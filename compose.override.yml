@@ -1,0 +1,27 @@
+services:
+  db:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  api:
+    build:
+      context: ./backend
+      target: dev
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    volumes:
+      - ./backend:/app
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  nginx:
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  cloudflared:
+    profiles: ["prod"]
+
+networks:
+  data:
+    internal: false
