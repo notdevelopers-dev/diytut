@@ -1,17 +1,11 @@
-from typing import Annotated
+from fastapi import FastAPI
 
-from fastapi import Depends, FastAPI
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from app.routers import api_router
 
-from app.db import get_session
-
-app = FastAPI(title="ДійТут API")
-
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
-
-
-@app.get("/health")
-async def health(session: SessionDep) -> dict[str, str]:
-    await session.execute(text("SELECT 1"))
-    return {"status": "ok"}
+app = FastAPI(
+    title="ДійТут API",
+    docs_url="/api/docs",
+    redoc_url=None,
+    openapi_url="/api/openapi.json",
+)
+app.include_router(api_router)

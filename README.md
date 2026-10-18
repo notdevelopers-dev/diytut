@@ -29,6 +29,7 @@
         ├── main.py          # застосунок FastAPI
         ├── config.py        # налаштування зі змінних оточення
         ├── db.py            # підключення до БД, сесії
+        ├── routers/         # ендпоінти API (усі під префіксом /api)
         └── models/          # моделі SQLAlchemy
 ```
 
@@ -81,9 +82,9 @@ flowchart LR
 
 5. Перевірити:
 
-   - <http://127.0.0.1:8000/health> → `{"status":"ok"}`
-   - <http://127.0.0.1:8080/health> — те саме, але через nginx
-   - <http://127.0.0.1:8000/docs> — автодокументація API
+   - <http://127.0.0.1:8000/api/health> → `{"status":"ok"}`
+   - <http://127.0.0.1:8080/api/health> — те саме, але через nginx
+   - <http://127.0.0.1:8000/api/docs> — автодокументація API
 
 ### Що працює локально
 
@@ -128,6 +129,37 @@ docker compose exec api uv lock --upgrade         # оновити всі вер
 - Не редагуйте `uv.lock` руками. Його веде тільки uv.
 - Комітьте `pyproject.toml` і `uv.lock` разом. Продакшн-образ збирається з `--locked` і впаде, якщо вони не збігаються.
 - Залежності для розробки (`ruff`, `pytest` тощо) — лише через `--dev`.
+
+## Ендпоінти
+
+Усі маршрути API живуть під префіксом `/api`, який задано в одному місці — `backend/app/routers/__init__.py`. Фронтенд звертається до API лише за відносним шляхом `/api/...`.
+
+### Додати групу ендпоінтів
+
+1. Створити файл у `backend/app/routers/`, наприклад `volunteers.py`:
+
+   ```python
+   from fastapi import APIRouter
+
+   from app.db import SessionDep
+
+   router = APIRouter(prefix="/volunteers", tags=["volunteers"])
+
+
+   @router.get("")
+   async def list_volunteers(session: SessionDep) -> list[dict]:
+       ...
+   ```
+
+2. Підключити його в `backend/app/routers/__init__.py`:
+
+   ```python
+   from app.routers import health, volunteers
+
+   api_router.include_router(volunteers.router)
+   ```
+
+   Після цього ендпоінт доступний за адресою `/api/volunteers`.
 
 ## Моделі та міграції
 
@@ -221,7 +253,7 @@ docker compose exec api uv run pytest
   chmod 600 .env
   ```
 
-- `TUNNEL_TOKEN` береться в панелі Cloudflare Zero Trust під час створення тунелю. Публічний hostname у тунелі вказує на `http://nginx:8080`; доменне ім'я має збігатися з `server_name` у `nginx/conf.d/api.conf`.
+- `TUNNEL_TOKEN` береться в панелі Cloudflare Zero Trust під час створення тунелю. Публічний hostname (домен сайту) у тунелі вказує на `http://nginx:8080`. Сайт і API живуть на одному домені: фронтенд на `/`, API на `/api/`.
 
 ### Розгортання
 
