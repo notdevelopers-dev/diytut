@@ -18,5 +18,5 @@ COPY . .
 RUN npm run build
 
 # --- продакшн: nginx роздає зібраний сайт (останній етап, збирається за замовчуванням) ---
-FROM nginxinc/nginx-unprivileged:stable-alpine AS prod
+FROM nginx/nginx-unprivileged:stable-alpine AS prod
 COPY --from=build /app/dist /usr/share/nginx/html
