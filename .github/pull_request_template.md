@@ -1,7 +1,7 @@
 <!--
-  Назва PR (поле «Title» над цим описом): ключ задачі Jira і коротко, що зроблено,
-  наприклад «SCRUM-5 FastAPI skeleton». Якщо PR закриває кілька задач, перелічіть
-  ключі: «SCRUM-6 SCRUM-8 Minimal deploy».
+  Назва PR — назва задачі в Jira разом із ключем, наприклад
+  «SCRUM-5 [BE] FastAPI Skeleton (Python 3.14, SQLAlchemy 2.0)».
+  Один PR — одна задача.
 -->
 
 ## Задача
