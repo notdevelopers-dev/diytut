@@ -1,0 +1,49 @@
+services:
+  db:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  api:
+    build:
+      context: ./backend
+      target: dev
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    volumes:
+      - ./backend:/app
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  nginx:
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  cloudflared:
+    profiles: ["prod"]
+
+  web:
+    build:
+      context: ./frontend
+      target: dev
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    profiles: ["web"]
+    init: true
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    volumes:
+      - ./frontend:/app
+      - web_node_modules:/app/node_modules
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on: [api]
+    networks: [proxy]
+
+networks:
+  data:
+    internal: false
+
+volumes:
+  web_node_modules:
