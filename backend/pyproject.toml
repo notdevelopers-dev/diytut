@@ -15,6 +15,7 @@ dependencies = [
 dev = [
     "ruff",
     "pytest",
+    "httpx>=0.28.1",
 ]
 
 [tool.ruff]
@@ -25,3 +26,7 @@ select = ["E", "F", "I", "UP", "B", "ASYNC"]
 
 [tool.ruff.lint.isort]
 known-third-party = ["alembic"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
