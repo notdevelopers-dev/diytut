@@ -4,16 +4,16 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=0 \
+    UV_COMPILE_BYTECODE=1 \
     PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # залежності для продакшну
 FROM base AS builder
-ENV UV_COMPILE_BYTECODE=1
 COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
 
-# середовище розробки
+# середовище розробки: код монтується ззовні
 FROM base AS dev
 ARG UID=1000
 ARG GID=1000

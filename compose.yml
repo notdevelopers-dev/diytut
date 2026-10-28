@@ -1,3 +1,9 @@
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:18
@@ -9,6 +15,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
     networks: [data]
+    logging: *logging
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -24,14 +31,18 @@ services:
       db:
         condition: service_healthy
     networks: [proxy, data]
+    logging: *logging
 
   nginx:
-    image: nginx:stable-alpine
+    build:
+      context: ./frontend
+      target: prod
     restart: unless-stopped
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
     depends_on: [api]
     networks: [proxy]
+    logging: *logging
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -41,6 +52,7 @@ services:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN}
     depends_on: [nginx]
     networks: [proxy]
+    logging: *logging
 
 networks:
   proxy:
