@@ -68,7 +68,11 @@ class User(Base):
     
     profile_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
     
     # Відношення
     city = relationship("City")
@@ -93,7 +97,11 @@ class Organization(Base):
     review_comment: Mapped[str | None] = mapped_column(Text)
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
     
     # Відношення
     city = relationship("City")
@@ -105,8 +113,12 @@ class Organization(Base):
 class OrganizationMember(Base):
     __tablename__ = "organization_members"
 
-    organization_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("organizations.id"), primary_key=True)
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("organizations.id"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id"), primary_key=True
+    )
     
     role: Mapped[OrgMemberRoleEnum] = mapped_column(default=OrgMemberRoleEnum.member)
     
