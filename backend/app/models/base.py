@@ -1,10 +1,9 @@
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import MetaData, BigInteger, Integer, Text, Date, ForeignKey, DateTime
+from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, MetaData, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-
 
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
@@ -20,22 +19,22 @@ class Base(DeclarativeBase):
 
 
 # 2. Перелічення (Enums)
-class GenderEnum(str, enum.Enum):
+class GenderEnum(enum.StrEnum):
     male = "male"
     female = "female"
     prefer_not_to_say = "prefer_not_to_say"
 
-class RoleEnum(str, enum.Enum):
+class RoleEnum(enum.StrEnum):
     user = "user"
     admin = "admin"
 
-class OrgStatusEnum(str, enum.Enum):
+class OrgStatusEnum(enum.StrEnum):
     pending = "pending"
     approved = "approved"  # Оновлено з verified на approved
     rejected = "rejected"
     blocked = "blocked"
 
-class OrgMemberRoleEnum(str, enum.Enum):
+class OrgMemberRoleEnum(enum.StrEnum):
     owner = "owner"
     admin = "admin"
     member = "member"
