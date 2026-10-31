@@ -25,8 +25,8 @@ export const ProfilePage = () => {
       </header>
 
       <div className="card profile-card">
-        <div className="profile-header">
-          <div className="profile-avatar-large">
+        <div className="flex flex-col items-center gap-5 sm:flex-row">
+          <div className="flex size-16 items-center justify-center rounded-full bg-primary-light text-primary">
             <svg
               width="48"
               height="48"
@@ -43,14 +43,14 @@ export const ProfilePage = () => {
           </div>
           <div>
             <h2>{user?.name ?? 'Користувач'}</h2>
-            <p className="text-muted">{user?.email}</p>
+            <p className="text-ink-muted">{user?.email}</p>
             <span className={`badge badge-${user?.role}`}>{user?.role}</span>
           </div>
         </div>
 
-        <hr className="divider" />
+        <hr className="my-6 h-px border-0 bg-border" />
 
-        <div className="profile-details">
+        <div className="flex flex-col gap-3">
           <div className="detail-item">
             <strong>ID користувача:</strong> <code>{user?.id}</code>
           </div>
@@ -61,7 +61,9 @@ export const ProfilePage = () => {
             <strong>Статус анкети:</strong>{' '}
             <span
               className={
-                user?.isProfileComplete ? 'text-success' : 'text-danger'
+                user?.isProfileComplete
+                  ? 'font-semibold text-success'
+                  : 'font-semibold text-danger'
               }
             >
               {user?.isProfileComplete ? 'Заповнено ✅' : 'Не заповнено ❌'}
@@ -69,11 +71,13 @@ export const ProfilePage = () => {
           </div>
           <div className="detail-item">
             <strong>Токен сесії (localStorage):</strong>
-            <pre className="token-preview">{token ?? '—'}</pre>
+            <pre className="max-w-full break-all rounded-sm border border-border bg-page px-[0.6rem] py-[0.4rem] text-[0.8rem]">
+              {token ?? '—'}
+            </pre>
           </div>
         </div>
 
-        <div className="button-group" style={{ marginTop: '1.5rem' }}>
+        <div className="button-group mt-6">
           <button
             type="button"
             className="btn btn-secondary"
