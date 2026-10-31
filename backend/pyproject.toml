@@ -9,13 +9,16 @@ dependencies = [
     "asyncpg",
     "alembic",
     "pydantic-settings",
+    "authlib",
+    "itsdangerous",
+    "pyjwt",
+    "httpx2",
 ]
 
 [dependency-groups]
 dev = [
     "ruff",
     "pytest",
-    "httpx>=0.28.1",
 ]
 
 [tool.ruff]
