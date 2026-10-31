@@ -15,7 +15,8 @@ import type {
  *    (домен і порт підставляє проксі Vite у dev та nginx у prod).
  * 2. Авторизація: інтерцептор автоматично зчитує токен з localStorage ('token')
  *    та додає заголовок 'Authorization: Bearer <token>'.
- * 3. Перехоплення помилок: статус 401 перехоплюється для централізованої обробки.
+ * 3. Перехоплення помилок: статус 401 автоматично очищує недійсну сесію
+ *    та перенаправляє користувача на сторінку входу ('/login').
  */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
@@ -40,12 +41,17 @@ apiClient.interceptors.request.use(
   },
 )
 
-// Response interceptor: централізоване логування та обробка відповідей (401 Unauthorized)
+// Response interceptor: централізована обробка відповідей (401 Unauthorized)
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      console.warn('Unauthorized: сесія недійсна або термін дії токена минув.')
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+
+      if (window.location.pathname !== '/login') {
+        window.location.replace('/login')
+      }
     }
     return Promise.reject(error)
   },
