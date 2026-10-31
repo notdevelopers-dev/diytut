@@ -27,6 +27,10 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC"]
 
+[tool.ruff.lint.per-file-ignores]
+# Змінні оточення для тестів мають бути задані до імпорту застосунку
+"tests/conftest.py" = ["E402"]
+
 [tool.ruff.lint.isort]
 known-third-party = ["alembic"]
 

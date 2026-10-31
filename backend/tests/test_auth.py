@@ -1,48 +1,34 @@
+from datetime import date
 from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app import auth
-from app.main import app
+from app.models.base import City, User
 from app.routers import auth as auth_router
-
-GOOGLE_CLAIMS = {
-    "sub": "google-123",
-    "email": "taras@example.com",
-    "email_verified": True,
-    "given_name": "Тарас",
-    "family_name": "Шевченко",
-}
+from tests.conftest import GOOGLE_CLAIMS
 
 
 @pytest.fixture
-def client() -> TestClient:
-    return TestClient(app, follow_redirects=False)
-
-
-@pytest.fixture
-def google_returns(monkeypatch: pytest.MonkeyPatch):
-    """Підміняє обмін коду на токен у Google заданими claims з ID-токена."""
-
-    def _set(claims: dict) -> None:
-        async def fake_authorize_access_token(request):
-            return {"userinfo": claims}
-
-        monkeypatch.setattr(
-            auth.oauth.google, "authorize_access_token", fake_authorize_access_token
+def existing_user(db) -> int:
+    async def create(session) -> int:
+        city = City(name="Київ", region="Київська")
+        user = User(
+            google_sub=GOOGLE_CLAIMS["sub"],
+            email="taras@example.com",
+            first_name="Тарас",
+            last_name="Шевченко",
+            nickname="taras",
+            phone="+380671234567",
+            birth_date=date(1990, 3, 9),
+            city=city,
         )
+        session.add(user)
+        await session.flush()
+        return user.id
 
-    return _set
-
-
-@pytest.fixture
-def existing_user(monkeypatch: pytest.MonkeyPatch) -> int:
-    async def fake_lookup(session, google_sub: str) -> int | None:
-        return 42 if google_sub == GOOGLE_CLAIMS["sub"] else None
-
-    monkeypatch.setattr(auth_router, "get_user_id_by_google_sub", fake_lookup)
-    return 42
+    return db(create)
 
 
 def test_login_redirects_to_google(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -96,7 +82,7 @@ def test_new_user_goes_to_registration(client: TestClient, google_returns) -> No
     assert me.status_code == 200
     assert me.json() == {
         "status": "registration_required",
-        "email": "taras@example.com",
+        "email": "Taras@Example.com",
         "first_name": "Тарас",
         "last_name": "Шевченко",
     }
@@ -108,8 +94,10 @@ def test_existing_user_gets_session(client: TestClient, google_returns, existing
     response = client.get("/api/auth/google/callback?code=abc&state=xyz")
 
     assert response.headers["location"] == auth_router.AFTER_LOGIN_URL
-    me = client.get("/api/auth/me")
-    assert me.json() == {"status": "authenticated", "user_id": existing_user}
+    me = client.get("/api/auth/me").json()
+    assert me["status"] == "authenticated"
+    assert me["user"]["id"] == existing_user
+    assert me["user"]["nickname"] == "taras"
 
 
 def test_logout_clears_session(client: TestClient, google_returns, existing_user) -> None:
@@ -121,6 +109,14 @@ def test_logout_clears_session(client: TestClient, google_returns, existing_user
 
 
 def test_me_without_cookies(client: TestClient) -> None:
+    assert client.get("/api/auth/me").status_code == 401
+
+
+def test_session_of_deleted_user_is_rejected(client: TestClient) -> None:
+    # Такого id не може бути навіть у БД з даними
+    token = auth._encode({"sub": str(2**63 - 1), "typ": "session"}, auth.SESSION_TTL)
+    client.cookies.set("session", token, path="/api")
+
     assert client.get("/api/auth/me").status_code == 401
 
 

@@ -5,7 +5,6 @@ from typing import Annotated, Any
 import jwt
 from authlib.integrations.starlette_client import OAuth
 from fastapi import Cookie, Depends, HTTPException, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 
@@ -43,11 +42,6 @@ class GoogleIdentity:
             first_name=claims.get("given_name"),
             last_name=claims.get("family_name"),
         )
-
-
-async def get_user_id_by_google_sub(session: AsyncSession, google_sub: str) -> int | None:
-    # TODO(SCRUM-40)
-    return None
 
 
 def _encode(claims: dict[str, Any], ttl: timedelta) -> str:
