@@ -15,7 +15,7 @@ export const Layout = () => {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-[100] border-b border-border bg-surface shadow-sm">
-        <div className="mx-auto flex w-full max-w-[1024px] items-center justify-between gap-4 px-4 py-3 sm:gap-6 sm:px-6">
+        <div className="mx-auto flex w-full max-w-[1024px] flex-wrap items-center justify-between gap-4 px-4 py-3 sm:gap-6 sm:px-6">
           <Link
             to="/"
             className="flex items-center gap-2 text-xl font-bold text-ink no-underline"
@@ -45,16 +45,16 @@ export const Layout = () => {
             )}
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             {isAuthenticated && user ? (
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <Link
                   to="/profile"
-                  className="flex items-center gap-2 rounded-sm px-[0.6rem] py-[0.35rem] text-ink no-underline transition-colors hover:bg-page"
+                  className="flex min-w-0 items-center gap-2 rounded-sm px-[0.6rem] py-[0.35rem] text-ink no-underline transition-colors hover:bg-page"
                   title="Перейти до профілю"
                 >
                   <span
-                    className="flex size-8 items-center justify-center rounded-full bg-primary-light text-primary"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-light text-primary"
                     aria-label="Іконка профілю"
                   >
                     <svg
@@ -71,10 +71,12 @@ export const Layout = () => {
                       <circle cx="12" cy="7" r="4" />
                     </svg>
                   </span>
-                  <span className="text-[0.9rem] font-semibold">
+                  <span className="min-w-0 truncate text-[0.9rem] font-semibold">
                     {user.name}
                   </span>
-                  <span className={`badge badge-sm badge-${user.role}`}>
+                  <span
+                    className={`badge badge-sm badge-${user.role} hidden shrink-0 sm:inline-block`}
+                  >
                     {user.role}
                   </span>
                 </Link>
