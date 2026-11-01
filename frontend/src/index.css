@@ -192,10 +192,18 @@
    * Role badges are rendered as `badge-${role}`, so the scanner never sees
    * the full class name — they have to live in CSS to survive.
    */
-  .badge-volunteer { @apply bg-primary-light text-primary-hover; }
-  .badge-organization { @apply bg-warning-bg text-amber-800; }
-  .badge-admin { @apply bg-pink-100 text-pink-800; }
-  .badge-warning { @apply bg-warning-bg text-warning; }
+  .badge-volunteer {
+    @apply bg-primary-light text-primary-hover;
+  }
+  .badge-organization {
+    @apply bg-warning-bg text-amber-800;
+  }
+  .badge-admin {
+    @apply bg-pink-100 text-pink-800;
+  }
+  .badge-warning {
+    @apply bg-warning-bg text-warning;
+  }
 
   /* Repeated detail rows ------------------------------------------------ */
   .detail-item {
