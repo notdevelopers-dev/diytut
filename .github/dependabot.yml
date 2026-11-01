@@ -3,7 +3,9 @@ updates:
   - package-ecosystem: "uv"
     directory: "/backend"
     schedule:
-      interval: "weekly"
+      interval: "cron"
+      cronjob: "0 9 1,15 * *"
+      timezone: "Europe/Kyiv"
     versioning-strategy: "lockfile-only"
     groups:
       python:
@@ -12,7 +14,9 @@ updates:
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
-      interval: "weekly"
+      interval: "cron"
+      cronjob: "0 9 1,15 * *"
+      timezone: "Europe/Kyiv"
     groups:
       typescript-toolchain:
         patterns: ["typescript", "oxlint-tsgolint"]
@@ -26,7 +30,9 @@ updates:
   - package-ecosystem: "docker"
     directory: "/backend"
     schedule:
-      interval: "weekly"
+      interval: "cron"
+      cronjob: "0 9 1,15 * *"
+      timezone: "Europe/Kyiv"
     ignore:
       - dependency-name: "python"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
@@ -34,7 +40,9 @@ updates:
   - package-ecosystem: "docker"
     directory: "/frontend"
     schedule:
-      interval: "weekly"
+      interval: "cron"
+      cronjob: "0 9 1,15 * *"
+      timezone: "Europe/Kyiv"
     ignore:
       - dependency-name: "node"
         update-types: ["version-update:semver-major"]
@@ -42,4 +50,6 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "cron"
+      cronjob: "0 9 1,15 * *"
+      timezone: "Europe/Kyiv"
