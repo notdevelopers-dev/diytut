@@ -8,9 +8,10 @@ from pydantic import (
     ConfigDict,
     Field,
     StringConstraints,
+    field_validator,
 )
 
-from app.models.base import OrgStatusEnum
+from app.models.base import OrganizationMember, OrgMemberRoleEnum, OrgStatusEnum
 from app.schemas.users import Phone, _empty_to_none
 
 EDRPOU_LENGTH = 8
@@ -63,6 +64,29 @@ class OrganizationCreate(BaseModel):
     edrpou: Annotated[Edrpou | None, BeforeValidator(_empty_to_none)] = None
 
 
+class OrganizationUpdate(BaseModel):
+    """Часткове оновлення: змінюються лише передані поля.
+
+    Назву й код ЄДРПОУ перевіряє адміністратор, тож змінювати їх не можна.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: OrganizationEmail | None = None
+    phone: Phone | None = None
+    city_id: int | None = Field(default=None, gt=0)
+    # null або порожній рядок прибирає опис
+    description: Annotated[Description | None, BeforeValidator(_empty_to_none)] = None
+
+    @field_validator("email", "phone", "city_id")
+    @classmethod
+    def _not_null(cls, value: object) -> object:
+        # Не викликається для пропущених полів, лише для явно переданого null
+        if value is None:
+            raise ValueError("Field cannot be null")
+        return value
+
+
 class OrganizationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -75,3 +99,33 @@ class OrganizationRead(BaseModel):
     edrpou: str | None
     status: OrgStatusEnum
     created_at: datetime
+
+
+class OrganizationProfile(OrganizationRead):
+    """Профіль організації для її учасника разом із його роллю в ній."""
+
+    role: OrgMemberRoleEnum
+
+    @classmethod
+    def from_membership(cls, membership: OrganizationMember) -> OrganizationProfile:
+        organization = OrganizationRead.model_validate(membership.organization)
+        return cls(**organization.model_dump(), role=membership.role)
+
+
+class OrganizationMembership(BaseModel):
+    """Коротко про організацію користувача: чи показувати фронтенду режим організації."""
+
+    id: int
+    name: str
+    status: OrgStatusEnum
+    role: OrgMemberRoleEnum
+
+    @classmethod
+    def from_membership(cls, membership: OrganizationMember) -> OrganizationMembership:
+        organization = membership.organization
+        return cls(
+            id=organization.id,
+            name=organization.name,
+            status=organization.status,
+            role=membership.role,
+        )

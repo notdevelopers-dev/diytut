@@ -72,7 +72,7 @@ def test_registration_creates_user_and_session(client: TestClient, form: dict, d
     assert body["platform_role"] == "user"
 
     me = client.get("/api/auth/me").json()
-    assert me == {"status": "authenticated", "user": body}
+    assert me == {"status": "authenticated", "user": body, "organization": None}
 
     user = db(lambda session: session.get(User, body["id"]))
     assert user.google_sub == GOOGLE_CLAIMS["sub"]

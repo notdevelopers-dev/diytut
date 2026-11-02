@@ -4,7 +4,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import auth
-from app.models.base import City, Organization, OrganizationMember, User
+from app.models.base import (
+    City,
+    Organization,
+    OrganizationMember,
+    OrgMemberRoleEnum,
+    OrgStatusEnum,
+    User,
+)
 from app.routers import organizations as organizations_router
 from app.schemas.organizations import _check_edrpou
 
@@ -243,3 +250,228 @@ def test_phone_is_normalized(client: TestClient, form: dict) -> None:
 @pytest.mark.parametrize("code", VALID_EDRPOU)
 def test_valid_edrpou_codes(code: str) -> None:
     assert _check_edrpou(code) == code
+
+
+@pytest.fixture
+def organization_id(client: TestClient, form: dict, user_id: int) -> int:
+    return create(client, form).json()["id"]
+
+
+def add_member(db, organization_id: int, user_id: int, role: OrgMemberRoleEnum) -> None:
+    async def add(session) -> None:
+        session.add(OrganizationMember(organization_id=organization_id, user_id=user_id, role=role))
+
+    db(add)
+
+
+def set_status(db, organization_id: int, new_status: OrgStatusEnum) -> None:
+    async def change(session) -> None:
+        organization = await session.get(Organization, organization_id)
+        organization.status = new_status
+
+    db(change)
+
+
+def update(client: TestClient, **changes):
+    return client.patch("/api/organizations/me", json=changes)
+
+
+def test_owner_reads_own_organization(client: TestClient, form: dict, organization_id: int) -> None:
+    response = client.get("/api/organizations/me")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == organization_id
+    assert body["name"] == form["name"]
+    assert body["edrpou"] == form["edrpou"]
+    assert body["status"] == "pending"
+    assert body["role"] == "owner"
+
+
+@pytest.mark.parametrize("role", list(OrgMemberRoleEnum))
+def test_member_sees_own_role(
+    client: TestClient, db, make_user, organization_id: int, role: OrgMemberRoleEnum
+) -> None:
+    member_id = make_user()
+    add_member(db, organization_id, member_id, role)
+    sign_in(client, member_id)
+
+    assert client.get("/api/organizations/me").json()["role"] == role
+
+
+@pytest.mark.usefixtures("user_id")
+def test_user_without_organization_gets_404(client: TestClient) -> None:
+    assert client.get("/api/organizations/me").status_code == 404
+    assert update(client, phone="0671234567").status_code == 404
+
+
+def test_own_organization_requires_sign_in(client: TestClient) -> None:
+    assert client.get("/api/organizations/me").status_code == 401
+    assert update(client, phone="0671234567").status_code == 401
+
+
+@pytest.mark.usefixtures("organization_id")
+def test_owner_updates_contacts(client: TestClient, db, city_id: int) -> None:
+    async def create_city(session) -> int:
+        city = City(name="Київ", region="Київська")
+        session.add(city)
+        await session.flush()
+        return city.id
+
+    new_city_id = db(create_city)
+
+    response = update(
+        client,
+        email=" New@Dobri.org.ua ",
+        phone="(050) 111-22-33",
+        city_id=new_city_id,
+        description="  Новий опис ",
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["email"] == "new@dobri.org.ua"
+    assert body["phone"] == "+380501112233"
+    assert body["city_id"] == new_city_id
+    assert body["description"] == "Новий опис"
+    assert body["role"] == "owner"
+    assert client.get("/api/organizations/me").json() == body
+
+
+def test_omitted_fields_stay_unchanged(client: TestClient, form: dict, organization_id) -> None:
+    response = update(client, phone="0501112233")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["phone"] == "+380501112233"
+    assert body["email"] == form["email"]
+    assert body["city_id"] == form["city_id"]
+    assert body["description"] == form["description"]
+
+
+@pytest.mark.usefixtures("organization_id")
+@pytest.mark.parametrize("value", [None, "", "  "])
+def test_description_can_be_cleared(client: TestClient, value) -> None:
+    response = update(client, description=value)
+
+    assert response.status_code == 200
+    assert response.json()["description"] is None
+
+
+@pytest.mark.usefixtures("organization_id")
+def test_empty_update_changes_nothing(client: TestClient) -> None:
+    before = client.get("/api/organizations/me").json()
+
+    response = update(client)
+
+    assert response.status_code == 200
+    assert response.json() == before
+
+
+def test_admin_can_update(client: TestClient, db, make_user, organization_id: int) -> None:
+    admin_id = make_user()
+    add_member(db, organization_id, admin_id, OrgMemberRoleEnum.admin)
+    sign_in(client, admin_id)
+
+    assert update(client, phone="0501112233").status_code == 200
+
+
+def test_member_cannot_update(client: TestClient, db, make_user, organization_id: int) -> None:
+    member_id = make_user()
+    add_member(db, organization_id, member_id, OrgMemberRoleEnum.member)
+    sign_in(client, member_id)
+
+    assert update(client, phone="0501112233").status_code == 403
+    assert client.get("/api/organizations/me").json()["phone"] == "+380671234567"
+
+
+def test_blocked_organization_cannot_be_updated(
+    client: TestClient, db, organization_id: int
+) -> None:
+    set_status(db, organization_id, OrgStatusEnum.blocked)
+
+    assert update(client, phone="0501112233").status_code == 403
+
+
+@pytest.mark.parametrize(
+    "org_status", [OrgStatusEnum.pending, OrgStatusEnum.approved, OrgStatusEnum.rejected]
+)
+def test_not_blocked_organization_can_be_updated(
+    client: TestClient, db, organization_id: int, org_status: OrgStatusEnum
+) -> None:
+    set_status(db, organization_id, org_status)
+
+    assert update(client, phone="0501112233").status_code == 200
+
+
+@pytest.mark.usefixtures("organization_id")
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("name", "Інша назва"),
+        ("edrpou", "21133352"),
+        ("status", "approved"),
+        ("created_by", 1),
+        ("id", 1),
+    ],
+)
+def test_protected_fields_cannot_be_updated(client: TestClient, field: str, value) -> None:
+    before = client.get("/api/organizations/me").json()
+
+    response = update(client, **{field: value})
+
+    assert response.status_code == 422
+    assert error_fields(response) == {field}
+    assert client.get("/api/organizations/me").json() == before
+
+
+@pytest.mark.usefixtures("organization_id")
+@pytest.mark.parametrize("field", ["email", "phone", "city_id"])
+def test_required_field_cannot_be_null(client: TestClient, field: str) -> None:
+    response = update(client, **{field: None})
+
+    assert response.status_code == 422
+    assert error_fields(response) == {field}
+
+
+@pytest.mark.usefixtures("organization_id")
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("email", "not-an-email"),
+        ("phone", "+48123456789"),
+        ("description", "x" * 2001),
+        ("city_id", 0),
+    ],
+)
+def test_invalid_update_is_rejected(client: TestClient, field: str, value) -> None:
+    response = update(client, **{field: value})
+
+    assert response.status_code == 422
+    assert error_fields(response) == {field}
+
+
+@pytest.mark.usefixtures("organization_id")
+def test_update_with_unknown_city_is_rejected(client: TestClient) -> None:
+    response = update(client, city_id=999_999_999)
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["type"] == "city_not_found"
+
+
+def test_me_reports_organization_and_role(
+    client: TestClient, form: dict, organization_id: int
+) -> None:
+    me = client.get("/api/auth/me").json()
+
+    assert me["organization"] == {
+        "id": organization_id,
+        "name": form["name"],
+        "status": "pending",
+        "role": "owner",
+    }
+
+
+@pytest.mark.usefixtures("user_id")
+def test_me_without_organization(client: TestClient) -> None:
+    assert client.get("/api/auth/me").json()["organization"] is None

@@ -21,6 +21,8 @@ from app.auth import (
 from app.config import settings
 from app.db import SessionDep
 from app.models.base import City, User
+from app.organizations import get_user_membership
+from app.schemas.organizations import OrganizationMembership
 from app.schemas.users import RegistrationRequest, UserRead
 from app.users import free_generated_nickname, get_user_id_by_google_sub, is_nickname_taken
 
@@ -35,6 +37,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class Authenticated(BaseModel):
     status: Literal["authenticated"] = "authenticated"
     user: UserRead
+    # Організація, до якої належить користувач; null, якщо такої немає
+    organization: OrganizationMembership | None
 
 
 class RegistrationRequired(BaseModel):
@@ -141,7 +145,11 @@ async def me(
     if user_id is not None:
         user = await session.get(User, user_id)
         if user is not None:
-            return Authenticated(user=UserRead.model_validate(user))
+            membership = await get_user_membership(session, user_id)
+            organization = (
+                OrganizationMembership.from_membership(membership) if membership else None
+            )
+            return Authenticated(user=UserRead.model_validate(user), organization=organization)
 
     identity = read_registration_identity(registration_token)
     if identity is not None:
