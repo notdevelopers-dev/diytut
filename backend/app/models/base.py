@@ -88,11 +88,12 @@ class Organization(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     name: Mapped[str] = mapped_column(Text)
-    email: Mapped[str | None] = mapped_column(Text)
-    phone: Mapped[str | None] = mapped_column(Text)
-    city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"))
+    email: Mapped[str] = mapped_column(Text)
+    phone: Mapped[str] = mapped_column(Text)
+    city_id: Mapped[int] = mapped_column(ForeignKey("cities.id"))
     description: Mapped[str | None] = mapped_column(Text)
-    edrpou: Mapped[str] = mapped_column(Text, unique=True)
+    # Необов'язковий; кілька NULL не порушують унікальність
+    edrpou: Mapped[str | None] = mapped_column(Text, unique=True)
     status: Mapped[OrgStatusEnum] = mapped_column(default=OrgStatusEnum.pending)
 
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
@@ -120,7 +121,10 @@ class OrganizationMember(Base):
     organization_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("organizations.id"), primary_key=True
     )
-    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), primary_key=True)
+    # Поки що користувач може належати лише до однієї організації
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id"), primary_key=True, unique=True
+    )
 
     role: Mapped[OrgMemberRoleEnum] = mapped_column(default=OrgMemberRoleEnum.member)
 
