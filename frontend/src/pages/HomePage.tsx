@@ -14,8 +14,8 @@ export const HomePage = () => {
         </p>
       </header>
 
-      <section className="card status-card">
-        <h2>Поточний статус сесії</h2>
+      <section className="card border-blue-200 bg-linear-to-r from-blue-50 to-page">
+        <h2 className="mb-3 text-xl">Поточний статус сесії</h2>
         {isAuthenticated && user ? (
           <div>
             <p>
@@ -52,7 +52,7 @@ export const HomePage = () => {
         )}
       </section>
 
-      <section className="grid-2">
+      <section className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="card">
           <h3>Для волонтерів</h3>
           <p>

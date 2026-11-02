@@ -20,14 +20,9 @@ export const RegistrationCompletePage = () => {
   }
 
   return (
-    <div className="page-container page-auth">
+    <div className="page-container mx-auto mt-6 w-full max-w-[540px]">
       <div className="card auth-card">
-        <div
-          className="badge badge-warning"
-          style={{ marginBottom: '1rem', display: 'inline-block' }}
-        >
-          Обовʼязковий крок
-        </div>
+        <div className="badge badge-warning mb-4">Обовʼязковий крок</div>
         <h1>Завершення реєстрації</h1>
         <p className="page-subtitle">
           Будь ласка, заповніть додаткові дані профілю, щоб отримати повний

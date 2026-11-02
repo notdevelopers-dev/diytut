@@ -13,15 +13,18 @@ export const Layout = () => {
   }
 
   return (
-    <div className="app-shell">
-      <header className="navbar">
-        <div className="navbar-container">
-          <Link to="/" className="navbar-brand">
-            <span className="brand-logo">🇺🇦</span>
-            <span className="brand-title">ДійТут</span>
+    <div className="flex min-h-dvh flex-col">
+      <header className="sticky top-0 z-[100] border-b border-border bg-surface shadow-sm">
+        <div className="mx-auto flex w-full max-w-[1024px] flex-wrap items-center justify-between gap-4 px-4 py-3 sm:gap-6 sm:px-6">
+          <Link
+            to="/"
+            className="flex items-center gap-2 text-xl font-bold text-ink no-underline"
+          >
+            <span className="text-2xl">🇺🇦</span>
+            <span className="tracking-tight">ДійТут</span>
           </Link>
 
-          <nav className="navbar-nav">
+          <nav className="flex items-center gap-4">
             <NavLink
               to="/"
               className={({ isActive }) =>
@@ -42,15 +45,18 @@ export const Layout = () => {
             )}
           </nav>
 
-          <div className="navbar-user">
+          <div className="flex min-w-0 items-center gap-3">
             {isAuthenticated && user ? (
-              <div className="user-menu">
+              <div className="flex min-w-0 items-center gap-3">
                 <Link
                   to="/profile"
-                  className="profile-link"
+                  className="flex min-w-0 items-center gap-2 rounded-sm px-[0.6rem] py-[0.35rem] text-ink no-underline transition-colors hover:bg-page"
                   title="Перейти до профілю"
                 >
-                  <span className="user-avatar" aria-label="Іконка профілю">
+                  <span
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-light text-primary"
+                    aria-label="Іконка профілю"
+                  >
                     <svg
                       width="20"
                       height="20"
@@ -65,8 +71,12 @@ export const Layout = () => {
                       <circle cx="12" cy="7" r="4" />
                     </svg>
                   </span>
-                  <span className="user-name">{user.name}</span>
-                  <span className={`badge badge-sm badge-${user.role}`}>
+                  <span className="min-w-0 truncate text-[0.9rem] font-semibold">
+                    {user.name}
+                  </span>
+                  <span
+                    className={`badge badge-sm badge-${user.role} hidden shrink-0 sm:inline-block`}
+                  >
                     {user.role}
                   </span>
                 </Link>
@@ -79,7 +89,7 @@ export const Layout = () => {
                 </button>
               </div>
             ) : (
-              <div className="guest-menu">
+              <div className="flex items-center">
                 <Link to="/login" className="btn btn-sm btn-primary">
                   <span className="btn-icon">
                     <svg
@@ -105,11 +115,11 @@ export const Layout = () => {
         </div>
       </header>
 
-      <main className="main-content">
+      <main className="mx-auto w-full max-w-[1024px] flex-1 px-4 py-8 sm:px-6">
         <Outlet />
       </main>
 
-      <footer className="footer">
+      <footer className="mt-auto border-t border-border bg-surface px-4 py-5 text-center text-[0.85rem] text-ink-muted sm:px-6">
         <div className="footer-container">
           <p>© {CURRENT_YEAR} Платформа «ДійТут». Разом до перемоги.</p>
         </div>
