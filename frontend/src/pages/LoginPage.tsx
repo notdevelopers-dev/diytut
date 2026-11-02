@@ -1,181 +1,79 @@
-import { useState } from 'react'
-import type { FormEvent } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext.tsx'
-import type { Role } from '../context/AuthContext.tsx'
-
-interface LocationState {
-  from?: {
-    pathname: string
-  }
-}
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 export const LoginPage = () => {
-  const { isAuthenticated, user, login, logout } = useAuth()
+  const { login } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
-  const state = location.state as LocationState | undefined
 
-  const [selectedRole, setSelectedRole] = useState<Role>('volunteer')
-  const [isProfileComplete, setIsProfileComplete] = useState<boolean>(true)
-  const [email, setEmail] = useState<string>('')
-
-  const redirectPath =
-    state?.from?.pathname ??
-    (isProfileComplete ? '/profile' : '/register/complete')
-
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    const mockToken = `mock_jwt_${selectedRole}_${Date.now()}`
-    login(mockToken, selectedRole, isProfileComplete, {
-      email: email || `${selectedRole}@diytut.org`,
-      name:
-        selectedRole === 'admin'
-          ? 'Адміністратор платформи'
-          : selectedRole === 'organization'
-            ? 'БО «Дій Разом»'
-            : 'Волонтер Тарас',
-    })
-    void navigate(redirectPath, { replace: true })
+  // 1. Генерація випадкового нікнейма за замовчуванням: volunteer_XXXX
+  const generateRandomNickname = () => {
+    const randomDigits = Math.floor(1000 + Math.random() * 9000)
+    return `volunteer_${randomDigits}`
   }
 
-  const handleQuickLogin = (role: Role, profileCompleted: boolean) => {
-    const mockToken = `mock_jwt_${role}_${Date.now()}`
-    login(mockToken, role, profileCompleted, {
-      email: `${role}@diytut.org`,
-      name:
-        role === 'admin'
-          ? 'Адміністратор'
-          : role === 'organization'
-            ? 'ГО «Дій Твори»'
-            : 'Волонтер Анна',
-    })
-    const target =
-      state?.from?.pathname ??
-      (profileCompleted ? '/profile' : '/register/complete')
-    void navigate(target, { replace: true })
+  // 2. Логіка кліку на кнопку Google
+  const handleGoogleSignIn = () => {
+    const mockToken = `google_jwt_${Date.now()}`
+
+    // Імітуємо отримання профілю від Google:
+    // Підтягуються ім'я та пошта, генерується нікнейм, стать за замовчуванням 'prefer_not_to_tell',
+    // а статус isProfileComplete: false (анкета ще не завершена)
+    const googleUserData = {
+      name: 'Олена Коваленко',
+      firstName: 'Олена',
+      lastName: 'Коваленко',
+      nickname: generateRandomNickname(),
+      email: 'olena.kovalenko@gmail.com',
+      gender: 'prefer_not_to_tell' as const,
+    }
+
+    login(mockToken, 'volunteer', false, googleUserData)
+
+    // Перенаправляємо на форму дозаповнення анкети
+    navigate('/register/complete', { replace: true })
   }
 
   return (
-    <div className="page-container page-auth">
-      <div className="card auth-card">
-        <h1>Вхід у систему</h1>
-        <p className="page-subtitle">
-          Увійдіть або скористайтеся швидкими кнопками для тестування ролей
-          каркасу.
-        </p>
+    <div className="flex min-h-[calc(100dvh-130px)] w-full flex-col items-center bg-page">
+      {/* Верхня бежева плашка "Реєстрація" за макетом із Figma */}
+      <div className="flex h-16 w-full items-center justify-center border-b border-[#F1D387] bg-[#F5E6BF] px-4">
+        <h1 className="m-0 text-3xl font-normal text-black md:text-5xl font-['e-Ukraine_Head',sans-serif]">
+          Реєстрація
+        </h1>
+      </div>
 
-        {isAuthenticated && user ? (
-          <div className="alert alert-info">
-            <p>
-              Ви вже увійшли як <strong>{user.name}</strong> ({user.role}).
-            </p>
-            <div className="button-group">
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  void navigate('/profile')
-                }}
-              >
-                Перейти до профілю
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={logout}
-              >
-                Вийти
-              </button>
-            </div>
+      {/* Центральна область: тільки кнопка "Продовжити через Google" */}
+      <div className="flex flex-1 w-full max-w-md flex-col items-center justify-center p-6">
+        <button
+          type="button"
+          onClick={handleGoogleSignIn}
+          className="flex h-[67px] w-full max-w-[348px] cursor-pointer items-center gap-3.5 rounded-[11px] border-none bg-[#DCECFF] px-3 shadow-[0px_3px_4px_rgba(26,44,74,0.25)] transition-all hover:bg-[#cde2fe] active:scale-[0.98]"
+        >
+          {/* Векторний SVG-логотип Google з макета */}
+          <div className="flex h-[52px] w-[52px] flex-shrink-0 items-center justify-center">
+            <svg width="40" height="40" viewBox="0 0 48 48">
+              <path
+                fill="#EA4335"
+                d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+              />
+              <path
+                fill="#4285F4"
+                d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+              />
+              <path
+                fill="#34A853"
+                d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+              />
+            </svg>
           </div>
-        ) : (
-          <>
-            <form onSubmit={handleSubmit} className="auth-form">
-              <div className="form-group">
-                <label htmlFor="email-input">Електронна пошта</label>
-                <input
-                  id="email-input"
-                  type="email"
-                  placeholder="Введіть email або залиште порожнім"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="form-input"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="role-select">Оберіть роль</label>
-                <select
-                  id="role-select"
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value as Role)}
-                  className="form-select"
-                >
-                  <option value="volunteer">Волонтер (volunteer)</option>
-                  <option value="organization">
-                    Організація (organization)
-                  </option>
-                  <option value="admin">Адміністратор (admin)</option>
-                </select>
-              </div>
-
-              <div className="form-checkbox">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={isProfileComplete}
-                    onChange={(e) => setIsProfileComplete(e.target.checked)}
-                  />{' '}
-                  Анкета вже заповнена (isProfileComplete:{' '}
-                  {isProfileComplete ? 'true' : 'false'})
-                </label>
-                <small className="help-text">
-                  Якщо зняти галочку — ProtectedRoute автоматично спрямує на
-                  /register/complete.
-                </small>
-              </div>
-
-              <button type="submit" className="btn btn-primary btn-block">
-                Увійти з обраними параметрами
-              </button>
-            </form>
-
-            <div className="quick-test-section">
-              <h3>Швидкий вхід для тестування ролей:</h3>
-              <div className="quick-buttons-grid">
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => handleQuickLogin('volunteer', true)}
-                >
-                  👤 Волонтер (анкета заповнена)
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => handleQuickLogin('volunteer', false)}
-                >
-                  ⚠️ Волонтер (анкета НЕ заповнена)
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => handleQuickLogin('organization', true)}
-                >
-                  🏢 Організація (анкета заповнена)
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => handleQuickLogin('admin', true)}
-                >
-                  👑 Адміністратор (доступ до /admin)
-                </button>
-              </div>
-            </div>
-          </>
-        )}
+          <span className="text-base font-normal text-black font-['e-Ukraine',sans-serif]">
+            Продовжити через Google
+          </span>
+        </button>
       </div>
     </div>
   )
