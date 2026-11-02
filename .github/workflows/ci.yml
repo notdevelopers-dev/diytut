@@ -34,6 +34,11 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test
+      GOOGLE_CLIENT_ID: test-client-id
+      GOOGLE_CLIENT_SECRET: test-client-secret
+      GOOGLE_REDIRECT_URI: http://testserver/api/auth/google/callback
+      SECRET_KEY: test-secret-key-at-least-32-bytes-long
+      COOKIE_SECURE: "false"
     steps:
       - uses: actions/checkout@v7
 

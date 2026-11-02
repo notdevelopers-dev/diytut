@@ -6,12 +6,7 @@ export const AdminPage = () => {
   return (
     <div className="page-container">
       <header className="page-header">
-        <div
-          className="badge badge-admin"
-          style={{ display: 'inline-block', marginBottom: '0.5rem' }}
-        >
-          Адміністративна зона
-        </div>
+        <div className="badge badge-admin mb-2">Адміністративна зона</div>
         <h1>Панель керування платформою «ДійТут»</h1>
         <p className="page-subtitle">
           Сторінка захищена за допомогою <code>AdminRoute</code>. Доступ мають
@@ -27,25 +22,25 @@ export const AdminPage = () => {
         </p>
       </section>
 
-      <section className="grid-3">
-        <div className="card metric-card">
+      <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3">
+        <div className="card p-5 text-center">
           <h4>Організації на верифікації</h4>
           <div className="metric-number">7</div>
-          <p className="text-muted">Потребують перевірки документів</p>
+          <p className="text-ink-muted">Потребують перевірки документів</p>
         </div>
-        <div className="card metric-card">
+        <div className="card p-5 text-center">
           <h4>Активні збори</h4>
           <div className="metric-number">42</div>
-          <p className="text-muted">Опубліковано за останні 7 днів</p>
+          <p className="text-ink-muted">Опубліковано за останні 7 днів</p>
         </div>
-        <div className="card metric-card">
+        <div className="card p-5 text-center">
           <h4>Зареєстровано волонтерів</h4>
           <div className="metric-number">1 280</div>
-          <p className="text-muted">+54 за сьогодні</p>
+          <p className="text-ink-muted">+54 за сьогодні</p>
         </div>
       </section>
 
-      <section className="card" style={{ marginTop: '1.5rem' }}>
+      <section className="card mt-6">
         <h3>Журнал дій адміністратора</h3>
         <ul className="admin-log">
           <li>✅ Верифіковано ГО «Крила Перемоги»</li>
