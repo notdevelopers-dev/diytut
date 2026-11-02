@@ -57,7 +57,7 @@ export const LoginPage = () => {
   }
 
   return (
-    <div className="page-container mx-auto mt-6 w-full max-w-[540px]">
+    <div className="page-container page-auth">
       <div className="card auth-card">
         <h1>Вхід у систему</h1>
         <p className="page-subtitle">
@@ -66,7 +66,7 @@ export const LoginPage = () => {
         </p>
 
         {isAuthenticated && user ? (
-          <div className="mb-4 rounded-sm bg-primary-light p-4 text-blue-900">
+          <div className="alert alert-info">
             <p>
               Ви вже увійшли як <strong>{user.name}</strong> ({user.role}).
             </p>
@@ -130,7 +130,7 @@ export const LoginPage = () => {
                   Анкета вже заповнена (isProfileComplete:{' '}
                   {isProfileComplete ? 'true' : 'false'})
                 </label>
-                <small className="text-[0.8rem] text-ink-muted">
+                <small className="help-text">
                   Якщо зняти галочку — ProtectedRoute автоматично спрямує на
                   /register/complete.
                 </small>
@@ -141,11 +141,9 @@ export const LoginPage = () => {
               </button>
             </form>
 
-            <div className="mt-6 border-t border-dashed border-border pt-6">
-              <h3 className="mb-3 text-[0.95rem] text-ink-muted">
-                Швидкий вхід для тестування ролей:
-              </h3>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="quick-test-section">
+              <h3>Швидкий вхід для тестування ролей:</h3>
+              <div className="quick-buttons-grid">
                 <button
                   type="button"
                   className="btn btn-outline"
