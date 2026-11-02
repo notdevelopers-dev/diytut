@@ -5,53 +5,50 @@ export const LoginPage = () => {
   const { login } = useAuth()
   const navigate = useNavigate()
 
-  // 1. Генерація випадкового нікнейма за замовчуванням: volunteer_XXXX
-  const generateRandomNickname = () => {
-    const randomDigits = Math.floor(1000 + Math.random() * 9000)
-    return `volunteer_${randomDigits}`
-  }
-
-  // 2. Логіка кліку на кнопку Google
-  const handleGoogleSignIn = () => {
-    const mockToken = `google_jwt_${Date.now()}`
-
-    // Імітуємо отримання профілю від Google:
-    // Підтягуються ім'я та пошта, генерується нікнейм, стать за замовчуванням 'prefer_not_to_tell',
-    // а статус isProfileComplete: false (анкета ще не завершена)
-    const googleUserData = {
-      name: 'Олена Коваленко',
-      firstName: 'Олена',
-      lastName: 'Коваленко',
-      nickname: generateRandomNickname(),
-      email: 'olena.kovalenko@gmail.com',
-      gender: 'prefer_not_to_tell' as const,
+  const handleGoogleSignIn = async () => {
+    try {
+      // 1. Пробуємо реальний бекенд-ендпоінт Google OAuth
+      window.location.href = '/api/auth/google/login'
+    } catch {
+      // 2. Fallback для локальної розробки, якщо бекенд тимчасово вимкнений
+      const mockToken = `google_jwt_${Date.now()}`
+      login(mockToken, 'volunteer', false, {
+        name: 'Петро Петренко',
+        firstName: 'Петро',
+        lastName: 'Петренко',
+        email: 'petrenko.petro@gmail.com',
+      })
+      navigate('/register/complete', { replace: true })
     }
-
-    login(mockToken, 'volunteer', false, googleUserData)
-
-    // Перенаправляємо на форму дозаповнення анкети
-    navigate('/register/complete', { replace: true })
   }
 
   return (
-    <div className="flex min-h-[calc(100dvh-130px)] w-full flex-col items-center bg-page">
-      {/* Верхня бежева плашка "Реєстрація" за макетом із Figma */}
-      <div className="flex h-16 w-full items-center justify-center border-b border-[#F1D387] bg-[#F5E6BF] px-4">
-        <h1 className="m-0 text-3xl font-normal text-black md:text-5xl font-['e-Ukraine_Head',sans-serif]">
-          Реєстрація
-        </h1>
+    <div className="relative flex min-h-screen w-full flex-col justify-between bg-[#F7FBFF] overflow-x-hidden">
+      {/* Верхня частина: Логотип і стрічка "Реєстрація" */}
+      <div className="w-full">
+        <div className="px-8 pt-6 pb-4">
+          <span className="text-3xl font-bold tracking-tight">
+            <span className="text-[#5897FB]">Дій</span>
+            <span className="text-[#F4B840]">Тут</span>
+          </span>
+        </div>
+
+        <div className="flex h-16 w-full items-center justify-center border-y border-[#F1D387] bg-[#FBE2A7]">
+          <h1 className="m-0 text-3xl font-normal text-black md:text-5xl font-['e-Ukraine_Head',sans-serif]">
+            Реєстрація
+          </h1>
+        </div>
       </div>
 
-      {/* Центральна область: тільки кнопка "Продовжити через Google" */}
-      <div className="flex flex-1 w-full max-w-md flex-col items-center justify-center p-6">
+      {/* Центральна частина: Кнопка "Продовжити через Google" */}
+      <div className="my-auto flex w-full flex-col items-center justify-center px-4 py-12">
         <button
           type="button"
           onClick={handleGoogleSignIn}
-          className="flex h-[67px] w-full max-w-[348px] cursor-pointer items-center gap-3.5 rounded-[11px] border-none bg-[#DCECFF] px-3 shadow-[0px_3px_4px_rgba(26,44,74,0.25)] transition-all hover:bg-[#cde2fe] active:scale-[0.98]"
+          className="flex h-16 w-full max-w-[348px] cursor-pointer items-center justify-center gap-3.5 rounded-xl border-none bg-[#DCECFF] px-4 shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#cde2fe] active:scale-[0.98]"
         >
-          {/* Векторний SVG-логотип Google з макета */}
-          <div className="flex h-[52px] w-[52px] flex-shrink-0 items-center justify-center">
-            <svg width="40" height="40" viewBox="0 0 48 48">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center">
+            <svg width="34" height="34" viewBox="0 0 48 48">
               <path
                 fill="#EA4335"
                 d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
@@ -75,6 +72,9 @@ export const LoginPage = () => {
           </span>
         </button>
       </div>
+
+      {/* Нижня декоративна смужка */}
+      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-[#F1D387]" />
     </div>
   )
 }

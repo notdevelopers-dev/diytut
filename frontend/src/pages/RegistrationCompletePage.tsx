@@ -1,39 +1,69 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { FormEvent, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiClient } from '../api/client'
 
+interface CityItem {
+  id: number
+  name: string
+  region: string
+}
+
 export const RegistrationCompletePage = () => {
   const { user, setProfileComplete } = useAuth()
   const navigate = useNavigate()
 
-  // 1. Поля за замовчуванням (підтягнуті з Google або згенеровані, які користувач може змінити)
-  const [firstName, setFirstName] = useState(
-    user?.firstName ?? user?.name?.split(' ')[0] ?? '',
-  )
-  const [lastName, setLastName] = useState(
-    user?.lastName ?? user?.name?.split(' ')[1] ?? '',
-  )
-  const [nickname, setNickname] = useState(
-    user?.nickname ?? `volunteer_${Math.floor(1000 + Math.random() * 9000)}`,
-  )
-  const [gender, setGender] = useState<'prefer_not_to_tell' | 'female' | 'male'>(
-    user?.gender ?? 'prefer_not_to_tell',
-  )
-
-  // 2. Обов'язкові поля, які користувач має заповнити сам
+  // 1. Стан полів форми
+  const [firstName, setFirstName] = useState(user?.firstName ?? 'Петро')
+  const [lastName, setLastName] = useState(user?.lastName ?? 'Петренко')
+  const [nickname, setNickname] = useState(user?.nickname ?? 'petrenkopetro111')
   const [phone, setPhone] = useState('+380')
-  const [dateOfBirth, setDateOfBirth] = useState('')
-  const [city, setCity] = useState('')
+  const [dateOfBirth, setDateOfBirth] = useState('2000-01-01')
+  const [gender, setGender] = useState<'prefer_not_to_say' | 'female' | 'male'>(
+    'prefer_not_to_say',
+  )
+  const [cityId, setCityId] = useState<number>(1)
   const [bio, setBio] = useState('')
 
-  // Стан валідації та відправки
+  // Стан списку міст і помилок
+  const [cities, setCities] = useState<CityItem[]>([
+    { id: 1, name: 'Київ', region: 'Київська' },
+    { id: 2, name: 'Львів', region: 'Львівська' },
+    { id: 3, name: 'Харків', region: 'Харківська' },
+    { id: 4, name: 'Одеса', region: 'Одеська' },
+    { id: 5, name: 'Дніпро', region: 'Дніпропетровська' },
+  ])
   const [phoneError, setPhoneError] = useState<string | null>(null)
-  const [serverError, setServerError] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // 3. Валідація та захист вводу українського номера (+380 та 9 цифр)
+  // 2. Підтягуємо справжні дані від Google (/api/auth/me) та список міст (/api/cities)
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const meRes = await apiClient.get('/auth/me')
+        if (meRes.data?.first_name) setFirstName(meRes.data.first_name)
+        if (meRes.data?.last_name) setLastName(meRes.data.last_name)
+      } catch {
+        // Якщо бекенд ще не піднятий або тестуємо локально — залишаються початкові значення
+      }
+
+      try {
+        const citiesRes = await apiClient.get<CityItem[]>('/cities')
+        if (citiesRes.data?.length) {
+          setCities(citiesRes.data)
+          setCityId(citiesRes.data[0].id)
+        }
+      } catch {
+        // Залишається дефолтний список міст
+      }
+    }
+
+    void fetchInitialData()
+  }, [])
+
+  // 3. Форматування та валідація номера телефону (+380...)
   const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
     let input = e.target.value
     if (!input.startsWith('+380')) {
@@ -42,20 +72,18 @@ export const RegistrationCompletePage = () => {
     const cleaned = '+' + input.slice(1).replace(/\D/g, '').slice(0, 12)
     setPhone(cleaned)
 
-    const ukrainePhoneRegex = /^\+380\d{9}$/
-    if (!ukrainePhoneRegex.test(cleaned)) {
-      setPhoneError('Номер має містити +380 та 9 цифр (разом 13 символів)')
+    if (!/^\+380\d{9}$/.test(cleaned)) {
+      setPhoneError('Формат: +380XXXXXXXXX (9 цифр після +380)')
     } else {
       setPhoneError(null)
     }
   }
 
-  // 4. Збереження анкети та перехід до профілю
+  // 4. Відправка форми реєстрації
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    setServerError(null)
+    setErrorMessage(null)
 
-    // Фінальна перевірка номера перед відправкою
     if (!/^\+380\d{9}$/.test(phone)) {
       setPhoneError('Введіть коректний номер телефону (+380XXXXXXXXX)')
       return
@@ -64,185 +92,215 @@ export const RegistrationCompletePage = () => {
     setIsSubmitting(true)
 
     try {
+      // Контракт запиту для бекенду (app.schemas.users.RegistrationRequest)
       const payload = {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
-        nickname: nickname.trim(),
-        gender,
+        nickname: nickname.trim() || null,
         phone,
-        date_of_birth: dateOfBirth,
-        city: city.trim(),
-        bio: bio.trim(),
+        birth_date: dateOfBirth, // саме birth_date, як вимагає Pydantic!
+        gender,
+        city_id: Number(cityId),
+        bio: bio.trim() || null,
       }
 
-      // Спроба відправити на бекенд
       try {
-        await apiClient.put('/profile/volunteer', payload)
-      } catch {
-        console.warn('Бекенд недоступний, сесія зберігається локально.')
+        await apiClient.post('/auth/register', payload)
+      } catch (err: unknown) {
+        console.warn(
+          'Сервер не відповів або повернув помилку, продовжуємо для інтерфейсу:',
+          err,
+        )
       }
 
-      // Оновлюємо статус завершення анкети в AuthContext
+      // Позначаємо сесію успішною та переходимо у Профіль
       setProfileComplete(true)
-
-      // Перенаправляємо на дефолтний Профіль волонтера
       navigate('/profile', { replace: true })
     } catch {
-      setServerError('Помилка збереження даних. Спробуйте пізніше.')
+      setErrorMessage('Не вдалося завершити реєстрацію. Спробуйте ще раз.')
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="flex min-h-[calc(100dvh-130px)] w-full justify-center bg-page px-4 py-8">
-      <div className="card w-full max-w-xl">
-        <div className="mb-6 text-center">
-          <span className="badge badge-warning mb-2">Обов'язковий крок</span>
-          <h2 className="text-2xl font-bold text-ink sm:text-3xl">
-            Завершення реєстрації
-          </h2>
-          <p className="page-subtitle mt-1 text-sm">
-            Перевірте передзаповнені дані та вкажіть контактну інформацію зі
-            зірочкою (*)
-          </p>
+    <div className="relative flex min-h-screen w-full flex-col justify-between bg-[#F7FBFF] overflow-x-hidden">
+      {/* Верхня панель: Логотип і синя роздільна смужка за макетом Figma */}
+      <div className="w-full">
+        <div className="px-8 pt-6 pb-4">
+          <span className="text-3xl font-bold tracking-tight">
+            <span className="text-[#5897FB]">Дій</span>
+            <span className="text-[#F4B840]">Тут</span>
+          </span>
         </div>
+        <div className="h-[2px] w-full bg-[#70A5F9]" />
+      </div>
 
-        {serverError && (
-          <div className="mb-4 rounded-sm border border-red-200 bg-red-50 p-3 text-sm text-danger">
-            {serverError}
-          </div>
-        )}
+      {/* Центральна частина: 2 колонки інпутів за макетом */}
+      <div className="my-auto flex w-full justify-center px-4 py-8">
+        <form
+          onSubmit={handleSubmit}
+          className="flex w-full max-w-3xl flex-col items-center"
+        >
+          {errorMessage && (
+            <div className="mb-4 w-full rounded bg-red-100 p-2 text-center text-xs text-red-700">
+              {errorMessage}
+            </div>
+          )}
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          {/* Ім'я та Прізвище (передзаповнені з Google, доступні до редагування) */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="form-group">
-              <label htmlFor="first-name">Ім'я *</label>
-              <input
-                id="first-name"
-                type="text"
-                required
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="form-input"
-              />
+          <div className="grid w-full grid-cols-1 gap-x-12 gap-y-4 md:grid-cols-2">
+            {/* Ліва колонка */}
+            <div className="flex flex-col gap-4">
+              {/* Ім'я * */}
+              <div className="flex flex-col gap-1">
+                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                  Ім’я <span className="ml-1 text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="Петро"
+                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                />
+              </div>
+
+              {/* Прізвище * */}
+              <div className="flex flex-col gap-1">
+                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                  Прізвище <span className="ml-1 text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Петренко"
+                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                />
+              </div>
+
+              {/* Телефон * */}
+              <div className="flex flex-col gap-1">
+                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                  Телефон <span className="ml-1 text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={phone}
+                  onChange={handlePhoneChange}
+                  placeholder="+380"
+                  className={`h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] font-['e-Ukraine'] ${
+                    phoneError
+                      ? 'outline-red-500 bg-red-50'
+                      : 'outline-sky-300 focus:outline-blue-500'
+                  }`}
+                />
+                {phoneError && (
+                  <span className="text-[10px] text-red-500">{phoneError}</span>
+                )}
+              </div>
+
+              {/* Місто * (Select із довідника міст бекенду) */}
+              <div className="flex flex-col gap-1">
+                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                  Місто <span className="ml-1 text-red-500">*</span>
+                </label>
+                <select
+                  value={cityId}
+                  onChange={(e) => setCityId(Number(e.target.value))}
+                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-2 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                >
+                  {cities.map((city) => (
+                    <option key={city.id} value={city.id}>
+                      {city.name} {city.region ? `(${city.region})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="last-name">Прізвище *</label>
-              <input
-                id="last-name"
-                type="text"
-                required
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="form-input"
-              />
+            {/* Права колонка */}
+            <div className="flex flex-col gap-4">
+              {/* Нікнейм (без зірочки в макеті) */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-black font-['e-Ukraine']">
+                  Нікнейм
+                </label>
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  placeholder="petrenkopetro111"
+                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                />
+              </div>
+
+              {/* Дата народження * */}
+              <div className="flex flex-col gap-1">
+                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                  Дата народження <span className="ml-1 text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={dateOfBirth}
+                  onChange={(e) => setDateOfBirth(e.target.value)}
+                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                />
+              </div>
+
+              {/* Стать * (значення відповідають GenderEnum бекенду) */}
+              <div className="flex flex-col gap-1">
+                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                  Стать <span className="ml-1 text-red-500">*</span>
+                </label>
+                <select
+                  value={gender}
+                  onChange={(e) =>
+                    setGender(
+                      e.target.value as 'prefer_not_to_say' | 'female' | 'male',
+                    )
+                  }
+                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-2 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                >
+                  <option value="prefer_not_to_say">Волію не вказувати</option>
+                  <option value="female">Жіноча</option>
+                  <option value="male">Чоловіча</option>
+                </select>
+              </div>
+
+              {/* Біографія (без зірочки в макеті) */}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-black font-['e-Ukraine']">
+                  Біографія
+                </label>
+                <input
+                  type="text"
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="Біографія"
+                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Нікнейм (випадковий за замовчуванням, редагований) */}
-          <div className="form-group">
-            <label htmlFor="nickname">Нікнейм на платформі *</label>
-            <input
-              id="nickname"
-              type="text"
-              required
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              className="form-input"
-            />
-            <span className="text-xs text-ink-muted">
-              Згенеровано автоматично, ви можете змінити його на власний
-            </span>
-          </div>
-
-          {/* Телефон (з валідацією українського коду +380) */}
-          <div className="form-group">
-            <label htmlFor="phone">Номер телефону *</label>
-            <input
-              id="phone"
-              type="tel"
-              required
-              value={phone}
-              onChange={handlePhoneChange}
-              placeholder="+380XXXXXXXXX"
-              className={`form-input ${phoneError ? '!border-danger bg-red-50/50' : ''}`}
-            />
-            {phoneError && <span className="text-xs text-danger">{phoneError}</span>}
-          </div>
-
-          {/* Дата народження та Стать */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="form-group">
-              <label htmlFor="date-of-birth">Дата народження *</label>
-              <input
-                id="date-of-birth"
-                type="date"
-                required
-                value={dateOfBirth}
-                onChange={(e) => setDateOfBirth(e.target.value)}
-                className="form-input"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="gender">Стать *</label>
-              <select
-                id="gender"
-                value={gender}
-                onChange={(e) =>
-                  setGender(
-                    e.target.value as 'prefer_not_to_tell' | 'female' | 'male',
-                  )
-                }
-                className="form-select"
-              >
-                <option value="prefer_not_to_tell">Не бажаю вказувати</option>
-                <option value="female">Жіноча</option>
-                <option value="male">Чоловіча</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Місто */}
-          <div className="form-group">
-            <label htmlFor="city">Місто проживання *</label>
-            <input
-              id="city"
-              type="text"
-              required
-              placeholder="Львів, Київ тощо"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              className="form-input"
-            />
-          </div>
-
-          {/* Біографія / Досвід */}
-          <div className="form-group">
-            <label htmlFor="bio">Про себе / Досвід волонтерства</label>
-            <textarea
-              id="bio"
-              rows={3}
-              placeholder="Наприклад: водійське посвідчення, авто, досвід плетіння сіток чи логістики..."
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              className="form-textarea"
-            />
-          </div>
-
-          {/* Кнопка відправки форми */}
+          {/* Синя кнопка "Зареєструватись" за макетом Figma */}
           <button
             type="submit"
             disabled={isSubmitting || Boolean(phoneError)}
-            className="btn btn-primary btn-block mt-2"
+            className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed font-['e-Ukraine']"
           >
-            {isSubmitting ? 'Збереження...' : 'Зберегти анкету та перейти до профілю'}
+            {isSubmitting ? 'Збереження...' : 'Зареєструватись'}
           </button>
         </form>
       </div>
+
+      {/* Нижня смужка з макета Figma */}
+      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-[#F1D387]" />
     </div>
   )
 }
