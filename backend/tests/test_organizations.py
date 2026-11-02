@@ -2,8 +2,11 @@ from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 
 from app import auth
+from app.db import engine
+from app.main import app
 from app.models.base import (
     City,
     Organization,
@@ -223,6 +226,7 @@ def test_required_field_is_missing(client: TestClient, form: dict, field: str) -
         ("edrpou", "1436057a"),
         ("edrpou", "14360571"),
         ("city_id", 0),
+        ("city_id", 2**31),
     ],
 )
 def test_invalid_field_is_rejected(client: TestClient, form: dict, field: str, value) -> None:
@@ -274,6 +278,21 @@ def set_status(db, organization_id: int, new_status: OrgStatusEnum) -> None:
 
 def update(client: TestClient, **changes):
     return client.patch("/api/organizations/me", json=changes)
+
+
+def stored(db, organization_id: int) -> Organization:
+    """Організація такою, якою вона є в БД, а не в пам'яті сесії.
+
+    Тести й застосунок працюють з однією сесією: без refresh незбережені зміни
+    виглядали б збереженими.
+    """
+
+    async def load(session) -> Organization:
+        organization = await session.get(Organization, organization_id)
+        await session.refresh(organization)
+        return organization
+
+    return db(load)
 
 
 def test_owner_reads_own_organization(client: TestClient, form: dict, organization_id: int) -> None:
@@ -336,6 +355,9 @@ def test_owner_updates_contacts(client: TestClient, db, city_id: int) -> None:
     assert body["description"] == "Новий опис"
     assert body["role"] == "owner"
     assert client.get("/api/organizations/me").json() == body
+    organization = stored(db, body["id"])
+    assert organization.phone == "+380501112233"
+    assert organization.city_id == new_city_id
 
 
 def test_omitted_fields_stay_unchanged(client: TestClient, form: dict, organization_id) -> None:
@@ -382,7 +404,7 @@ def test_member_cannot_update(client: TestClient, db, make_user, organization_id
     sign_in(client, member_id)
 
     assert update(client, phone="0501112233").status_code == 403
-    assert client.get("/api/organizations/me").json()["phone"] == "+380671234567"
+    assert stored(db, organization_id).phone == "+380671234567"
 
 
 def test_blocked_organization_cannot_be_updated(
@@ -391,6 +413,7 @@ def test_blocked_organization_cannot_be_updated(
     set_status(db, organization_id, OrgStatusEnum.blocked)
 
     assert update(client, phone="0501112233").status_code == 403
+    assert stored(db, organization_id).phone == "+380671234567"
 
 
 @pytest.mark.parametrize(
@@ -442,6 +465,7 @@ def test_required_field_cannot_be_null(client: TestClient, field: str) -> None:
         ("phone", "+48123456789"),
         ("description", "x" * 2001),
         ("city_id", 0),
+        ("city_id", 2**31),
     ],
 )
 def test_invalid_update_is_rejected(client: TestClient, field: str, value) -> None:
@@ -475,3 +499,58 @@ def test_me_reports_organization_and_role(
 @pytest.mark.usefixtures("user_id")
 def test_me_without_organization(client: TestClient) -> None:
     assert client.get("/api/auth/me").json()["organization"] is None
+
+
+@pytest.mark.parametrize("role", list(OrgMemberRoleEnum))
+def test_blocked_organization_is_still_readable(
+    client: TestClient, db, make_user, organization_id: int, role: OrgMemberRoleEnum
+) -> None:
+    set_status(db, organization_id, OrgStatusEnum.blocked)
+    member_id = make_user()
+    add_member(db, organization_id, member_id, role)
+    sign_in(client, member_id)
+
+    response = client.get("/api/organizations/me")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "blocked"
+
+
+def test_update_locks_rows_until_saved(client: TestClient, organization_id: int) -> None:
+    statements: list[str] = []
+
+    def capture(conn, cursor, statement, parameters, context, executemany) -> None:
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture)
+    try:
+        client.get("/api/organizations/me")
+        reads = len(statements)
+        assert update(client, phone="0501112233").status_code == 200
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture)
+
+    # Читання нічого не блокує, а зміна блокує членство й організацію до збереження
+    assert not any("FOR UPDATE" in statement for statement in statements[:reads])
+    assert any("FOR UPDATE" in statement for statement in statements[reads:])
+
+
+def test_update_schema_does_not_accept_null_for_required_fields() -> None:
+    properties = app.openapi()["components"]["schemas"]["OrganizationUpdate"]["properties"]
+
+    for field in ("email", "phone", "city_id"):
+        assert "anyOf" not in properties[field], field
+    assert {"type": "null"} in properties["description"]["anyOf"]
+
+
+def test_me_reports_role_of_non_owner(client: TestClient, db, make_user, organization_id) -> None:
+    set_status(db, organization_id, OrgStatusEnum.approved)
+    admin_id = make_user()
+    add_member(db, organization_id, admin_id, OrgMemberRoleEnum.admin)
+    sign_in(client, admin_id)
+
+    organization = client.get("/api/auth/me").json()["organization"]
+
+    assert organization["id"] == organization_id
+    assert organization["role"] == "admin"
+    assert organization["status"] == "approved"

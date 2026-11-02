@@ -11,13 +11,22 @@ async def get_user_organization_id(session: AsyncSession, user_id: int) -> int |
     )
 
 
-async def get_user_membership(session: AsyncSession, user_id: int) -> OrganizationMember | None:
-    """Членство користувача в організації разом із самою організацією."""
-    return await session.scalar(
+async def get_user_membership(
+    session: AsyncSession, user_id: int, *, lock: bool = False
+) -> OrganizationMember | None:
+    """Членство користувача в організації разом із самою організацією.
+
+    З lock=True обидва рядки блокуються до кінця транзакції: роль і статус організації,
+    перевірені перед зміною, не зміняться, доки зміну не збережено.
+    """
+    query = (
         select(OrganizationMember)
-        .options(joinedload(OrganizationMember.organization))
+        .options(joinedload(OrganizationMember.organization, innerjoin=True))
         .where(OrganizationMember.user_id == user_id)
     )
+    if lock:
+        query = query.with_for_update().execution_options(populate_existing=True)
+    return await session.scalar(query)
 
 
 async def is_edrpou_taken(session: AsyncSession, edrpou: str) -> bool:

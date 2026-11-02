@@ -15,6 +15,8 @@ from app.models.base import GenderEnum, RoleEnum
 
 MIN_AGE = 18
 MAX_AGE = 120
+# Найбільше значення integer у PostgreSQL; більший id БД відхилила б з помилкою 500
+MAX_INT32 = 2**31 - 1
 PHONE_DIGITS = re.compile(r"^(?:\+?38)?0(\d{9})$")
 
 
@@ -69,6 +71,7 @@ Nickname = Annotated[
 Phone = Annotated[str, BeforeValidator(_normalize_phone)]
 BirthDate = Annotated[date, AfterValidator(_check_age)]
 Bio = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)]
+CityId = Annotated[int, Field(gt=0, le=MAX_INT32)]
 
 
 class RegistrationRequest(BaseModel):
@@ -82,7 +85,7 @@ class RegistrationRequest(BaseModel):
     phone: Phone
     birth_date: BirthDate
     gender: GenderEnum = GenderEnum.prefer_not_to_say
-    city_id: int = Field(gt=0)
+    city_id: CityId
     bio: Annotated[Bio | None, BeforeValidator(_empty_to_none)] = None
 
 

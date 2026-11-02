@@ -47,14 +47,34 @@ def city_not_found() -> HTTPException:
     )
 
 
+def no_organization() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "User does not belong to an organization")
+
+
 async def get_current_membership(session: SessionDep, user_id: CurrentUserId) -> OrganizationMember:
     membership = await get_user_membership(session, user_id)
     if membership is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User does not belong to an organization")
+        raise no_organization()
     return membership
 
 
+async def get_editor_membership(session: SessionDep, user_id: CurrentUserId) -> OrganizationMember:
+    """Членство, з яким можна змінювати профіль організації; заблоковане до кінця запиту."""
+    membership = await get_user_membership(session, user_id, lock=True)
+    if membership is None:
+        raise no_organization()
+    if membership.role not in EDITOR_ROLES:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only the owner or an admin can edit the organization"
+        )
+    if membership.organization.status == OrgStatusEnum.blocked:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Organization is blocked")
+    return membership
+
+
+# Читати профіль може будь-який учасник, змінювати — лише owner чи admin
 CurrentMembership = Annotated[OrganizationMember, Depends(get_current_membership)]
+EditorMembership = Annotated[OrganizationMember, Depends(get_editor_membership)]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -101,16 +121,9 @@ async def read_my_organization(membership: CurrentMembership) -> OrganizationPro
 
 @router.patch("/me")
 async def update_my_organization(
-    data: OrganizationUpdate, session: SessionDep, membership: CurrentMembership
+    data: OrganizationUpdate, session: SessionDep, membership: EditorMembership
 ) -> OrganizationProfile:
-    if membership.role not in EDITOR_ROLES:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "Only the owner or an admin can edit the organization"
-        )
     organization = membership.organization
-    if organization.status == OrgStatusEnum.blocked:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Organization is blocked")
-
     changes = data.model_dump(exclude_unset=True)
     if "city_id" in changes and await session.get(City, changes["city_id"]) is None:
         raise city_not_found()
@@ -118,7 +131,4 @@ async def update_my_organization(
     for field, value in changes.items():
         setattr(organization, field, value)
     await session.commit()
-
-    # updated_at оновлює БД
-    await session.refresh(organization)
     return OrganizationProfile.from_membership(membership)
