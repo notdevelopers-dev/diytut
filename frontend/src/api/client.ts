@@ -8,13 +8,13 @@ import type {
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: '/api',
-  withCredentials: true, // КРИТИЧНО для сесійних кук бекенду!
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Request interceptor: передає токен з localStorage (якщо є)
+// Додавання токена до кожного вихідного запиту
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('token')
@@ -26,16 +26,20 @@ apiClient.interceptors.request.use(
   (error: AxiosError) => Promise.reject(error),
 )
 
-// Response interceptor: перехоплення 401
+// Обробка помилок відповіді від сервера
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
+
+      // Перенаправляємо на /login тільки якщо користувач не перебуває у процесі реєстрації чи входу
+      const currentPath = window.location.pathname
       if (
-        window.location.pathname !== '/login' &&
-        window.location.pathname !== '/register/complete'
+        currentPath !== '/login' &&
+        currentPath !== '/register/complete' &&
+        !currentPath.includes('/organization')
       ) {
         window.location.href = '/login'
       }
