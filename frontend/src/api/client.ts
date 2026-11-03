@@ -1,33 +1,20 @@
 import axios from 'axios'
 import type {
-  AxiosError,
   AxiosInstance,
-  AxiosResponse,
   InternalAxiosRequestConfig,
+  AxiosResponse,
+  AxiosError,
 } from 'axios'
 
-/**
- * Головний HTTP-клієнт для взаємодії з бекендом «ДійТут».
- *
- * Особливості для розробників команди:
- * 1. Базовий шлях: '/api'. Усі запити пишіть відносно, наприклад:
- *    `apiClient.get('/initiatives')` або `apiClient.post('/auth/login', data)`
- *    (домен і порт підставляє проксі Vite у dev та nginx у prod).
- * 2. Авторизація: інтерцептор автоматично зчитує токен з localStorage ('token')
- *    та додає заголовок 'Authorization: Bearer <token>'.
- * 3. Перехоплення помилок: статус 401 автоматично очищує недійсну сесію
- *    та перенаправляє користувача на сторінку входу ('/login').
- */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
-
 export const apiClient: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: '/api',
+  withCredentials: true, // КРИТИЧНО для сесійних кук бекенду!
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Request interceptor: автоматичне додавання JWT токена до кожного запиту
+// Request interceptor: передає токен з localStorage (якщо є)
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('token')
@@ -36,21 +23,21 @@ apiClient.interceptors.request.use(
     }
     return config
   },
-  (error: AxiosError) => {
-    return Promise.reject(error)
-  },
+  (error: AxiosError) => Promise.reject(error),
 )
 
-// Response interceptor: централізована обробка відповідей (401 Unauthorized)
+// Response interceptor: перехоплення 401
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
-
-      if (window.location.pathname !== '/login') {
-        window.location.replace('/login')
+      if (
+        window.location.pathname !== '/login' &&
+        window.location.pathname !== '/register/complete'
+      ) {
+        window.location.href = '/login'
       }
     }
     return Promise.reject(error)
