@@ -8,6 +8,7 @@ import type { ReactNode } from 'react'
  * - 'admin': адміністратор платформи з доступом до панелі керування /admin
  */
 export type Role = 'volunteer' | 'organization' | 'admin'
+// краще створити окрему папку types і всі типи запихнути туди
 
 /**
  * Модель профілю користувача в контексті
@@ -44,10 +45,11 @@ export interface AuthContextType {
   /** Чи пройшов користувач обов'язкове заповнення анкети */
   isProfileComplete: boolean
   /** Функція входу: оновлює стан та зберігає сесію в localStorage */
+  
   login: (
     token: string,
     role: Role,
-    isProfileComplete?: boolean,
+    isProfileComplete?: boolean,// бажано винести в окремий інтерфейс, login: LoginParams
     userData?: Partial<User>,
   ) => void
   /** Функція виходу: очищує стан і видаляє сесію з localStorage */
@@ -56,6 +58,8 @@ export interface AuthContextType {
   setProfileComplete: (isComplete: boolean) => void
 }
 
+
+// ось такі однорядкові константи бажано тримати на самому горі файла
 export const STORAGE_KEY_TOKEN = 'token'
 export const STORAGE_KEY_USER = 'user'
 

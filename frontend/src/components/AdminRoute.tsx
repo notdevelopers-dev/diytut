@@ -19,6 +19,8 @@ export const AdminRoute = ({ children }: AdminRouteProps) => {
   const { isAuthenticated, role } = useAuth()
   const location = useLocation()
 
+
+  // чому б не перевикористати ProtectedRoute?
   // 1. Якщо не авторизований -> на /login
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />

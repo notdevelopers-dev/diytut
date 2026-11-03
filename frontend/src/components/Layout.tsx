@@ -14,6 +14,7 @@ export const Layout = () => {
 
   return (
     <div className="flex min-h-dvh flex-col">
+      {/* винести в окремий Navbar.tsx */}
       <header className="sticky top-0 z-[100] border-b border-border bg-surface shadow-sm">
         <div className="mx-auto flex w-full max-w-[1024px] flex-wrap items-center justify-between gap-4 px-4 py-3 sm:gap-6 sm:px-6">
           <Link
@@ -119,6 +120,7 @@ export const Layout = () => {
         <Outlet />
       </main>
 
+      {/* Окремо footer.tsx */}
       <footer className="mt-auto border-t border-border bg-surface px-4 py-5 text-center text-[0.85rem] text-ink-muted sm:px-6">
         <div className="footer-container">
           <p>© {CURRENT_YEAR} Платформа «ДійТут». Разом до перемоги.</p>
