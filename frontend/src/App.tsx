@@ -9,6 +9,7 @@ import { RegistrationCompletePage } from './pages/RegistrationCompletePage'
 import { HomePage } from './pages/HomePage'
 import { ProfilePage } from './pages/ProfilePage'
 import { AdminPage } from './pages/AdminPage'
+import { CreateOrganizationPage } from './pages/CreateOrganisationPage'
 
 export const App = () => {
   return (
@@ -19,7 +20,11 @@ export const App = () => {
           <Route path="/login" element={<LoginPage />} />
           <Route
             path="/register/complete"
-            element={<RegistrationCompletePage />}
+            element={
+              <ProtectedRoute requireProfileComplete={false}>
+                <RegistrationCompletePage />
+              </ProtectedRoute>
+            }
           />
 
           {/* Внутрішній сайт з шапкою та навігацією */}
@@ -32,6 +37,10 @@ export const App = () => {
                   <ProfilePage />
                 </ProtectedRoute>
               }
+            />
+            <Route
+              path="/organization/create"
+              element={<CreateOrganizationPage />}
             />
             <Route
               path="/admin"
