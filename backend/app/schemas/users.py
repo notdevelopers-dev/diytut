@@ -1,6 +1,6 @@
 import re
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import (
     AfterValidator,
@@ -9,12 +9,15 @@ from pydantic import (
     ConfigDict,
     Field,
     StringConstraints,
+    field_validator,
 )
 
 from app.models.base import GenderEnum, RoleEnum
 
 MIN_AGE = 18
 MAX_AGE = 120
+# Найбільше значення integer у PostgreSQL; більший id БД відхилила б з помилкою 500
+MAX_INT32 = 2**31 - 1
 PHONE_DIGITS = re.compile(r"^(?:\+?38)?0(\d{9})$")
 
 
@@ -69,6 +72,7 @@ Nickname = Annotated[
 Phone = Annotated[str, BeforeValidator(_normalize_phone)]
 BirthDate = Annotated[date, AfterValidator(_check_age)]
 Bio = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)]
+CityId = Annotated[int, Field(gt=0, le=MAX_INT32)]
 
 
 class RegistrationRequest(BaseModel):
@@ -82,8 +86,56 @@ class RegistrationRequest(BaseModel):
     phone: Phone
     birth_date: BirthDate
     gender: GenderEnum = GenderEnum.prefer_not_to_say
-    city_id: int = Field(gt=0)
+    city_id: CityId
     bio: Annotated[Bio | None, BeforeValidator(_empty_to_none)] = None
+
+
+# Поля, які в оновленні можна пропустити, але не можна передати як null
+_NOT_NULL_ON_USER_UPDATE = (
+    "first_name",
+    "last_name",
+    "nickname",
+    "phone",
+    "birth_date",
+    "gender",
+    "city_id",
+)
+
+
+def _hide_null_in_schema(schema: dict[str, Any]) -> None:
+    """Прибирає null зі схеми OpenAPI для полів, де null відхиляється.
+
+    Тип X | None потрібен, щоб поле можна було пропустити; SkipJsonSchema[None] тут не
+    підходить, бо змінює формат помилок валідації.
+    """
+    for field in _NOT_NULL_ON_USER_UPDATE:
+        variants = schema["properties"][field].pop("anyOf")
+        schema["properties"][field].update(*(v for v in variants if v != {"type": "null"}))
+
+
+class UserUpdate(BaseModel):
+    """Часткове оновлення: змінюються лише передані поля."""
+
+    model_config = ConfigDict(extra="forbid", json_schema_extra=_hide_null_in_schema)
+
+    # None тут означає лише «поле не передали»: явний null відхиляє валідатор нижче
+    first_name: PersonName | None = None
+    last_name: PersonName | None = None
+    patronymic: Annotated[PersonName | None, BeforeValidator(_empty_to_none)] = None
+    nickname: Annotated[Nickname | None, BeforeValidator(_empty_to_none)] = None
+    phone: Phone | None = None
+    birth_date: BirthDate | None = None
+    gender: GenderEnum | None = None
+    city_id: CityId | None = None
+    bio: Annotated[Bio | None, BeforeValidator(_empty_to_none)] = None
+
+    @field_validator(*_NOT_NULL_ON_USER_UPDATE)
+    @classmethod
+    def _not_null(cls, value: object) -> object:
+        # Не викликається для пропущених полів, лише для явно переданого null
+        if value is None:
+            raise ValueError("Field cannot be null")
+        return value
 
 
 class UserRead(BaseModel):
@@ -109,3 +161,9 @@ class CityRead(BaseModel):
     id: int
     name: str
     region: str
+
+
+class UserProfileRead(UserRead):
+    """Профіль користувача разом з інформацією про місто."""
+
+    city: CityRead | None = None
