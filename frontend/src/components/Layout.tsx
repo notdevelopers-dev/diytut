@@ -10,14 +10,11 @@ export const Layout = () => {
   const handleLogout = () => {
     setIsMenuOpen(false)
     logout()
-    navigate('/login')
+    void navigate('/login')
   }
 
   // Організація користувача
-  const org = user?.organization ?? {
-    name: 'БО «Дій Разом»',
-    roleInOrg: 'Власник',
-  }
+  const org = user?.organization
 
   return (
     <div className="relative flex min-h-screen flex-col justify-between bg-[#F7FBFF] overflow-x-hidden">
@@ -82,31 +79,57 @@ export const Layout = () => {
                 </button>
               </div>
 
-              {/* Картка організації за макетом image_2e19c8.png */}
+              {/* Картка організації або профілю користувача */}
               <div className="rounded-2xl border border-sky-200 bg-white p-5 shadow-xs flex flex-col gap-4">
-                <div>
-                  <div className="text-xs text-gray-400">Назва організації</div>
-                  <div className="text-base font-bold text-black truncate">
-                    {org.name}
-                  </div>
-                  {/* Відображення ролі в організації за критерієм таски */}
-                  <span className="inline-block mt-1 text-[11px] font-semibold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full">
-                    Роль: {org.roleInOrg ?? 'Власник'}
-                  </span>
-                </div>
+                {org ? (
+                  <>
+                    <div>
+                      <div className="text-xs text-gray-400">
+                        Назва організації
+                      </div>
+                      <div className="text-base font-bold text-black truncate">
+                        {org.name}
+                      </div>
+                      <span className="inline-block mt-1 text-[11px] font-semibold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full">
+                        Роль: {org.roleInOrg ?? 'Власник'}
+                      </span>
+                    </div>
 
-                {/* Кнопка "Редагувати організацію" з шестернею ⚙️ */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMenuOpen(false)
-                    navigate('/organization/edit')
-                  }}
-                  className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100"
-                >
-                  <span className="text-base">⚙️</span>
-                  Редагувати організацію
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false)
+                        void navigate('/organization/edit')
+                      }}
+                      className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100 cursor-pointer"
+                    >
+                      <span className="text-base">⚙️</span>
+                      Редагувати організацію
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <div className="text-base font-bold text-black truncate">
+                        {user?.name ?? 'Користувач'}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {user?.email ?? 'Волонтер'}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false)
+                        void navigate('/organization/create')
+                      }}
+                      className="flex items-center justify-center gap-2 w-full rounded-full bg-[#5897FB] px-4 py-2 text-xs font-medium text-white hover:bg-[#4782e0] cursor-pointer"
+                    >
+                      + Створити організацію
+                    </button>
+                  </>
+                )}
 
                 <div className="h-[1px] w-full bg-gray-100 my-1" />
 
@@ -116,7 +139,9 @@ export const Layout = () => {
                   onClick={handleLogout}
                   className="flex items-center gap-2 text-xs font-medium text-red-500 hover:text-red-700 cursor-pointer"
                 >
-                  <span className="border border-red-400 rounded px-1 text-sm font-bold">➔</span>
+                  <span className="border border-red-400 rounded px-1 text-sm font-bold">
+                    ➔
+                  </span>
                   Вийти
                 </button>
               </div>

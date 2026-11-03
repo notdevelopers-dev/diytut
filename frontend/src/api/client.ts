@@ -34,12 +34,9 @@ apiClient.interceptors.response.use(
       localStorage.removeItem('token')
       localStorage.removeItem('user')
 
-      // Перенаправляємо на /login тільки якщо користувач не перебуває у процесі реєстрації чи входу
-      const currentPath = window.location.pathname
       if (
-        currentPath !== '/login' &&
-        currentPath !== '/register/complete' &&
-        !currentPath.includes('/organization')
+        window.location.pathname !== '/login' &&
+        window.location.pathname !== '/register/complete'
       ) {
         window.location.href = '/login'
       }

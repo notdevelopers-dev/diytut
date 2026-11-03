@@ -72,7 +72,9 @@ const getInitialSession = (): {
     const storedOrg = localStorage.getItem(STORAGE_KEY_ORG)
     if (storedToken && storedUser) {
       const parsedUser = JSON.parse(storedUser) as User
-      const parsedOrg = storedOrg ? (JSON.parse(storedOrg) as OrganizationData) : null
+      const parsedOrg = storedOrg
+        ? (JSON.parse(storedOrg) as OrganizationData)
+        : null
       return {
         token: storedToken,
         user: { ...parsedUser, organization: parsedOrg },
@@ -93,39 +95,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }>({ token: initial.token, user: initial.user })
 
   // Режим відображення: 'volunteer' або 'organization'
-  const [activeMode, setActiveMode] = useState<'volunteer' | 'organization'>('volunteer')
+  const [activeMode, setActiveMode] = useState<'volunteer' | 'organization'>(
+    'volunteer',
+  )
 
   // Перемикач профілю ("Переключити профіль" із макета)
   const switchActiveMode = useCallback(() => {
-    setActiveMode((prev) => (prev === 'volunteer' ? 'organization' : 'volunteer'))
+    setActiveMode((prev) =>
+      prev === 'volunteer' ? 'organization' : 'volunteer',
+    )
   }, [])
 
   // Оновлення даних організації (редагування)
-  const updateOrganization = useCallback((orgData: Partial<OrganizationData>) => {
-    setSession((prev) => {
-      if (!prev.user) return prev
-      const currentOrg = prev.user.organization ?? {
-        name: 'БО «Дій Разом»',
-        email: 'org@diytut.org',
-        phone: '+380971234567',
-        cityId: 1,
-        cityName: 'Київ',
-        description: 'Гуманітарна та волонтерська допомога.',
-        roleInOrg: 'Власник',
-      }
-      const updatedOrg: OrganizationData = { ...currentOrg, ...orgData }
-      const updatedUser: User = { ...prev.user, organization: updatedOrg }
+  const updateOrganization = useCallback(
+    (orgData: Partial<OrganizationData>) => {
+      setSession((prev) => {
+        if (!prev.user) return prev
+        const currentOrg = prev.user.organization ?? {
+          name: '',
+          email: prev.user.email ?? '',
+          phone: '',
+          cityId: 1,
+          cityName: '',
+          description: '',
+          roleInOrg: 'Власник',
+        }
+        const updatedOrg: OrganizationData = { ...currentOrg, ...orgData }
+        const updatedUser: User = { ...prev.user, organization: updatedOrg }
 
-      try {
-        localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(updatedOrg))
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser))
-      } catch (err) {
-        console.error('Помилка збереження організації:', err)
-      }
+        try {
+          localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(updatedOrg))
+          localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser))
+        } catch (err) {
+          console.error('Помилка збереження організації:', err)
+        }
 
-      return { ...prev, user: updatedUser }
-    })
-  }, [])
+        return { ...prev, user: updatedUser }
+      })
+    },
+    [],
+  )
 
   const login = useCallback(
     (
@@ -143,7 +152,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const newUser: User = {
         id: userData.id ?? `usr_${Date.now()}`,
-        name: userData.name ?? 'Петро Петренко',
+        name:
+          userData.name ??
+          (role === 'admin'
+            ? 'Адміністратор'
+            : role === 'organization'
+              ? 'Благодійний Фонд'
+              : 'Волонтер'),
         email: userData.email ?? `${role}@diytut.org`,
         role,
         isProfileComplete,

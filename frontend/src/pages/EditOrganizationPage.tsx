@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { FormEvent, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { apiClient } from '../api/client'
 
 interface CityItem {
   id: number
@@ -13,14 +14,13 @@ export const EditOrganizationPage = () => {
   const navigate = useNavigate()
   const { user, updateOrganization } = useAuth()
 
-  // Підтягуємо щойно створені дані або дефолтні тестові
   const currentOrg = user?.organization ?? {
-    name: 'Волонтери',
-    email: 'organisation@example.com',
-    phone: '+380971234567',
+    name: '',
+    email: user?.email ?? '',
+    phone: user?.phone ?? '+380',
     cityId: 1,
-    edrpou: '00000000',
-    description: 'Діяльність',
+    edrpou: '',
+    description: '',
     roleInOrg: 'Власник',
   }
 
@@ -31,13 +31,27 @@ export const EditOrganizationPage = () => {
   const [edrpou, setEdrpou] = useState(currentOrg.edrpou || '')
   const [description, setDescription] = useState(currentOrg.description)
 
-  const cities: CityItem[] = [
-    { id: 1, name: 'Київ', region: 'Київська' },
-    { id: 2, name: 'Львів', region: 'Львівська' },
-    { id: 3, name: 'Одеса', region: 'Одеська' },
-    { id: 4, name: 'Харків', region: 'Харківська' },
-    { id: 5, name: 'Дніпро', region: 'Дніпропетровська' },
-  ]
+  const [cities, setCities] = useState<CityItem[]>([])
+
+  useEffect(() => {
+    const fetchCities = async () => {
+      try {
+        const res = await apiClient.get<CityItem[]>('/cities')
+        if (res.data?.length) {
+          setCities(res.data)
+        }
+      } catch {
+        setCities([
+          { id: 1, name: 'Київ', region: 'Київська' },
+          { id: 2, name: 'Львів', region: 'Львівська' },
+          { id: 3, name: 'Одеса', region: 'Одеська' },
+          { id: 4, name: 'Харків', region: 'Харківська' },
+          { id: 5, name: 'Дніпро', region: 'Дніпропетровська' },
+        ])
+      }
+    }
+    void fetchCities()
+  }, [])
 
   const [phoneError, setPhoneError] = useState<string | null>(null)
   const [edrpouError, setEdrpouError] = useState<string | null>(null)
@@ -100,7 +114,7 @@ export const EditOrganizationPage = () => {
     setIsSuccess(true)
 
     setTimeout(() => {
-      navigate('/profile')
+      void navigate('/profile')
     }, 500)
   }
 
@@ -125,7 +139,10 @@ export const EditOrganizationPage = () => {
       </div>
 
       <div className="my-auto flex w-full justify-center px-4 py-8">
-        <form onSubmit={handleSubmit} className="flex w-full max-w-xl flex-col items-center">
+        <form
+          onSubmit={handleSubmit}
+          className="flex w-full max-w-xl flex-col items-center"
+        >
           {isSuccess && (
             <div className="mb-4 w-full rounded-lg bg-green-100 p-2.5 text-center text-xs text-green-700">
               Дані організації успішно збережено!
@@ -150,7 +167,8 @@ export const EditOrganizationPage = () => {
             {/* Email * */}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-black">
-                Електронна пошта організації <span className="text-red-500">*</span>
+                Електронна пошта організації{' '}
+                <span className="text-red-500">*</span>
               </label>
               <input
                 type="email"
@@ -172,10 +190,14 @@ export const EditOrganizationPage = () => {
                 value={phone}
                 onChange={handlePhoneChange}
                 className={`h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] ${
-                  phoneError ? 'outline-red-500 bg-red-50' : 'outline-sky-300 focus:outline-blue-500'
+                  phoneError
+                    ? 'outline-red-500 bg-red-50'
+                    : 'outline-sky-300 focus:outline-blue-500'
                 }`}
               />
-              {phoneError && <span className="text-[10px] text-red-500">{phoneError}</span>}
+              {phoneError && (
+                <span className="text-[10px] text-red-500">{phoneError}</span>
+              )}
             </div>
 
             {/* Місто * */}
@@ -199,18 +221,22 @@ export const EditOrganizationPage = () => {
             {/* Код ЄДРПОУ */}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-black">
-                Код EDRPOU
+                Код ЄДРПОУ
               </label>
               <input
                 type="text"
                 value={edrpou}
                 onChange={handleEdrpouChange}
-                placeholder="00000000"
+                placeholder="00000000 (8 цифр, якщо зареєстрована ГО)"
                 className={`h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] ${
-                  edrpouError ? 'outline-red-500 bg-red-50' : 'outline-sky-300 focus:outline-blue-500'
+                  edrpouError
+                    ? 'outline-red-500 bg-red-50'
+                    : 'outline-sky-300 focus:outline-blue-500'
                 }`}
               />
-              {edrpouError && <span className="text-[10px] text-red-500">{edrpouError}</span>}
+              {edrpouError && (
+                <span className="text-[10px] text-red-500">{edrpouError}</span>
+              )}
             </div>
 
             {/* Опис * */}
@@ -230,7 +256,9 @@ export const EditOrganizationPage = () => {
 
           <button
             type="submit"
-            disabled={isSubmitting || Boolean(phoneError) || Boolean(edrpouError)}
+            disabled={
+              isSubmitting || Boolean(phoneError) || Boolean(edrpouError)
+            }
             className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Збереження...' : 'Зберегти'}
