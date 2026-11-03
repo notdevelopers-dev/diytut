@@ -21,27 +21,27 @@ class Base(DeclarativeBase):
 
 # 2. Перелічення (Enums)
 class GenderEnum(enum.StrEnum):
-    male = "male"
-    female = "female"
-    prefer_not_to_say = "prefer_not_to_say"
+    male = enum.auto()
+    female = enum.auto()
+    prefer_not_to_say = enum.auto()
 
 
 class RoleEnum(enum.StrEnum):
-    user = "user"
-    admin = "admin"
+    user = enum.auto()
+    admin = enum.auto()
 
 
 class OrgStatusEnum(enum.StrEnum):
-    pending = "pending"
-    approved = "approved"  # Оновлено з verified на approved
-    rejected = "rejected"
-    blocked = "blocked"
+    pending = enum.auto()
+    approved = enum.auto()  # Оновлено з verified на approved
+    rejected = enum.auto()
+    blocked = enum.auto()
 
 
 class OrgMemberRoleEnum(enum.StrEnum):
-    owner = "owner"
-    admin = "admin"
-    member = "member"
+    owner = enum.auto()
+    admin = enum.auto()
+    member = enum.auto()
 
 
 # 3. Моделі
