@@ -15,10 +15,18 @@ export type Role = 'volunteer' | 'organization' | 'admin'
 export interface User {
   id?: string
   name?: string
+  firstName?: string
+  lastName?: string
+  nickname?: string
   email?: string
+  phone?: string
+  dateOfBirth?: string
+  gender?: 'prefer_not_to_tell' | 'female' | 'male'
+  city?: string
+  bio?: string
   role: Role
-  /** Чи заповнена обов'язкова анкета користувача */
   isProfileComplete: boolean
+  isProfileCompleted?: boolean
 }
 
 /**
