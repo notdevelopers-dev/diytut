@@ -15,8 +15,19 @@ NAMING_CONVENTION = {
 
 
 # 1. Ініціалізація Base з MetaData
+# коменти мають відповідати на питання "навіщо?"
+# в інакшому разі це лише збільшує кількість коду, який необхідно підтримувати
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
+
+# Краще також весь цей файл розбити на окремі user.py organization.py etc
+# для візуального розділення файлу в навігаторі можете використовувати 
+
+# MARK: enums
+
+# тоді праворуч на скрол превю в visual studio code (і його форках) будуть nav anchors.
+# якщо рознести цей мегафайл на сабфайли, то тоді і розділювачі не потрібні
 
 
 # 2. Перелічення (Enums)
@@ -43,6 +54,8 @@ class OrgMemberRoleEnum(enum.StrEnum):
     admin = enum.auto()
     member = enum.auto()
 
+
+# MARK: models
 
 # 3. Моделі
 class City(Base):
@@ -121,7 +134,8 @@ class OrganizationMember(Base):
     organization_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("organizations.id"), primary_key=True
     )
-    # Поки що користувач може належати лише до однієї організації
+    
+    # Поки що користувач може належати лише до однієї організації -- це для тесту?
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.id"), primary_key=True, unique=True
     )

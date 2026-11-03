@@ -5,7 +5,8 @@ from app.db import SessionDep
 from app.models.base import City
 from app.schemas.users import CityRead
 
-router = APIRouter(prefix="/cities", tags=["cities"])
+# реєструємо path/tags у ./__init__.py
+router = APIRouter()
 
 
 @router.get("")
