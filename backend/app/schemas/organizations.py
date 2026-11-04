@@ -6,12 +6,11 @@ from pydantic import (
     BaseModel,
     BeforeValidator,
     ConfigDict,
-    Field,
     StringConstraints,
 )
 
-from app.models.base import OrgStatusEnum
-from app.schemas.users import Phone, _empty_to_none
+from app.models.base import OrganizationMember, OrgMemberRoleEnum, OrgStatusEnum
+from app.schemas.users import CityId, Phone, _empty_to_none
 
 EDRPOU_LENGTH = 8
 
@@ -58,7 +57,7 @@ class OrganizationCreate(BaseModel):
     name: OrganizationName
     email: OrganizationEmail
     phone: Phone
-    city_id: int = Field(gt=0)
+    city_id: CityId
     description: Annotated[Description | None, BeforeValidator(_empty_to_none)] = None
     edrpou: Annotated[Edrpou | None, BeforeValidator(_empty_to_none)] = None
 
@@ -75,3 +74,22 @@ class OrganizationRead(BaseModel):
     edrpou: str | None
     status: OrgStatusEnum
     created_at: datetime
+
+
+class OrganizationMembership(BaseModel):
+    """Коротко про організацію користувача: чи показувати фронтенду режим організації."""
+
+    id: int
+    name: str
+    status: OrgStatusEnum
+    role: OrgMemberRoleEnum
+
+    @classmethod
+    def from_membership(cls, membership: OrganizationMember) -> OrganizationMembership:
+        organization = membership.organization
+        return cls(
+            id=organization.id,
+            name=organization.name,
+            status=organization.status,
+            role=membership.role,
+        )
