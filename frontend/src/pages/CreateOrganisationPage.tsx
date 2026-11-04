@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { FormEvent, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiClient } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 
 interface CityItem {
   id: number
@@ -11,6 +12,7 @@ interface CityItem {
 
 export const CreateOrganizationPage = () => {
   const navigate = useNavigate()
+  const { refresh } = useAuth()
 
   // Поля форми
   const [name, setName] = useState('')
@@ -28,6 +30,13 @@ export const CreateOrganizationPage = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
 
   // 1. Завантаження міст із бекенду
   useEffect(() => {
@@ -115,22 +124,32 @@ export const CreateOrganizationPage = () => {
       }
 
       await apiClient.post('/organizations', payload)
+      // Організація з'являється в /auth/me
+      await refresh()
 
       // Якщо бекенд зберіг успішно:
       setSuccessMessage('Організацію успішно створено! Переходимо в кабінет...')
-      setTimeout(() => {
-        navigate('/profile', { replace: true })
+      timerRef.current = setTimeout(() => {
+        void navigate('/profile', { replace: true })
       }, 1200)
     } catch (err: unknown) {
       const axiosErr = err as {
-        response?: { status: number; data?: { detail?: string } }
+        response?: { status: number; data?: { detail?: unknown } }
       }
+      const detail = axiosErr.response?.data?.detail
 
       // Форма залишається на екрані, а юзер бачить точну причину:
       if (axiosErr.response?.status === 409) {
-        setErrorMessage(
-          'Помилка: організація з таким ЄДРПОУ вже зареєстрована.',
-        )
+        if (
+          typeof detail === 'string' &&
+          detail.toLowerCase().includes('already belongs')
+        ) {
+          setErrorMessage('Ви вже створили організацію або належите до неї.')
+        } else {
+          setErrorMessage(
+            'Помилка: організація з таким кодом ЄДРПОУ вже зареєстрована.',
+          )
+        }
       } else if (axiosErr.response?.status === 401) {
         setErrorMessage(
           'Помилка авторизації: ваша сесія минула. Будь ласка, увійдіть знову.',

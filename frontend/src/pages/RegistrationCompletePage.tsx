@@ -11,7 +11,7 @@ interface CityItem {
 }
 
 export const RegistrationCompletePage = () => {
-  const { user, setProfileComplete } = useAuth()
+  const { user, refresh } = useAuth()
   const navigate = useNavigate()
 
   // 1. Стан полів форми
@@ -104,20 +104,22 @@ export const RegistrationCompletePage = () => {
         bio: bio.trim() || null,
       }
 
-      try {
-        await apiClient.post('/auth/register', payload)
-      } catch (err: unknown) {
-        console.warn(
-          'Сервер не відповів або повернув помилку, продовжуємо для інтерфейсу:',
-          err,
-        )
-      }
+      await apiClient.post('/auth/register', payload)
 
-      // Позначаємо сесію успішною та переходимо у Профіль
-      setProfileComplete(true)
-      navigate('/profile', { replace: true })
-    } catch {
-      setErrorMessage('Не вдалося завершити реєстрацію. Спробуйте ще раз.')
+      // Бекенд замінив cookie `registration` на `session`: оновлюємо стан із /auth/me
+      await refresh()
+      void navigate('/profile', { replace: true })
+    } catch (err: unknown) {
+      // Показуємо помилку бекенду (рядок або список помилок полів FastAPI)
+      const detail = (err as { response?: { data?: { detail?: unknown } } })
+        .response?.data?.detail
+      setErrorMessage(
+        Array.isArray(detail)
+          ? detail.map((d: { msg: string }) => d.msg).join('. ')
+          : typeof detail === 'string'
+            ? detail
+            : 'Не вдалося завершити реєстрацію. Спробуйте ще раз.',
+      )
     } finally {
       setIsSubmitting(false)
     }

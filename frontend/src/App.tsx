@@ -27,11 +27,16 @@ export const App = () => {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/organization/create"
-            element={<CreateOrganizationPage />}
-          />
-          <Route path="/organization/edit" element={<EditOrganizationPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route
+              path="/organization/create"
+              element={<CreateOrganizationPage />}
+            />
+            <Route
+              path="/organization/edit"
+              element={<EditOrganizationPage />}
+            />
+          </Route>
 
           {/* Внутрішній сайт під спільним Layout */}
           <Route element={<Layout />}>

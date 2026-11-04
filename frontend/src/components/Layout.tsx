@@ -133,6 +133,19 @@ export const Layout = () => {
 
                 <div className="h-[1px] w-full bg-gray-100 my-1" />
 
+                {/* Посилання на Особистий кабінет / Профіль */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    void navigate('/profile')
+                  }}
+                  className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100 cursor-pointer"
+                >
+                  <span className="text-base">👤</span>
+                  Мій профіль
+                </button>
+
                 {/* Червона кнопка "Вийти" */}
                 <button
                   type="button"

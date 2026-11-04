@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { FormEvent, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -12,26 +12,61 @@ interface CityItem {
 
 export const EditOrganizationPage = () => {
   const navigate = useNavigate()
-  const { user, updateOrganization } = useAuth()
+  const { user, isLoading, refresh } = useAuth()
 
-  const currentOrg = user?.organization ?? {
-    name: '',
-    email: user?.email ?? '',
-    phone: user?.phone ?? '+380',
-    cityId: 1,
-    edrpou: '',
-    description: '',
-    roleInOrg: 'Власник',
-  }
-
-  const [name, setName] = useState(currentOrg.name)
-  const [email, setEmail] = useState(currentOrg.email)
-  const [phone, setPhone] = useState(currentOrg.phone || '+380')
-  const [cityId, setCityId] = useState<number>(currentOrg.cityId || 1)
-  const [edrpou, setEdrpou] = useState(currentOrg.edrpou || '')
-  const [description, setDescription] = useState(currentOrg.description)
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('+380')
+  const [cityId, setCityId] = useState<number>(1)
+  const [edrpou, setEdrpou] = useState('')
+  const [description, setDescription] = useState('')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const [cities, setCities] = useState<CityItem[]>([])
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  // Якщо у користувача немає організації — перенаправляємо на створення
+  useEffect(() => {
+    if (!isLoading && user && !user.organization) {
+      void navigate('/organization/create', { replace: true })
+    }
+  }, [user, isLoading, navigate])
+
+  // Поточні дані організації з бекенду
+  useEffect(() => {
+    apiClient
+      .get<{
+        name: string
+        email: string
+        phone: string
+        city_id: number
+        edrpou: string | null
+        description: string | null
+      }>('/organizations/me')
+      .then(({ data }) => {
+        setName(data.name)
+        setEmail(data.email)
+        setPhone(data.phone)
+        setCityId(data.city_id)
+        setEdrpou(data.edrpou ?? '')
+        setDescription(data.description ?? '')
+      })
+      .catch((err: unknown) => {
+        const status = (err as { response?: { status?: number } })?.response
+          ?.status
+        if (status === 404) {
+          void navigate('/organization/create', { replace: true })
+        } else {
+          setErrorMessage('Не вдалося завантажити дані організації.')
+        }
+      })
+  }, [navigate])
 
   useEffect(() => {
     const fetchCities = async () => {
@@ -54,7 +89,6 @@ export const EditOrganizationPage = () => {
   }, [])
 
   const [phoneError, setPhoneError] = useState<string | null>(null)
-  const [edrpouError, setEdrpouError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
 
@@ -73,49 +107,45 @@ export const EditOrganizationPage = () => {
     }
   }
 
-  const handleEdrpouChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 8)
-    setEdrpou(value)
-
-    if (value.length > 0 && value.length !== 8) {
-      setEdrpouError('Код ЄДРПОУ має містити рівно 8 цифр')
-    } else {
-      setEdrpouError(null)
-    }
-  }
-
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    setErrorMessage(null)
 
     if (!/^\+380\d{9}$/.test(phone)) {
       setPhoneError('Введіть коректний номер телефону')
       return
     }
 
-    if (edrpou.length > 0 && edrpou.length !== 8) {
-      setEdrpouError('Код ЄДРПОУ має містити рівно 8 цифр')
-      return
-    }
-
     setIsSubmitting(true)
 
+    // Назву та ЄДРПОУ бекенд змінювати не дозволяє (PATCH поверне 422), тож їх не відправляємо
     const updatedData = {
-      name: name.trim(),
       email: email.trim().toLowerCase(),
       phone,
-      cityId: Number(cityId),
+      city_id: Number(cityId),
       description: description.trim(),
-      edrpou: edrpou.trim() || null,
-      roleInOrg: currentOrg.roleInOrg ?? 'Власник',
     }
 
-    updateOrganization(updatedData)
-    setIsSubmitting(false)
-    setIsSuccess(true)
-
-    setTimeout(() => {
-      void navigate('/profile')
-    }, 500)
+    try {
+      await apiClient.patch('/organizations/me', updatedData)
+      await refresh()
+      setIsSuccess(true)
+      timerRef.current = setTimeout(() => {
+        void navigate('/profile')
+      }, 1200)
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })
+        .response?.data?.detail
+      setErrorMessage(
+        Array.isArray(detail)
+          ? detail.map((d: { msg: string }) => d.msg).join('. ')
+          : typeof detail === 'string'
+            ? detail
+            : 'Не вдалося зберегти зміни. Спробуйте ще раз.',
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -128,7 +158,7 @@ export const EditOrganizationPage = () => {
           </h1>
           <button
             type="button"
-            onClick={() => navigate('/profile')}
+            onClick={() => void navigate('/profile')}
             className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl bg-[#F5E6BF] text-2xl font-bold text-black transition-transform hover:scale-105 active:scale-95"
             title="Закрити"
           >
@@ -143,6 +173,12 @@ export const EditOrganizationPage = () => {
           onSubmit={handleSubmit}
           className="flex w-full max-w-xl flex-col items-center"
         >
+          {errorMessage && (
+            <div className="mb-4 w-full rounded-lg bg-red-100 p-2.5 text-center text-xs text-red-700">
+              {errorMessage}
+            </div>
+          )}
+
           {isSuccess && (
             <div className="mb-4 w-full rounded-lg bg-green-100 p-2.5 text-center text-xs text-green-700">
               Дані організації успішно збережено!
@@ -150,18 +186,21 @@ export const EditOrganizationPage = () => {
           )}
 
           <div className="flex w-full flex-col gap-4">
-            {/* Назва * */}
+            {/* Назва (не редагується) */}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-black">
-                Назва організації <span className="text-red-500">*</span>
+                Назва організації
               </label>
               <input
                 type="text"
-                required
+                disabled
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
+                className="h-9 w-full rounded-[5px] bg-[#DCECFF]/60 px-3 text-xs text-gray-700 outline outline-1 outline-offset-[-1px] outline-sky-200 cursor-not-allowed"
+                title="Назва організації фіксується при створенні та перевіряється адміністратором"
               />
+              <span className="text-[10px] text-gray-500">
+                Назву перевіряє адміністратор, її не можна редагувати
+              </span>
             </div>
 
             {/* Email * */}
@@ -218,25 +257,18 @@ export const EditOrganizationPage = () => {
               </select>
             </div>
 
-            {/* Код ЄДРПОУ */}
+            {/* Код ЄДРПОУ (не редагується) */}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-black">
                 Код ЄДРПОУ
               </label>
               <input
                 type="text"
-                value={edrpou}
-                onChange={handleEdrpouChange}
-                placeholder="00000000 (8 цифр, якщо зареєстрована ГО)"
-                className={`h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] ${
-                  edrpouError
-                    ? 'outline-red-500 bg-red-50'
-                    : 'outline-sky-300 focus:outline-blue-500'
-                }`}
+                disabled
+                value={edrpou || 'Не вказано'}
+                className="h-9 w-full rounded-[5px] bg-[#DCECFF]/60 px-3 text-xs text-gray-700 outline outline-1 outline-offset-[-1px] outline-sky-200 cursor-not-allowed"
+                title="Код ЄДРПОУ не можна змінити після реєстрації"
               />
-              {edrpouError && (
-                <span className="text-[10px] text-red-500">{edrpouError}</span>
-              )}
             </div>
 
             {/* Опис * */}
@@ -256,9 +288,7 @@ export const EditOrganizationPage = () => {
 
           <button
             type="submit"
-            disabled={
-              isSubmitting || Boolean(phoneError) || Boolean(edrpouError)
-            }
+            disabled={isSubmitting || Boolean(phoneError)}
             className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Збереження...' : 'Зберегти'}

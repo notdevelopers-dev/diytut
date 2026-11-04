@@ -1,17 +1,18 @@
-import { createContext, useCallback, useMemo, useState } from 'react'
+import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { apiClient } from '../api/client'
 
 export type Role = 'volunteer' | 'organization' | 'admin'
 
 export interface OrganizationData {
   id?: number | string
   name: string
-  email: string
-  phone: string
-  cityId: number
+  email?: string
+  phone?: string
+  cityId?: number
   cityName?: string
   edrpou?: string | null
-  description: string
+  description?: string
   roleInOrg?: 'Власник' | 'Адміністратор' | 'Учасник'
 }
 
@@ -35,64 +36,116 @@ export interface User {
 
 export interface AuthContextType {
   user: User | null
-  token: string | null
   role: Role | null
+  /** Поки чекаємо на першу відповідь /auth/me */
+  isLoading: boolean
   isAuthenticated: boolean
   isProfileComplete: boolean
   isProfileCompleted?: boolean
   // Активний режим відображення: чи ми дивимось як волонтер, чи як організація
   activeMode: 'volunteer' | 'organization'
   switchActiveMode: () => void
-  updateOrganization: (orgData: Partial<OrganizationData>) => void
-  login: (
-    token: string,
-    role: Role,
-    isProfileComplete?: boolean,
-    userData?: Partial<User>,
-  ) => void
+  /** Повторно запитує /auth/me (наприклад, після реєстрації) */
+  refresh: () => Promise<void>
   logout: () => void
   setProfileComplete: (isComplete: boolean) => void
 }
 
-export const STORAGE_KEY_TOKEN = 'token'
-export const STORAGE_KEY_USER = 'user'
-export const STORAGE_KEY_ORG = 'user_organization'
-
 // oxlint-disable-next-line react/only-export-components
 export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-const getInitialSession = (): {
-  token: string | null
-  user: User | null
-  org: OrganizationData | null
-} => {
-  try {
-    const storedToken = localStorage.getItem(STORAGE_KEY_TOKEN)
-    const storedUser = localStorage.getItem(STORAGE_KEY_USER)
-    const storedOrg = localStorage.getItem(STORAGE_KEY_ORG)
-    if (storedToken && storedUser) {
-      const parsedUser = JSON.parse(storedUser) as User
-      const parsedOrg = storedOrg
-        ? (JSON.parse(storedOrg) as OrganizationData)
-        : null
-      return {
-        token: storedToken,
-        user: { ...parsedUser, organization: parsedOrg },
-        org: parsedOrg,
+// Відповідь GET /api/auth/me (app.routers.auth)
+type MeResponse =
+  | {
+      status: 'authenticated'
+      user: {
+        id: number
+        email: string
+        first_name: string
+        last_name: string
+        nickname: string
+        phone: string
+        birth_date: string
+        gender: 'male' | 'female' | 'prefer_not_to_say'
+        bio: string | null
+        platform_role: 'user' | 'admin'
       }
+      // Організація користувача або null (є в /auth/me з гілки be/org-profile)
+      organization?: {
+        id: number
+        name: string
+        role: keyof typeof ORG_ROLE_LABELS
+      } | null
     }
-  } catch (error) {
-    console.error('Помилка при відновленні сесії:', error)
+  | {
+      status: 'registration_required'
+      email: string
+      first_name: string | null
+      last_name: string | null
+    }
+
+const ORG_ROLE_LABELS = {
+  owner: 'Власник',
+  admin: 'Адміністратор',
+  member: 'Учасник',
+} as const
+
+const toUser = (me: MeResponse): User => {
+  if (me.status === 'registration_required') {
+    // Увійшов через Google, але анкету ще не заповнив
+    return {
+      email: me.email,
+      firstName: me.first_name ?? undefined,
+      lastName: me.last_name ?? undefined,
+      role: 'volunteer',
+      isProfileComplete: false,
+    }
   }
-  return { token: null, user: null, org: null }
+  const u = me.user
+  return {
+    id: String(u.id),
+    name: `${u.first_name} ${u.last_name}`,
+    firstName: u.first_name,
+    lastName: u.last_name,
+    nickname: u.nickname,
+    email: u.email,
+    phone: u.phone,
+    dateOfBirth: u.birth_date,
+    gender: u.gender,
+    bio: u.bio ?? undefined,
+    role: u.platform_role === 'admin' ? 'admin' : 'volunteer',
+    isProfileComplete: true,
+    organization: me.organization
+      ? {
+          id: me.organization.id,
+          name: me.organization.name,
+          roleInOrg: ORG_ROLE_LABELS[me.organization.role],
+        }
+      : null,
+  }
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const initial = getInitialSession()
+  // Сесія живе в httpOnly cookie, тож стан беремо лише з бекенду (/auth/me)
   const [session, setSession] = useState<{
-    token: string | null
+    isLoading: boolean
     user: User | null
-  }>({ token: initial.token, user: initial.user })
+  }>({ isLoading: true, user: null })
+
+  const refresh = useCallback(async () => {
+    try {
+      const response = await apiClient.get<MeResponse>('/auth/me')
+      setSession({ isLoading: false, user: toUser(response.data) })
+    } catch {
+      // 401 — не увійшов (або бекенд недоступний)
+      setSession({ isLoading: false, user: null })
+    }
+  }, [])
+
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
+    void refresh()
+  }, [refresh])
 
   // Режим відображення: 'volunteer' або 'organization'
   const [activeMode, setActiveMode] = useState<'volunteer' | 'organization'>(
@@ -106,128 +159,56 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     )
   }, [])
 
-  // Оновлення даних організації (редагування)
-  const updateOrganization = useCallback(
-    (orgData: Partial<OrganizationData>) => {
-      setSession((prev) => {
-        if (!prev.user) return prev
-        const currentOrg = prev.user.organization ?? {
-          name: '',
-          email: prev.user.email ?? '',
-          phone: '',
-          cityId: 1,
-          cityName: '',
-          description: '',
-          roleInOrg: 'Власник',
-        }
-        const updatedOrg: OrganizationData = { ...currentOrg, ...orgData }
-        const updatedUser: User = { ...prev.user, organization: updatedOrg }
-
-        try {
-          localStorage.setItem(STORAGE_KEY_ORG, JSON.stringify(updatedOrg))
-          localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser))
-        } catch (err) {
-          console.error('Помилка збереження організації:', err)
-        }
-
-        return { ...prev, user: updatedUser }
-      })
-    },
-    [],
-  )
-
-  const login = useCallback(
-    (
-      newToken: string,
-      role: Role,
-      isProfileComplete = true,
-      userData: Partial<User> = {},
-    ) => {
-      // Якщо в пам'яті вже є створена організація — підтягуємо її
-      let existingOrg: OrganizationData | null = null
-      try {
-        const storedOrg = localStorage.getItem(STORAGE_KEY_ORG)
-        if (storedOrg) existingOrg = JSON.parse(storedOrg)
-      } catch {}
-
-      const newUser: User = {
-        id: userData.id ?? `usr_${Date.now()}`,
-        name:
-          userData.name ??
-          (role === 'admin'
-            ? 'Адміністратор'
-            : role === 'organization'
-              ? 'Благодійний Фонд'
-              : 'Волонтер'),
-        email: userData.email ?? `${role}@diytut.org`,
-        role,
-        isProfileComplete,
-        organization: existingOrg,
-        ...userData,
-      }
-
-      setSession({ token: newToken, user: newUser })
-
-      try {
-        localStorage.setItem(STORAGE_KEY_TOKEN, newToken)
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(newUser))
-      } catch (error) {
-        console.error('Помилка збереження сесії:', error)
-      }
-    },
-    [],
-  )
-
   const logout = useCallback(() => {
-    setSession({ token: null, user: null })
+    setSession({ isLoading: false, user: null })
     setActiveMode('volunteer')
     try {
-      localStorage.removeItem(STORAGE_KEY_TOKEN)
-      localStorage.removeItem(STORAGE_KEY_USER)
+      localStorage.removeItem('user_organization')
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
     } catch {}
+    // Бекенд видаляє httpOnly cookie
+    apiClient.post('/auth/logout').catch((error: unknown) => {
+      console.error('Помилка під час виходу:', error)
+    })
   }, [])
 
   const setProfileComplete = useCallback((isComplete: boolean) => {
     setSession((prev) => {
       if (!prev.user) return prev
       const updatedUser: User = { ...prev.user, isProfileComplete: isComplete }
-      try {
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser))
-      } catch {}
       return { ...prev, user: updatedUser }
     })
   }, [])
 
-  const { token, user } = session
-  const isAuthenticated = Boolean(token && user)
+  const { isLoading, user } = session
+  const isAuthenticated = user !== null
   const isProfileComplete = Boolean(user?.isProfileComplete)
   const role = user?.role ?? null
 
   const value = useMemo<AuthContextType>(
     () => ({
       user,
-      token,
       role,
+      isLoading,
       isAuthenticated,
       isProfileComplete,
       isProfileCompleted: isProfileComplete,
       activeMode,
       switchActiveMode,
-      updateOrganization,
-      login,
+      refresh,
       logout,
       setProfileComplete,
     }),
     [
       user,
-      token,
       role,
+      isLoading,
       isAuthenticated,
       isProfileComplete,
       activeMode,
       switchActiveMode,
-      updateOrganization,
-      login,
+      refresh,
       logout,
       setProfileComplete,
     ],
