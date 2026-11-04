@@ -29,6 +29,17 @@ async def get_user_membership(
     return await session.scalar(query)
 
 
+async def get_user_memberships(session: AsyncSession, user_id: int) -> list[OrganizationMember]:
+    """Усі членства користувача в організаціях для перемикання акаунтів."""
+    query = (
+        select(OrganizationMember)
+        .options(joinedload(OrganizationMember.organization, innerjoin=True))
+        .where(OrganizationMember.user_id == user_id)
+    )
+    result = await session.scalars(query)
+    return list(result.all())
+
+
 async def is_edrpou_taken(session: AsyncSession, edrpou: str) -> bool:
     found = await session.scalar(select(Organization.id).where(Organization.edrpou == edrpou))
     return found is not None
