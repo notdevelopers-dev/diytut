@@ -1,129 +1,190 @@
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext.tsx'
-
-const CURRENT_YEAR = new Date().getFullYear()
+import { useState } from 'react'
+import { Link, Outlet, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { canEditOrganization, getOrgRoleLabel } from '../utils/organization'
 
 export const Layout = () => {
   const { isAuthenticated, user, logout } = useAuth()
   const navigate = useNavigate()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   const handleLogout = () => {
+    setIsMenuOpen(false)
     logout()
     void navigate('/login')
   }
 
+  // Організація користувача; редагувати її можуть лише owner/admin не заблокованої організації
+  const org = user?.organization
+  const canEditOrg = canEditOrganization(org)
+
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-[100] border-b border-border bg-surface shadow-sm">
-        <div className="mx-auto flex w-full max-w-[1024px] flex-wrap items-center justify-between gap-4 px-4 py-3 sm:gap-6 sm:px-6">
-          <Link
-            to="/"
-            className="flex items-center gap-2 text-xl font-bold text-ink no-underline"
-          >
-            <span className="text-2xl">🇺🇦</span>
-            <span className="tracking-tight">ДійТут</span>
+    <div className="relative flex min-h-screen flex-col justify-between bg-[#F7FBFF] overflow-x-hidden">
+      {/* 1. Шапка за макетом із Figma: логотип ДійТут + жовта кнопка ☰ */}
+      <header className="w-full bg-[#F7FBFF]">
+        <div className="flex items-center justify-between px-8 pt-6 pb-4">
+          <Link to="/" className="no-underline">
+            <span className="text-3xl font-bold tracking-tight">
+              <span className="text-[#5897FB]">Дій</span>
+              <span className="text-[#F4B840]">Тут</span>
+            </span>
           </Link>
 
-          <nav className="flex items-center gap-4">
-            <NavLink
-              to="/"
-              className={({ isActive }) =>
-                isActive ? 'nav-link active' : 'nav-link'
-              }
+          {/* Жовта кнопка трьох рисочок (☰) */}
+          {isAuthenticated ? (
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen(true)}
+              className="flex h-10 w-12 cursor-pointer items-center justify-center rounded-xl bg-[#F5E6BF] shadow-sm transition-transform hover:scale-105 active:scale-95"
+              aria-label="Відкрити меню"
             >
-              Головна
-            </NavLink>
-            {user?.role === 'admin' && (
-              <NavLink
-                to="/admin"
-                className={({ isActive }) =>
-                  isActive ? 'nav-link active' : 'nav-link'
-                }
-              >
-                Адмін-панель
-              </NavLink>
-            )}
-          </nav>
-
-          <div className="flex min-w-0 items-center gap-3">
-            {isAuthenticated && user ? (
-              <div className="flex min-w-0 items-center gap-3">
-                <Link
-                  to="/profile"
-                  className="flex min-w-0 items-center gap-2 rounded-sm px-[0.6rem] py-[0.35rem] text-ink no-underline transition-colors hover:bg-page"
-                  title="Перейти до профілю"
-                >
-                  <span
-                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-light text-primary"
-                    aria-label="Іконка профілю"
-                  >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                      <circle cx="12" cy="7" r="4" />
-                    </svg>
-                  </span>
-                  <span className="min-w-0 truncate text-[0.9rem] font-semibold">
-                    {user.name}
-                  </span>
-                  <span
-                    className={`badge badge-sm badge-${user.role} hidden shrink-0 sm:inline-block`}
-                  >
-                    {user.role}
-                  </span>
-                </Link>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline"
-                  onClick={handleLogout}
-                >
-                  Вийти
-                </button>
+              <div className="flex flex-col gap-1">
+                <span className="h-0.5 w-6 bg-black rounded-full" />
+                <span className="h-0.5 w-6 bg-black rounded-full" />
+                <span className="h-0.5 w-6 bg-black rounded-full" />
               </div>
-            ) : (
-              <div className="flex items-center">
-                <Link to="/login" className="btn btn-sm btn-primary">
-                  <span className="btn-icon">
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-                      <polyline points="10 17 15 12 10 7" />
-                      <line x1="15" y1="12" x2="3" y2="12" />
-                    </svg>
-                  </span>
-                  Увійти
-                </Link>
-              </div>
-            )}
-          </div>
+            </button>
+          ) : (
+            <Link
+              to="/login"
+              className="rounded-lg bg-[#5897FB] px-4 py-2 text-sm font-medium text-white no-underline"
+            >
+              Увійти
+            </Link>
+          )}
         </div>
+        <div className="h-[2px] w-full bg-[#70A5F9]" />
       </header>
 
-      <main className="mx-auto w-full max-w-[1024px] flex-1 px-4 py-8 sm:px-6">
+      {/* 2. Основний вміст сайту */}
+      <main className="flex-1 w-full">
         <Outlet />
       </main>
 
-      <footer className="mt-auto border-t border-border bg-surface px-4 py-5 text-center text-[0.85rem] text-ink-muted sm:px-6">
-        <div className="footer-container">
-          <p>© {CURRENT_YEAR} Платформа «ДійТут». Разом до перемоги.</p>
+      {/* 3. Нижня декоративна смужка */}
+      <footer className="h-14 w-full bg-[#DCECFF] border-t-2 border-[#F1D387]" />
+
+      {/* 4. ВИСУВНЕ МЕНЮ ОРГАНІЗАЦІЇ (image_2e19c8.png) */}
+      {isMenuOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-xs">
+          <div className="relative flex h-full w-full max-w-sm flex-col justify-between bg-[#F7FBFF] shadow-2xl p-6 sm:p-8">
+            <div>
+              {/* Шапка меню з помаранчевим хрестиком */}
+              <div className="flex items-center justify-between border-b-2 border-[#70A5F9] pb-4 mb-6">
+                <h2 className="text-3xl font-bold text-[#5897FB]">Меню</h2>
+                <button
+                  type="button"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl bg-[#F5E6BF] text-2xl font-bold text-black"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Картка організації або профілю користувача */}
+              <div className="rounded-2xl border border-sky-200 bg-white p-5 shadow-xs flex flex-col gap-4">
+                {org ? (
+                  <>
+                    <div>
+                      <div className="text-xs text-gray-400">
+                        Назва організації
+                      </div>
+                      <div className="text-base font-bold text-black truncate">
+                        {org.name}
+                      </div>
+                      <span className="inline-block mt-1 text-[11px] font-semibold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full">
+                        Роль: {getOrgRoleLabel(org.role)}
+                      </span>
+                    </div>
+
+                    {canEditOrg && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMenuOpen(false)
+                          void navigate('/organization/edit')
+                        }}
+                        className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100 cursor-pointer"
+                      >
+                        <span className="text-base">⚙️</span>
+                        Редагувати організацію
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <div className="text-base font-bold text-black truncate">
+                        {user?.name ?? 'Користувач'}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {user?.email ?? 'Волонтер'}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false)
+                        void navigate('/organization/create')
+                      }}
+                      className="flex items-center justify-center gap-2 w-full rounded-full bg-[#5897FB] px-4 py-2 text-xs font-medium text-white hover:bg-[#4782e0] cursor-pointer"
+                    >
+                      + Створити організацію
+                    </button>
+                  </>
+                )}
+
+                <div className="h-[1px] w-full bg-gray-100 my-1" />
+
+                {/* Посилання на Особистий кабінет / Профіль */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    void navigate('/profile')
+                  }}
+                  className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100 cursor-pointer"
+                >
+                  <span className="text-base">👤</span>
+                  Мій профіль
+                </button>
+
+                {/* Адмін-панель доступна лише адміністраторам платформи */}
+                {user?.role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false)
+                      void navigate('/admin')
+                    }}
+                    className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100 cursor-pointer"
+                  >
+                    <span className="text-base">🛡️</span>
+                    Адмін-панель
+                  </button>
+                )}
+
+                {/* Червона кнопка "Вийти" */}
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 text-xs font-medium text-red-500 hover:text-red-700 cursor-pointer"
+                >
+                  <span className="border border-red-400 rounded px-1 text-sm font-bold">
+                    ➔
+                  </span>
+                  Вийти
+                </button>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-gray-400 text-center">
+              Платформа «ДійТут»
+            </div>
+          </div>
         </div>
-      </footer>
+      )}
     </div>
   )
 }

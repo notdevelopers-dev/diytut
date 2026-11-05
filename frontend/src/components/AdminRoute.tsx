@@ -16,8 +16,11 @@ interface AdminRouteProps {
  * 3. Якщо роль 'admin' -> відкриває доступ до адмін-панелі.
  */
 export const AdminRoute = ({ children }: AdminRouteProps) => {
-  const { isAuthenticated, role } = useAuth()
+  const { isLoading, isAuthenticated, role } = useAuth()
   const location = useLocation()
+
+  // Поки /auth/me не відповів, нікуди не редиректимо
+  if (isLoading) return null
 
   // 1. Якщо не авторизований -> на /login
   if (!isAuthenticated) {
