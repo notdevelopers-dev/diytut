@@ -38,7 +38,7 @@ class Authenticated(BaseModel):
     status: Literal["authenticated"] = "authenticated"
     user: UserRead
     # Організація, до якої належить користувач; null, якщо такої немає
-    organization: OrganizationMembership | None = None
+    organization: OrganizationMembership | None
 
 
 class RegistrationRequired(BaseModel):

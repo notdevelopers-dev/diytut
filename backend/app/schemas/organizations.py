@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import (
     AfterValidator,
@@ -7,6 +7,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     StringConstraints,
+    field_validator,
 )
 
 from app.models.base import OrganizationMember, OrgMemberRoleEnum, OrgStatusEnum
@@ -62,6 +63,45 @@ class OrganizationCreate(BaseModel):
     edrpou: Annotated[Edrpou | None, BeforeValidator(_empty_to_none)] = None
 
 
+# Поля, які в оновленні можна пропустити, але не можна передати як null
+_NOT_NULL_ON_UPDATE = ("email", "phone", "city_id")
+
+
+def _hide_null_in_schema(schema: dict[str, Any]) -> None:
+    """Прибирає null зі схеми OpenAPI для полів, де null відхиляється.
+
+    Тип X | None потрібен, щоб поле можна було пропустити; SkipJsonSchema[None] тут не
+    підходить, бо змінює формат помилок валідації.
+    """
+    for field in _NOT_NULL_ON_UPDATE:
+        variants = schema["properties"][field].pop("anyOf")
+        schema["properties"][field].update(*(v for v in variants if v != {"type": "null"}))
+
+
+class OrganizationUpdate(BaseModel):
+    """Часткове оновлення: змінюються лише передані поля.
+
+    Назву й код ЄДРПОУ перевіряє адміністратор, тож змінювати їх не можна.
+    """
+
+    model_config = ConfigDict(extra="forbid", json_schema_extra=_hide_null_in_schema)
+
+    # None тут означає лише «поле не передали»: явний null відхиляє валідатор нижче
+    email: OrganizationEmail | None = None
+    phone: Phone | None = None
+    city_id: CityId | None = None
+    # null або порожній рядок прибирає опис
+    description: Annotated[Description | None, BeforeValidator(_empty_to_none)] = None
+
+    @field_validator(*_NOT_NULL_ON_UPDATE)
+    @classmethod
+    def _not_null(cls, value: object) -> object:
+        # Не викликається для пропущених полів, лише для явно переданого null
+        if value is None:
+            raise ValueError("Field cannot be null")
+        return value
+
+
 class OrganizationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -74,6 +114,17 @@ class OrganizationRead(BaseModel):
     edrpou: str | None
     status: OrgStatusEnum
     created_at: datetime
+
+
+class OrganizationProfile(OrganizationRead):
+    """Профіль організації для її учасника разом із його роллю в ній."""
+
+    role: OrgMemberRoleEnum
+
+    @classmethod
+    def from_membership(cls, membership: OrganizationMember) -> OrganizationProfile:
+        organization = OrganizationRead.model_validate(membership.organization)
+        return cls(**organization.model_dump(), role=membership.role)
 
 
 class OrganizationMembership(BaseModel):
