@@ -1,6 +1,20 @@
-.venv
-__pycache__
-*.pyc
+**/__pycache__
+**/*.pyc
 .env
+.env.*
+!.env.example
+.venv
 .git
 tests
+.ruff_cache
+
+# vcs / ci / editor
+.git
+.github
+.idea
+.vscode
+
+# docker itself
+Dockerfile*
+docker-compose*.yml
+.dockerignore

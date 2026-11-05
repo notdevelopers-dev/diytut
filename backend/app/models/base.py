@@ -15,34 +15,47 @@ NAMING_CONVENTION = {
 
 
 # 1. Ініціалізація Base з MetaData
+# коменти мають відповідати на питання "навіщо?"
+# в інакшому разі це лише збільшує кількість коду, який необхідно підтримувати
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
+# Краще також весь цей файл розбити на окремі user.py organization.py etc
+# для візуального розділення файлу в навігаторі можете використовувати 
+
+# MARK: enums
+
+# тоді праворуч на скрол превю в visual studio code (і його форках) будуть nav anchors.
+# якщо рознести цей мегафайл на сабфайли, то тоді і розділювачі не потрібні
+
+
 # 2. Перелічення (Enums)
 class GenderEnum(enum.StrEnum):
-    male = "male"
-    female = "female"
-    prefer_not_to_say = "prefer_not_to_say"
+    male = enum.auto()
+    female = enum.auto()
+    prefer_not_to_say = enum.auto()
 
 
 class RoleEnum(enum.StrEnum):
-    user = "user"
-    admin = "admin"
+    user = enum.auto()
+    admin = enum.auto()
 
 
 class OrgStatusEnum(enum.StrEnum):
-    pending = "pending"
-    approved = "approved"  # Оновлено з verified на approved
-    rejected = "rejected"
-    blocked = "blocked"
+    pending = enum.auto()
+    approved = enum.auto()  # Оновлено з verified на approved
+    rejected = enum.auto()
+    blocked = enum.auto()
 
 
 class OrgMemberRoleEnum(enum.StrEnum):
-    owner = "owner"
-    admin = "admin"
-    member = "member"
+    owner = enum.auto()
+    admin = enum.auto()
+    member = enum.auto()
 
+
+# MARK: models
 
 # 3. Моделі
 class City(Base):
@@ -121,7 +134,8 @@ class OrganizationMember(Base):
     organization_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("organizations.id"), primary_key=True
     )
-    # Поки що користувач може належати лише до однієї організації
+    
+    # Поки що користувач може належати лише до однієї організації -- це для тесту?
     user_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("users.id"), primary_key=True, unique=True
     )
@@ -133,3 +147,38 @@ class OrganizationMember(Base):
     # Відношення
     organization = relationship("Organization", back_populates="members")
     user = relationship("User", back_populates="organizations")
+
+
+class Project(Base):
+    # модель для волонтерської роботи
+
+    # мінімально необхідний досвід
+    # дата створення
+    # дата проведення
+    # назва
+    # опис
+    # дата відкриття подання реєстрацій
+    # дата закриття подання реєстрацій
+    ...
+
+
+class Attendance(Base):
+    # модель для асоціації роботи до волонтера
+
+    # юзер ід
+    # проджект ід
+
+    # к-ть годин
+    # дата
+
+    # чи підтверджено організацією
+    ...
+
+
+class Feedback(Base):
+    # оцінка (1-5)
+    # коментар
+    # хто залишив відгук -- юзер ід
+    # кому залишили відгук  -- юзер ід
+    ...
+

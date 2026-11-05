@@ -5,6 +5,7 @@ import { getErrorStatus } from '../api/errors'
 import type { OrgRole, OrgStatus } from '../utils/organization'
 
 export type Role = 'volunteer' | 'organization' | 'admin'
+// краще створити окрему папку types і всі типи запихнути туди
 
 export interface OrganizationData {
   id?: number | string

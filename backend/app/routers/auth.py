@@ -24,7 +24,7 @@ from app.models.base import City, User
 from app.organizations import get_user_membership
 from app.schemas.organizations import OrganizationMembership
 from app.schemas.users import RegistrationRequest, UserRead
-from app.users import free_generated_nickname, get_user_id_by_google_sub, is_nickname_taken
+from backend.app.services.users import free_generated_nickname, get_user_id_by_google_sub, is_nickname_taken
 
 # Сторінки фронтенду, куди повертаємо користувача після входу
 AFTER_LOGIN_URL = "/"
@@ -33,7 +33,8 @@ LOGIN_FAILED_URL = "/login?error=google"
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-
+# ось всю цю мега двіжуху рознести на окремий schemas/users чи /auth, services
+# в роутерах має бути лише оголошення самого ендпоінта,виклик бізнес функції і повернення відповіді
 class Authenticated(BaseModel):
     status: Literal["authenticated"] = "authenticated"
     user: UserRead

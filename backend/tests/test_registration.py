@@ -65,11 +65,16 @@ def test_registration_creates_user_and_session(client: TestClient, form: dict, d
 
     assert response.status_code == 201
     body = response.json()
-    assert body["email"] == "taras@example.com"
-    assert body["nickname"] == "taras_1814"
-    assert body["gender"] == "prefer_not_to_say"
-    assert body["bio"] == "Волонтерю з 2022"
-    assert body["platform_role"] == "user"
+
+    correct_dict = {
+        "email": "taras@example.com",
+        "nickname": "taras_1814",
+        "gender": "prefer_not_to_say",
+        "bio": "Волонтерю з 2022",
+        "platform_role": "user"
+    } 
+    # для спрощення взаємодії з pytest
+    assert body == correct_dict
 
     me = client.get("/api/auth/me").json()
     assert me == {"status": "authenticated", "user": body, "organization": None}

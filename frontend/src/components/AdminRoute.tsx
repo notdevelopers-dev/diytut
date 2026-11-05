@@ -19,6 +19,8 @@ export const AdminRoute = ({ children }: AdminRouteProps) => {
   const { isLoading, isAuthenticated, role } = useAuth()
   const location = useLocation()
 
+
+  // чому б не перевикористати ProtectedRoute?
   // Поки /auth/me не відповів, нікуди не редиректимо
   if (isLoading) return null
 
