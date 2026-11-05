@@ -71,6 +71,12 @@ docker compose up -d --build
 docker compose --profile web up -d --build
 ```
 
+Якщо БД уже створювалася раніше з іншим паролем, `migrate` впаде з `password authentication failed`: Postgres бере пароль лише при першому створенні тому. Тоді або впишіть старий пароль у `.env` як `POSTGRES_PASSWORD`, або змініть його в БД на локальний за замовчуванням:
+
+```bash
+docker compose exec db psql -U diytut -d diytut -c "ALTER USER diytut PASSWORD 'diytut'"
+```
+
 Міграції застосовуються самі: перед стартом `api` запускається одноразовий сервіс `migrate`, і `api` стартує лише після його успіху. Міста теж заливаються міграцією.
 
 Після цього локально доступні:

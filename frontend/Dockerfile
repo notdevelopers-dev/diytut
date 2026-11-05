@@ -7,7 +7,8 @@ ENV HOME=/tmp
 WORKDIR /app
 USER ${UID}:${GID}
 EXPOSE 5173
-CMD ["sh", "-c", "npm install --no-audit --no-fund && exec npm run dev -- --host 0.0.0.0"]
+# --no-save: контейнер не переписує package-lock.json у змонтованому репозиторії (інакше npm падає з EACCES, коли власник файлів на хості має інший UID)
+CMD ["sh", "-c", "npm install --no-save --no-audit --no-fund && exec npm run dev -- --host 0.0.0.0"]
 
 # --- збирання продакшн-версії ---
 FROM node:24-slim AS build
