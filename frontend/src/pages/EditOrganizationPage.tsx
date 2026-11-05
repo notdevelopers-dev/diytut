@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { apiClient } from '../api/client'
 import { getApiErrorMessage, getErrorStatus } from '../api/errors'
 import { useCities } from '../hooks/useCities'
+import { canEditOrganization } from '../utils/organization'
 import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../utils/phone'
 
 export const EditOrganizationPage = () => {
@@ -30,13 +31,13 @@ export const EditOrganizationPage = () => {
     }
   }, [])
 
-  // Без організації — на створення; звичайний учасник редагувати не може — у профіль
+  // Без організації — на створення; без права редагування (учасник, заблокована) — у профіль
   const organization = user?.organization
   useEffect(() => {
     if (isLoading || !user) return
     if (!organization) {
       void navigate('/organization/create', { replace: true })
-    } else if (organization.roleInOrg === 'Учасник') {
+    } else if (!canEditOrganization(organization)) {
       void navigate('/profile', { replace: true })
     }
   }, [user, organization, isLoading, navigate])
@@ -121,10 +122,12 @@ export const EditOrganizationPage = () => {
       await apiClient.patch('/organizations/me', updatedData)
       await refresh()
       setIsSuccess(true)
+      // isSubmitting лишається true до переходу, щоб не можна було відправити форму вдруге
       timerRef.current = setTimeout(() => {
         void navigate('/profile')
       }, 1200)
     } catch (err: unknown) {
+      setIsSubmitting(false)
       setErrorMessage(
         getErrorStatus(err) === 403
           ? 'Редагувати організацію може лише власник або адміністратор, а заблоковану організацію змінювати не можна.'
@@ -133,8 +136,6 @@ export const EditOrganizationPage = () => {
               'Не вдалося зберегти зміни. Спробуйте ще раз.',
             ),
       )
-    } finally {
-      setIsSubmitting(false)
     }
   }
 

@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.tsx'
 import { apiClient } from '../api/client'
+import {
+  canEditOrganization,
+  getOrgRoleLabel,
+  getOrgStatusLabel,
+} from '../utils/organization'
 
 interface OrgProfileData {
   id: number
@@ -16,23 +21,32 @@ interface OrgProfileData {
 }
 
 export const ProfilePage = () => {
-  const { user, logout, setProfileComplete } = useAuth()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
 
   const [orgData, setOrgData] = useState<OrgProfileData | null>(null)
   const [isOrgLoading, setIsOrgLoading] = useState(false)
+  const [orgError, setOrgError] = useState<string | null>(null)
 
   useEffect(() => {
     let isMounted = true
     if (user?.organization) {
       // oxlint-disable-next-line react/set-state-in-effect
       setIsOrgLoading(true)
+      setOrgError(null)
       apiClient
         .get<OrgProfileData>('/organizations/me')
         .then(({ data }) => {
           if (isMounted) setOrgData(data)
         })
-        .catch(() => {})
+        .catch((err: unknown) => {
+          console.error('Не вдалося завантажити дані організації:', err)
+          if (isMounted) {
+            setOrgError(
+              'Не вдалося завантажити дані організації. Оновіть сторінку.',
+            )
+          }
+        })
         .finally(() => {
           if (isMounted) setIsOrgLoading(false)
         })
@@ -49,18 +63,10 @@ export const ProfilePage = () => {
     void navigate('/login')
   }
 
-  const handleResetProfile = () => {
-    setProfileComplete(false)
-    void navigate('/register/complete')
-  }
-
   return (
     <div className="page-container">
       <header className="page-header">
         <h1>Особистий кабінет</h1>
-        <p className="page-subtitle">
-          Сторінка захищена за допомогою <code>ProtectedRoute</code>.
-        </p>
       </header>
 
       <div className="card profile-card">
@@ -113,13 +119,6 @@ export const ProfilePage = () => {
         <div className="button-group mt-6">
           <button
             type="button"
-            className="btn btn-secondary"
-            onClick={handleResetProfile}
-          >
-            Скинути анкету (тест редиректу на /register/complete)
-          </button>
-          <button
-            type="button"
             className="btn btn-danger"
             onClick={handleLogout}
           >
@@ -138,10 +137,15 @@ export const ProfilePage = () => {
                 {orgData?.name ?? user.organization.name}
               </h2>
               <span className="inline-block mt-1 text-xs font-semibold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full">
-                Роль: {user.organization.roleInOrg ?? 'Власник'}
+                Роль: {getOrgRoleLabel(user.organization.role)}
               </span>
+              {getOrgStatusLabel(user.organization.status) && (
+                <span className="ml-2 inline-block mt-1 text-xs font-semibold text-ink-muted bg-page px-2.5 py-0.5 rounded-full">
+                  {getOrgStatusLabel(user.organization.status)}
+                </span>
+              )}
             </div>
-            {user.organization.roleInOrg !== 'Учасник' && (
+            {canEditOrganization(user.organization) && (
               <button
                 type="button"
                 className="btn btn-primary"
@@ -157,6 +161,10 @@ export const ProfilePage = () => {
           {isOrgLoading ? (
             <div className="text-xs text-ink-muted">
               Завантаження даних організації...
+            </div>
+          ) : orgError ? (
+            <div className="rounded-lg bg-red-100 p-2.5 text-center text-xs text-red-700">
+              {orgError}
             </div>
           ) : (
             <div className="flex flex-col gap-3">

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { canEditOrganization, getOrgRoleLabel } from '../utils/organization'
 
 export const Layout = () => {
   const { isAuthenticated, user, logout } = useAuth()
@@ -13,9 +14,9 @@ export const Layout = () => {
     void navigate('/login')
   }
 
-  // Організація користувача; звичайний учасник редагувати її не може
+  // Організація користувача; редагувати її можуть лише owner/admin не заблокованої організації
   const org = user?.organization
-  const canEditOrg = Boolean(org) && org?.roleInOrg !== 'Учасник'
+  const canEditOrg = canEditOrganization(org)
 
   return (
     <div className="relative flex min-h-screen flex-col justify-between bg-[#F7FBFF] overflow-x-hidden">
@@ -92,7 +93,7 @@ export const Layout = () => {
                         {org.name}
                       </div>
                       <span className="inline-block mt-1 text-[11px] font-semibold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full">
-                        Роль: {org.roleInOrg ?? 'Власник'}
+                        Роль: {getOrgRoleLabel(org.role)}
                       </span>
                     </div>
 

@@ -2,6 +2,7 @@ import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { apiClient } from '../api/client'
 import { getErrorStatus } from '../api/errors'
+import type { OrgRole, OrgStatus } from '../utils/organization'
 
 export type Role = 'volunteer' | 'organization' | 'admin'
 
@@ -14,7 +15,9 @@ export interface OrganizationData {
   cityName?: string
   edrpou?: string | null
   description?: string
-  roleInOrg?: 'Власник' | 'Адміністратор' | 'Учасник'
+  /** Роль користувача в організації (як її повертає бекенд) */
+  role?: OrgRole
+  status?: OrgStatus
 }
 
 export interface User {
@@ -45,7 +48,6 @@ export interface AuthContextType {
   /** Повторно запитує /auth/me (наприклад, після реєстрації) */
   refresh: () => Promise<void>
   logout: () => void
-  setProfileComplete: (isComplete: boolean) => void
 }
 
 // oxlint-disable-next-line react/only-export-components
@@ -71,7 +73,8 @@ type MeResponse =
       organization?: {
         id: number
         name: string
-        role: keyof typeof ORG_ROLE_LABELS
+        status: OrgStatus
+        role: OrgRole
       } | null
     }
   | {
@@ -80,12 +83,6 @@ type MeResponse =
       first_name: string | null
       last_name: string | null
     }
-
-const ORG_ROLE_LABELS = {
-  owner: 'Власник',
-  admin: 'Адміністратор',
-  member: 'Учасник',
-} as const
 
 const toUser = (me: MeResponse): User => {
   if (me.status === 'registration_required') {
@@ -116,7 +113,8 @@ const toUser = (me: MeResponse): User => {
       ? {
           id: me.organization.id,
           name: me.organization.name,
-          roleInOrg: ORG_ROLE_LABELS[me.organization.role],
+          role: me.organization.role,
+          status: me.organization.status,
         }
       : null,
   }
@@ -158,14 +156,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     })
   }, [])
 
-  const setProfileComplete = useCallback((isComplete: boolean) => {
-    setSession((prev) => {
-      if (!prev.user) return prev
-      const updatedUser: User = { ...prev.user, isProfileComplete: isComplete }
-      return { ...prev, user: updatedUser }
-    })
-  }, [])
-
   const { isLoading, user } = session
   const isAuthenticated = user !== null
   const isProfileComplete = Boolean(user?.isProfileComplete)
@@ -180,7 +170,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       isProfileComplete,
       refresh,
       logout,
-      setProfileComplete,
     }),
     [
       user,
@@ -190,7 +179,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       isProfileComplete,
       refresh,
       logout,
-      setProfileComplete,
     ],
   )
 

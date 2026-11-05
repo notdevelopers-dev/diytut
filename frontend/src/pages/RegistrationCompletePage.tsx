@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import type { FormEvent, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -12,12 +12,13 @@ export const RegistrationCompletePage = () => {
   const navigate = useNavigate()
   const { cities, error: citiesError } = useCities()
 
-  // 1. Стан полів форми
-  const [firstName, setFirstName] = useState(user?.firstName ?? 'Петро')
-  const [lastName, setLastName] = useState(user?.lastName ?? 'Петренко')
-  const [nickname, setNickname] = useState(user?.nickname ?? 'petrenkopetro111')
+  // 1. Стан полів форми. Ім'я та прізвище від Google вже є в AuthContext (/auth/me),
+  // решту користувач вводить сам — жодних тестових значень за замовчуванням
+  const [firstName, setFirstName] = useState(user?.firstName ?? '')
+  const [lastName, setLastName] = useState(user?.lastName ?? '')
+  const [nickname, setNickname] = useState(user?.nickname ?? '')
   const [phone, setPhone] = useState(PHONE_PREFIX)
-  const [dateOfBirth, setDateOfBirth] = useState('2000-01-01')
+  const [dateOfBirth, setDateOfBirth] = useState('')
   const [gender, setGender] = useState<'prefer_not_to_say' | 'female' | 'male'>(
     'prefer_not_to_say',
   )
@@ -33,21 +34,6 @@ export const RegistrationCompletePage = () => {
   if (cityId === '' && cities.length > 0) {
     setCityId(cities[0].id)
   }
-
-  // 2. Підтягуємо справжні дані від Google (/api/auth/me)
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const meRes = await apiClient.get('/auth/me')
-        if (meRes.data?.first_name) setFirstName(meRes.data.first_name)
-        if (meRes.data?.last_name) setLastName(meRes.data.last_name)
-      } catch {
-        // Якщо бекенд ще не піднятий або тестуємо локально — залишаються початкові значення
-      }
-    }
-
-    void fetchInitialData()
-  }, [])
 
   // 3. Форматування та валідація номера телефону (+380...)
   const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {

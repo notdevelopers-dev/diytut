@@ -9,7 +9,7 @@ import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../utils/phone'
 
 export const CreateOrganizationPage = () => {
   const navigate = useNavigate()
-  const { refresh } = useAuth()
+  const { user, refresh } = useAuth()
   const { cities, error: citiesError } = useCities()
 
   // Поля форми
@@ -28,12 +28,22 @@ export const CreateOrganizationPage = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Організацію щойно створили на цій сторінці: у профіль веде таймер, а не редирект нижче
+  const justCreatedRef = useRef(false)
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
   }, [])
+
+  // Організація вже є — створювати другу не можна (бекенд поверне 409)
+  const hasOrganization = Boolean(user?.organization)
+  useEffect(() => {
+    if (hasOrganization && !justCreatedRef.current) {
+      void navigate('/profile', { replace: true })
+    }
+  }, [hasOrganization, navigate])
 
   // 1. Перше місто зі списку обираємо за замовчуванням
   if (cityId === '' && cities.length > 0) {
@@ -97,15 +107,18 @@ export const CreateOrganizationPage = () => {
       }
 
       await apiClient.post('/organizations', payload)
+      justCreatedRef.current = true
       // Організація з'являється в /auth/me
       await refresh()
 
       // Якщо бекенд зберіг успішно:
       setSuccessMessage('Організацію успішно створено! Переходимо в кабінет...')
+      // isSubmitting лишається true до переходу, щоб не можна було відправити форму вдруге
       timerRef.current = setTimeout(() => {
         void navigate('/profile', { replace: true })
       }, 1200)
     } catch (err: unknown) {
+      setIsSubmitting(false)
       // 401 сюди не доходить: його обробляє interceptor в api/client.ts
       const status = getErrorStatus(err)
       const message = getApiErrorMessage(err, '')
@@ -129,8 +142,6 @@ export const CreateOrganizationPage = () => {
           'Не вдалося зв’язатися з сервером. Будь ласка, перевірте з’єднання та спробуйте ще раз пізніше.',
         )
       }
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
