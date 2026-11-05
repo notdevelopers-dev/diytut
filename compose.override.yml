@@ -12,6 +12,8 @@ services:
         GID: ${GID:-1000}
     environment:
       COOKIE_SECURE: "false"
+      # Вхід без Google; для перевірки справжнього входу — DEV_LOGIN=false у .env
+      DEV_LOGIN: ${DEV_LOGIN:-true}
     volumes:
       - ./backend:/app
     ports:
