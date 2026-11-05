@@ -15,11 +15,6 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     // 401 від /auth/me означає просто «не увійшов», його обробляє AuthContext
     if (error.response?.status === 401 && error.config?.url !== '/auth/me') {
-      try {
-        localStorage.removeItem('user_organization')
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-      } catch {}
       if (
         window.location.pathname !== '/login' &&
         window.location.pathname !== '/register/complete'

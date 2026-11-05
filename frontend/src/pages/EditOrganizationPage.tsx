@@ -3,26 +3,25 @@ import type { FormEvent, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiClient } from '../api/client'
-
-interface CityItem {
-  id: number
-  name: string
-  region: string
-}
+import { getApiErrorMessage, getErrorStatus } from '../api/errors'
+import { useCities } from '../hooks/useCities'
+import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../utils/phone'
 
 export const EditOrganizationPage = () => {
   const navigate = useNavigate()
   const { user, isLoading, refresh } = useAuth()
+  const { cities, error: citiesError } = useCities()
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('+380')
-  const [cityId, setCityId] = useState<number>(1)
+  const [phone, setPhone] = useState(PHONE_PREFIX)
+  const [cityId, setCityId] = useState<number | ''>('')
   const [edrpou, setEdrpou] = useState('')
   const [description, setDescription] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  // Поки дані організації не завантажені, зберігати не можна: інакше PATCH затре їх порожніми
+  const [isOrgLoaded, setIsOrgLoaded] = useState(false)
 
-  const [cities, setCities] = useState<CityItem[]>([])
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -31,15 +30,20 @@ export const EditOrganizationPage = () => {
     }
   }, [])
 
-  // Якщо у користувача немає організації — перенаправляємо на створення
+  // Без організації — на створення; звичайний учасник редагувати не може — у профіль
+  const organization = user?.organization
   useEffect(() => {
-    if (!isLoading && user && !user.organization) {
+    if (isLoading || !user) return
+    if (!organization) {
       void navigate('/organization/create', { replace: true })
+    } else if (organization.roleInOrg === 'Учасник') {
+      void navigate('/profile', { replace: true })
     }
-  }, [user, isLoading, navigate])
+  }, [user, organization, isLoading, navigate])
 
   // Поточні дані організації з бекенду
   useEffect(() => {
+    let isMounted = true
     apiClient
       .get<{
         name: string
@@ -50,80 +54,67 @@ export const EditOrganizationPage = () => {
         description: string | null
       }>('/organizations/me')
       .then(({ data }) => {
+        if (!isMounted) return
         setName(data.name)
         setEmail(data.email)
         setPhone(data.phone)
         setCityId(data.city_id)
         setEdrpou(data.edrpou ?? '')
         setDescription(data.description ?? '')
+        setIsOrgLoaded(true)
       })
       .catch((err: unknown) => {
-        const status = (err as { response?: { status?: number } })?.response
-          ?.status
-        if (status === 404) {
+        if (!isMounted) return
+        if (getErrorStatus(err) === 404) {
           void navigate('/organization/create', { replace: true })
         } else {
-          setErrorMessage('Не вдалося завантажити дані організації.')
+          setErrorMessage(
+            'Не вдалося завантажити дані організації. Оновіть сторінку.',
+          )
         }
       })
-  }, [navigate])
-
-  useEffect(() => {
-    const fetchCities = async () => {
-      try {
-        const res = await apiClient.get<CityItem[]>('/cities')
-        if (res.data?.length) {
-          setCities(res.data)
-        }
-      } catch {
-        setCities([
-          { id: 1, name: 'Київ', region: 'Київська' },
-          { id: 2, name: 'Львів', region: 'Львівська' },
-          { id: 3, name: 'Одеса', region: 'Одеська' },
-          { id: 4, name: 'Харків', region: 'Харківська' },
-          { id: 5, name: 'Дніпро', region: 'Дніпропетровська' },
-        ])
-      }
+    return () => {
+      isMounted = false
     }
-    void fetchCities()
-  }, [])
+  }, [navigate])
 
   const [phoneError, setPhoneError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
 
   const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
-    let input = e.target.value
-    if (!input.startsWith('+380')) {
-      input = '+380'
-    }
-    const cleaned = '+' + input.slice(1).replace(/\D/g, '').slice(0, 12)
+    const cleaned = normalizePhone(e.target.value)
     setPhone(cleaned)
-
-    if (!/^\+380\d{9}$/.test(cleaned)) {
-      setPhoneError('Формат: +380XXXXXXXXX (9 цифр)')
-    } else {
-      setPhoneError(null)
-    }
+    setPhoneError(
+      isValidPhone(cleaned) ? null : 'Формат: +380XXXXXXXXX (9 цифр)',
+    )
   }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setErrorMessage(null)
 
-    if (!/^\+380\d{9}$/.test(phone)) {
+    if (!isOrgLoaded) return
+
+    if (!isValidPhone(phone)) {
       setPhoneError('Введіть коректний номер телефону')
+      return
+    }
+
+    if (!cityId) {
+      setErrorMessage('Оберіть місто зі списку')
       return
     }
 
     setIsSubmitting(true)
 
-    // Назву та ЄДРПОУ бекенд змінювати не дозволяє (PATCH поверне 422), тож їх не відправляємо
+    // Назву та ЄДРПОУ бекенд змінювати не дозволяє (PATCH поверне 422), тож їх не відправляємо.
+    // Порожній опис бекенд зберігає як null, тобто опис можна прибрати.
     const updatedData = {
       email: email.trim().toLowerCase(),
       phone,
       city_id: Number(cityId),
-      description: description.trim(),
+      description: description.trim() || null,
     }
 
     try {
@@ -134,14 +125,13 @@ export const EditOrganizationPage = () => {
         void navigate('/profile')
       }, 1200)
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: unknown } } })
-        .response?.data?.detail
       setErrorMessage(
-        Array.isArray(detail)
-          ? detail.map((d: { msg: string }) => d.msg).join('. ')
-          : typeof detail === 'string'
-            ? detail
-            : 'Не вдалося зберегти зміни. Спробуйте ще раз.',
+        getErrorStatus(err) === 403
+          ? 'Редагувати організацію може лише власник або адміністратор, а заблоковану організацію змінювати не можна.'
+          : getApiErrorMessage(
+              err,
+              'Не вдалося зберегти зміни. Спробуйте ще раз.',
+            ),
       )
     } finally {
       setIsSubmitting(false)
@@ -173,6 +163,12 @@ export const EditOrganizationPage = () => {
           onSubmit={handleSubmit}
           className="flex w-full max-w-xl flex-col items-center"
         >
+          {citiesError && (
+            <div className="mb-4 w-full rounded-lg bg-red-100 p-2.5 text-center text-xs text-red-700">
+              {citiesError}
+            </div>
+          )}
+
           {errorMessage && (
             <div className="mb-4 w-full rounded-lg bg-red-100 p-2.5 text-center text-xs text-red-700">
               {errorMessage}
@@ -249,6 +245,7 @@ export const EditOrganizationPage = () => {
                 onChange={(e) => setCityId(Number(e.target.value))}
                 className="h-9 w-full rounded-[5px] bg-[#DCECFF] px-2 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
               >
+                {cityId === '' && <option value="">Завантаження...</option>}
                 {cities.map((city) => (
                   <option key={city.id} value={city.id}>
                     {city.name} {city.region ? `(${city.region})` : ''}
@@ -271,14 +268,13 @@ export const EditOrganizationPage = () => {
               />
             </div>
 
-            {/* Опис * */}
+            {/* Опис (необов’язковий) */}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-black">
-                Опис організації <span className="text-red-500">*</span>
+                Опис організації
               </label>
               <textarea
                 rows={3}
-                required
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 className="w-full rounded-[5px] bg-[#DCECFF] p-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
@@ -288,7 +284,12 @@ export const EditOrganizationPage = () => {
 
           <button
             type="submit"
-            disabled={isSubmitting || Boolean(phoneError)}
+            disabled={
+              isSubmitting ||
+              !isOrgLoaded ||
+              Boolean(phoneError) ||
+              cities.length === 0
+            }
             className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Збереження...' : 'Зберегти'}

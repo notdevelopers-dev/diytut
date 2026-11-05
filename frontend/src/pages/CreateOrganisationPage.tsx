@@ -2,27 +2,24 @@ import { useState, useEffect, useRef } from 'react'
 import type { FormEvent, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiClient } from '../api/client'
+import { getApiErrorMessage, getErrorStatus } from '../api/errors'
 import { useAuth } from '../context/AuthContext'
-
-interface CityItem {
-  id: number
-  name: string
-  region: string
-}
+import { useCities } from '../hooks/useCities'
+import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../utils/phone'
 
 export const CreateOrganizationPage = () => {
   const navigate = useNavigate()
   const { refresh } = useAuth()
+  const { cities, error: citiesError } = useCities()
 
   // Поля форми
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('+380')
+  const [phone, setPhone] = useState(PHONE_PREFIX)
   const [cityId, setCityId] = useState<number | ''>('')
   const [edrpou, setEdrpou] = useState('')
   const [description, setDescription] = useState('')
 
-  const [cities, setCities] = useState<CityItem[]>([])
   const [phoneError, setPhoneError] = useState<string | null>(null)
   const [edrpouError, setEdrpouError] = useState<string | null>(null)
 
@@ -38,47 +35,23 @@ export const CreateOrganizationPage = () => {
     }
   }, [])
 
-  // 1. Завантаження міст із бекенду
-  useEffect(() => {
-    const fetchCities = async () => {
-      try {
-        const res = await apiClient.get<CityItem[]>('/cities')
-        if (res.data?.length) {
-          setCities(res.data)
-          setCityId(res.data[0].id)
-        }
-      } catch {
-        // Якщо бекенд ще не піднятий — показуємо міста для попереднього перегляду
-        setCities([
-          { id: 1, name: 'Київ', region: 'Київська' },
-          { id: 2, name: 'Львів', region: 'Львівська' },
-          { id: 3, name: 'Одеса', region: 'Одеська' },
-          { id: 4, name: 'Харків', region: 'Харківська' },
-          { id: 5, name: 'Дніпро', region: 'Дніпропетровська' },
-        ])
-        setCityId(1)
-      }
-    }
-    void fetchCities()
-  }, [])
+  // 1. Перше місто зі списку обираємо за замовчуванням
+  if (cityId === '' && cities.length > 0) {
+    setCityId(cities[0].id)
+  }
 
   // 2. Валідація телефону
   const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
-    let input = e.target.value
-    if (!input.startsWith('+380')) {
-      input = '+380'
-    }
-    const cleaned = '+' + input.slice(1).replace(/\D/g, '').slice(0, 12)
+    const cleaned = normalizePhone(e.target.value)
     setPhone(cleaned)
-
-    if (!/^\+380\d{9}$/.test(cleaned)) {
-      setPhoneError('Формат: +380XXXXXXXXX (9 цифр після +380)')
-    } else {
-      setPhoneError(null)
-    }
+    setPhoneError(
+      isValidPhone(cleaned)
+        ? null
+        : 'Формат: +380XXXXXXXXX (9 цифр після +380)',
+    )
   }
 
-  // 3. Валідація ЄДРПОУ
+  // 3. Валідація ЄДРПОУ (контрольну цифру перевіряє бекенд)
   const handleEdrpouChange = (e: ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 8)
     setEdrpou(value)
@@ -96,7 +69,7 @@ export const CreateOrganizationPage = () => {
     setErrorMessage(null)
     setSuccessMessage(null)
 
-    if (!/^\+380\d{9}$/.test(phone)) {
+    if (!isValidPhone(phone)) {
       setPhoneError('Введіть коректний номер телефону (+380XXXXXXXXX)')
       return
     }
@@ -133,30 +106,22 @@ export const CreateOrganizationPage = () => {
         void navigate('/profile', { replace: true })
       }, 1200)
     } catch (err: unknown) {
-      const axiosErr = err as {
-        response?: { status: number; data?: { detail?: unknown } }
-      }
-      const detail = axiosErr.response?.data?.detail
+      // 401 сюди не доходить: його обробляє interceptor в api/client.ts
+      const status = getErrorStatus(err)
+      const message = getApiErrorMessage(err, '')
 
       // Форма залишається на екрані, а юзер бачить точну причину:
-      if (axiosErr.response?.status === 409) {
-        if (
-          typeof detail === 'string' &&
-          detail.toLowerCase().includes('already belongs')
-        ) {
-          setErrorMessage('Ви вже створили організацію або належите до неї.')
-        } else {
-          setErrorMessage(
-            'Помилка: організація з таким кодом ЄДРПОУ вже зареєстрована.',
-          )
-        }
-      } else if (axiosErr.response?.status === 401) {
+      if (status === 409) {
         setErrorMessage(
-          'Помилка авторизації: ваша сесія минула. Будь ласка, увійдіть знову.',
+          message.toLowerCase().includes('already belongs')
+            ? 'Ви вже створили організацію або належите до неї.'
+            : 'Помилка: організація з таким кодом ЄДРПОУ вже зареєстрована.',
         )
-      } else if (axiosErr.response?.status === 422) {
+      } else if (status === 422) {
         setErrorMessage(
-          'Помилка: перевірте правильність заповнення всіх полів.',
+          message
+            ? `Помилка у полях форми: ${message}`
+            : 'Помилка: перевірте правильність заповнення всіх полів.',
         )
       } else {
         console.error('Не вдалося зв’язатися з сервером:', err)
@@ -195,6 +160,11 @@ export const CreateOrganizationPage = () => {
           className="flex w-full max-w-xl flex-col items-center"
         >
           {/* ЧЕРВОНА ПЛАШКА ПОМИЛКИ (якщо щось пішло не так) */}
+          {citiesError && (
+            <div className="mb-5 w-full rounded-lg border border-red-200 bg-red-50 p-3.5 text-center text-xs font-medium text-red-700">
+              {citiesError}
+            </div>
+          )}
           {errorMessage && (
             <div className="mb-5 w-full rounded-lg border border-red-200 bg-red-50 p-3.5 text-center text-xs font-medium text-red-700 animate-in fade-in">
               {errorMessage}
@@ -315,7 +285,10 @@ export const CreateOrganizationPage = () => {
           <button
             type="submit"
             disabled={
-              isSubmitting || Boolean(phoneError) || Boolean(edrpouError)
+              isSubmitting ||
+              Boolean(phoneError) ||
+              Boolean(edrpouError) ||
+              cities.length === 0
             }
             className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed font-['e-Ukraine']"
           >

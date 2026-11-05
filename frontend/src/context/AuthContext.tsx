@@ -1,6 +1,7 @@
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { apiClient } from '../api/client'
+import { getErrorStatus } from '../api/errors'
 
 export type Role = 'volunteer' | 'organization' | 'admin'
 
@@ -41,10 +42,6 @@ export interface AuthContextType {
   isLoading: boolean
   isAuthenticated: boolean
   isProfileComplete: boolean
-  isProfileCompleted?: boolean
-  // Активний режим відображення: чи ми дивимось як волонтер, чи як організація
-  activeMode: 'volunteer' | 'organization'
-  switchActiveMode: () => void
   /** Повторно запитує /auth/me (наприклад, після реєстрації) */
   refresh: () => Promise<void>
   logout: () => void
@@ -136,9 +133,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await apiClient.get<MeResponse>('/auth/me')
       setSession({ isLoading: false, user: toUser(response.data) })
-    } catch {
-      // 401 — не увійшов (або бекенд недоступний)
-      setSession({ isLoading: false, user: null })
+    } catch (err: unknown) {
+      if (getErrorStatus(err) === 401) {
+        // Не увійшов (або сесія скінчилась)
+        setSession({ isLoading: false, user: null })
+      } else {
+        // Бекенд тимчасово недоступний: не «розлогінюємо» користувача, лишаємо попередній стан
+        console.error('Не вдалося оновити дані сесії:', err)
+        setSession((prev) => ({ ...prev, isLoading: false }))
+      }
     }
   }, [])
 
@@ -147,26 +150,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     void refresh()
   }, [refresh])
 
-  // Режим відображення: 'volunteer' або 'organization'
-  const [activeMode, setActiveMode] = useState<'volunteer' | 'organization'>(
-    'volunteer',
-  )
-
-  // Перемикач профілю ("Переключити профіль" із макета)
-  const switchActiveMode = useCallback(() => {
-    setActiveMode((prev) =>
-      prev === 'volunteer' ? 'organization' : 'volunteer',
-    )
-  }, [])
-
   const logout = useCallback(() => {
     setSession({ isLoading: false, user: null })
-    setActiveMode('volunteer')
-    try {
-      localStorage.removeItem('user_organization')
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-    } catch {}
     // Бекенд видаляє httpOnly cookie
     apiClient.post('/auth/logout').catch((error: unknown) => {
       console.error('Помилка під час виходу:', error)
@@ -193,9 +178,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       isLoading,
       isAuthenticated,
       isProfileComplete,
-      isProfileCompleted: isProfileComplete,
-      activeMode,
-      switchActiveMode,
       refresh,
       logout,
       setProfileComplete,
@@ -206,8 +188,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       isLoading,
       isAuthenticated,
       isProfileComplete,
-      activeMode,
-      switchActiveMode,
       refresh,
       logout,
       setProfileComplete,

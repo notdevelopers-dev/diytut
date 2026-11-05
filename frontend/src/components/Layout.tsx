@@ -13,8 +13,9 @@ export const Layout = () => {
     void navigate('/login')
   }
 
-  // Організація користувача
+  // Організація користувача; звичайний учасник редагувати її не може
   const org = user?.organization
+  const canEditOrg = Boolean(org) && org?.roleInOrg !== 'Учасник'
 
   return (
     <div className="relative flex min-h-screen flex-col justify-between bg-[#F7FBFF] overflow-x-hidden">
@@ -95,17 +96,19 @@ export const Layout = () => {
                       </span>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMenuOpen(false)
-                        void navigate('/organization/edit')
-                      }}
-                      className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100 cursor-pointer"
-                    >
-                      <span className="text-base">⚙️</span>
-                      Редагувати організацію
-                    </button>
+                    {canEditOrg && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMenuOpen(false)
+                          void navigate('/organization/edit')
+                        }}
+                        className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100 cursor-pointer"
+                      >
+                        <span className="text-base">⚙️</span>
+                        Редагувати організацію
+                      </button>
+                    )}
                   </>
                 ) : (
                   <>
@@ -145,6 +148,21 @@ export const Layout = () => {
                   <span className="text-base">👤</span>
                   Мій профіль
                 </button>
+
+                {/* Адмін-панель доступна лише адміністраторам платформи */}
+                {user?.role === 'admin' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false)
+                      void navigate('/admin')
+                    }}
+                    className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100 cursor-pointer"
+                  >
+                    <span className="text-base">🛡️</span>
+                    Адмін-панель
+                  </button>
+                )}
 
                 {/* Червона кнопка "Вийти" */}
                 <button
