@@ -151,6 +151,11 @@
     @apply inline-flex cursor-pointer items-center justify-center gap-[0.4rem] rounded-sm border border-transparent px-[1.1rem] py-[0.6rem] text-[0.95rem] font-semibold no-underline transition-all;
   }
 
+  /* Недоступна кнопка має виглядати недоступною (наприклад, «Перейти в акаунт організації») */
+  .btn:disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
+
   .btn-sm {
     @apply px-[0.75rem] py-[0.35rem] text-[0.85rem];
   }
