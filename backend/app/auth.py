@@ -4,8 +4,9 @@ from typing import Annotated, Any
 
 import jwt
 from authlib.integrations.starlette_client import OAuth
-from fastapi import Cookie, Depends, HTTPException, Response, status
+from fastapi import Cookie, Depends, Response
 
+from app import errors
 from app.config import settings
 
 SESSION_COOKIE = "session"
@@ -19,7 +20,7 @@ oauth = OAuth()
 oauth.register(
     name="google",
     client_id=settings.google_client_id,
-    client_secret=settings.google_client_secret,
+    client_secret=settings.google_client_secret.get_secret_value(),
     server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
     client_kwargs={"scope": "openid email profile", "code_challenge_method": "S256"},
 )
@@ -47,7 +48,7 @@ class GoogleIdentity:
 def _encode(claims: dict[str, Any], ttl: timedelta) -> str:
     now = datetime.now(UTC)
     payload = {**claims, "iat": now, "exp": now + ttl}
-    return jwt.encode(payload, settings.secret_key, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, settings.secret_key.get_secret_value(), algorithm=JWT_ALGORITHM)
 
 
 def _decode(token: str | None, token_type: str) -> dict[str, Any] | None:
@@ -56,7 +57,7 @@ def _decode(token: str | None, token_type: str) -> dict[str, Any] | None:
     try:
         claims = jwt.decode(
             token,
-            settings.secret_key,
+            settings.secret_key.get_secret_value(),
             algorithms=[JWT_ALGORITHM],
             options={"require": ["sub", "exp", "typ"]},
         )
@@ -127,7 +128,7 @@ async def get_current_user_id(
 ) -> int:
     user_id = read_session_user_id(session_token)
     if user_id is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
+        raise errors.not_authenticated()
     return user_id
 
 

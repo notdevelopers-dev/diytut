@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import auth
-from app.models.base import City, Organization, OrganizationMember, OrgMemberRoleEnum, User
+from app.models import City, Organization, OrganizationMember, OrgMemberRoleEnum, User
 
 
 @pytest.fixture

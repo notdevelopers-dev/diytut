@@ -12,7 +12,7 @@ from pydantic import (
     field_validator,
 )
 
-from app.models.base import GenderEnum, RoleEnum
+from app.models import GenderEnum, RoleEnum
 
 MIN_AGE = 18
 MAX_AGE = 120

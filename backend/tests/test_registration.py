@@ -1,10 +1,11 @@
 from datetime import date, timedelta
+from unittest.mock import ANY
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.models.base import City, User
-from app.routers import auth as auth_router
+from app.models import City, User
+from app.services import users as users_service
 from tests.conftest import GOOGLE_CLAIMS
 
 
@@ -60,16 +61,28 @@ def error_fields(response) -> set[str]:
 
 
 @pytest.mark.usefixtures("signed_in_with_google")
-def test_registration_creates_user_and_session(client: TestClient, form: dict, db) -> None:
+def test_registration_creates_user_and_session(
+    client: TestClient, form: dict, city_id: int, db
+) -> None:
     response = register(client, form, nickname="Taras_1814", bio="  Волонтерю з 2022  ")
 
     assert response.status_code == 201
     body = response.json()
-    assert body["email"] == "taras@example.com"
-    assert body["nickname"] == "taras_1814"
-    assert body["gender"] == "prefer_not_to_say"
-    assert body["bio"] == "Волонтерю з 2022"
-    assert body["platform_role"] == "user"
+    # Уся відповідь одним порівнянням: pytest покаже різницю за всіма полями одразу
+    assert body == {
+        "id": ANY,  # Перевіряється нижче: за ним знаходимо користувача в БД
+        "email": "taras@example.com",
+        "first_name": "Тарас",
+        "last_name": "Шевченко",
+        "patronymic": None,
+        "nickname": "taras_1814",
+        "phone": "+380671234567",
+        "birth_date": "1990-03-09",
+        "gender": "prefer_not_to_say",
+        "city_id": city_id,
+        "bio": "Волонтерю з 2022",
+        "platform_role": "user",
+    }
 
     me = client.get("/api/auth/me").json()
     assert me == {"status": "authenticated", "user": body, "organization": None}
@@ -110,7 +123,7 @@ def test_nickname_taken_between_check_and_insert(
     async def not_taken(session, nickname: str) -> bool:
         return False
 
-    monkeypatch.setattr(auth_router, "is_nickname_taken", not_taken)
+    monkeypatch.setattr(users_service, "is_nickname_taken", not_taken)
 
     response = register(client, form, nickname="taras")
 
