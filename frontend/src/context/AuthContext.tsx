@@ -1,18 +1,26 @@
-import { createContext, useCallback, useMemo, useState } from 'react'
+import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import { apiClient } from '../api/client'
+import { getErrorStatus } from '../api/errors'
+import type { OrgRole, OrgStatus } from '../utils/organization'
 
-/**
- * Ролі користувачів у системі «ДійТут»:
- * - 'volunteer': звичайний волонтер, який шукає ініціативи та долучається до дій
- * - 'organization': благодійний фонд, ГО чи ініціативна група, що публікує потреби
- * - 'admin': адміністратор платформи з доступом до панелі керування /admin
- */
 export type Role = 'volunteer' | 'organization' | 'admin'
 // краще створити окрему папку types і всі типи запихнути туди
 
-/**
- * Модель профілю користувача в контексті
- */
+export interface OrganizationData {
+  id?: number | string
+  name: string
+  email?: string
+  phone?: string
+  cityId?: number
+  cityName?: string
+  edrpou?: string | null
+  description?: string
+  /** Роль користувача в організації (як її повертає бекенд) */
+  role?: OrgRole
+  status?: OrgStatus
+}
+
 export interface User {
   id?: string
   name?: string
@@ -22,171 +30,156 @@ export interface User {
   email?: string
   phone?: string
   dateOfBirth?: string
-  gender?: 'prefer_not_to_tell' | 'female' | 'male'
+  gender?: 'prefer_not_to_say' | 'prefer_not_to_tell' | 'female' | 'male'
   city?: string
   bio?: string
   role: Role
   isProfileComplete: boolean
   isProfileCompleted?: boolean
+  organization?: OrganizationData | null
 }
 
-/**
- * Інтерфейс авторизаційного контексту
- */
 export interface AuthContextType {
-  /** Дані авторизованого користувача або null */
   user: User | null
-  /** JWT токен доступу до API або null */
-  token: string | null
-  /** Поточна роль користувача для швидкої перевірки прав */
   role: Role | null
-  /** Чи увійшов користувач у систему */
+  /** Поки чекаємо на першу відповідь /auth/me */
+  isLoading: boolean
   isAuthenticated: boolean
-  /** Чи пройшов користувач обов'язкове заповнення анкети */
   isProfileComplete: boolean
-  /** Функція входу: оновлює стан та зберігає сесію в localStorage */
-  
-  login: (
-    token: string,
-    role: Role,
-    isProfileComplete?: boolean,// бажано винести в окремий інтерфейс, login: LoginParams
-    userData?: Partial<User>,
-  ) => void
-  /** Функція виходу: очищує стан і видаляє сесію з localStorage */
+  /** Повторно запитує /auth/me (наприклад, після реєстрації) */
+  refresh: () => Promise<void>
   logout: () => void
-  /** Оновлення статусу заповнення анкети */
-  setProfileComplete: (isComplete: boolean) => void
 }
-
-
-// ось такі однорядкові константи бажано тримати на самому горі файла
-export const STORAGE_KEY_TOKEN = 'token'
-export const STORAGE_KEY_USER = 'user'
 
 // oxlint-disable-next-line react/only-export-components
 export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-interface AuthProviderProps {
-  children: ReactNode
-}
-
-/**
- * Синхронне відновлення стану сесії з localStorage під час першого рендеру.
- * Це гарантує, що при перезавантаженні сторінки (F5) користувача не викидає з акаунта
- * і не відбувається миготіння екрана (flicker).
- */
-const getInitialSession = (): { token: string | null; user: User | null } => {
-  try {
-    const storedToken = localStorage.getItem(STORAGE_KEY_TOKEN)
-    const storedUser = localStorage.getItem(STORAGE_KEY_USER)
-    if (storedToken && storedUser) {
-      return {
-        token: storedToken,
-        user: JSON.parse(storedUser) as User,
+// Відповідь GET /api/auth/me (app.routers.auth)
+type MeResponse =
+  | {
+      status: 'authenticated'
+      user: {
+        id: number
+        email: string
+        first_name: string
+        last_name: string
+        nickname: string
+        phone: string
+        birth_date: string
+        gender: 'male' | 'female' | 'prefer_not_to_say'
+        bio: string | null
+        platform_role: 'user' | 'admin'
       }
+      // Організація користувача або null (є в /auth/me з гілки be/org-profile)
+      organization?: {
+        id: number
+        name: string
+        status: OrgStatus
+        role: OrgRole
+      } | null
     }
-  } catch (error) {
-    console.error('Помилка при відновленні сесії з localStorage:', error)
+  | {
+      status: 'registration_required'
+      email: string
+      first_name: string | null
+      last_name: string | null
+    }
+
+const toUser = (me: MeResponse): User => {
+  if (me.status === 'registration_required') {
+    // Увійшов через Google, але анкету ще не заповнив
+    return {
+      email: me.email,
+      firstName: me.first_name ?? undefined,
+      lastName: me.last_name ?? undefined,
+      role: 'volunteer',
+      isProfileComplete: false,
+    }
   }
-  return { token: null, user: null }
+  const u = me.user
+  return {
+    id: String(u.id),
+    name: `${u.first_name} ${u.last_name}`,
+    firstName: u.first_name,
+    lastName: u.last_name,
+    nickname: u.nickname,
+    email: u.email,
+    phone: u.phone,
+    dateOfBirth: u.birth_date,
+    gender: u.gender,
+    bio: u.bio ?? undefined,
+    role: u.platform_role === 'admin' ? 'admin' : 'volunteer',
+    isProfileComplete: true,
+    organization: me.organization
+      ? {
+          id: me.organization.id,
+          name: me.organization.name,
+          role: me.organization.role,
+          status: me.organization.status,
+        }
+      : null,
+  }
 }
 
-/**
- * Провайдер стану автентифікації для всього застосунку «ДійТут»
- */
-export const AuthProvider = ({ children }: AuthProviderProps) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  // Сесія живе в httpOnly cookie, тож стан беремо лише з бекенду (/auth/me)
   const [session, setSession] = useState<{
-    token: string | null
+    isLoading: boolean
     user: User | null
-  }>(getInitialSession)
+  }>({ isLoading: true, user: null })
 
-  const login = useCallback(
-    (
-      newToken: string,
-      role: Role,
-      isProfileComplete = true,
-      userData: Partial<User> = {},
-    ) => {
-      const newUser: User = {
-        id: userData.id ?? `usr_${Date.now()}`,
-        name:
-          userData.name ??
-          (role === 'admin'
-            ? 'Адміністратор'
-            : role === 'organization'
-              ? 'Благодійний Фонд'
-              : 'Волонтер'),
-        email: userData.email ?? `${role}@diytut.org`,
-        role,
-        isProfileComplete,
-      }
-
-      setSession({ token: newToken, user: newUser })
-
-      try {
-        localStorage.setItem(STORAGE_KEY_TOKEN, newToken)
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(newUser))
-      } catch (error) {
-        console.error('Помилка збереження сесії в localStorage:', error)
-      }
-    },
-    [],
-  )
-
-  const logout = useCallback(() => {
-    setSession({ token: null, user: null })
+  const refresh = useCallback(async () => {
     try {
-      localStorage.removeItem(STORAGE_KEY_TOKEN)
-      localStorage.removeItem(STORAGE_KEY_USER)
-    } catch (error) {
-      console.error('Помилка очищення сесії з localStorage:', error)
+      const response = await apiClient.get<MeResponse>('/auth/me')
+      setSession({ isLoading: false, user: toUser(response.data) })
+    } catch (err: unknown) {
+      if (getErrorStatus(err) === 401) {
+        // Не увійшов (або сесія скінчилась)
+        setSession({ isLoading: false, user: null })
+      } else {
+        // Бекенд тимчасово недоступний: не «розлогінюємо» користувача, лишаємо попередній стан
+        console.error('Не вдалося оновити дані сесії:', err)
+        setSession((prev) => ({ ...prev, isLoading: false }))
+      }
     }
   }, [])
 
-  const setProfileComplete = useCallback((isComplete: boolean) => {
-    setSession((prev) => {
-      if (!prev.user) return prev
-      const updatedUser: User = {
-        ...prev.user,
-        isProfileComplete: isComplete,
-      }
-      try {
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser))
-      } catch (error) {
-        console.error('Помилка оновлення статусу анкети в localStorage:', error)
-      }
-      return {
-        ...prev,
-        user: updatedUser,
-      }
+  useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect
+    void refresh()
+  }, [refresh])
+
+  const logout = useCallback(() => {
+    setSession({ isLoading: false, user: null })
+    // Бекенд видаляє httpOnly cookie
+    apiClient.post('/auth/logout').catch((error: unknown) => {
+      console.error('Помилка під час виходу:', error)
     })
   }, [])
 
-  const { token, user } = session
-  const isAuthenticated = Boolean(token && user)
+  const { isLoading, user } = session
+  const isAuthenticated = user !== null
   const isProfileComplete = Boolean(user?.isProfileComplete)
   const role = user?.role ?? null
 
   const value = useMemo<AuthContextType>(
     () => ({
       user,
-      token,
       role,
+      isLoading,
       isAuthenticated,
       isProfileComplete,
-      login,
+      refresh,
       logout,
-      setProfileComplete,
     }),
     [
       user,
-      token,
       role,
+      isLoading,
       isAuthenticated,
       isProfileComplete,
-      login,
+      refresh,
       logout,
-      setProfileComplete,
     ],
   )
 
@@ -195,5 +188,4 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
 // oxlint-disable-next-line react/only-export-components
 export { useAuth } from './useAuth.ts'
-
 export default AuthContext

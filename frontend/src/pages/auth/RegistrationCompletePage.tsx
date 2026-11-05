@@ -1,82 +1,49 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import type { FormEvent, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiClient } from '../api/client'
-
-interface CityItem {
-  id: number
-  name: string
-  region: string
-}
+import { getApiErrorMessage } from '../api/errors'
+import { useCities } from '../hooks/useCities'
+import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../utils/phone'
 
 export const RegistrationCompletePage = () => {
-  const { user, setProfileComplete } = useAuth()
+  const { user, refresh } = useAuth()
   const navigate = useNavigate()
+  const { cities, error: citiesError } = useCities()
 
-  // 1. Стан полів форми
-  const [firstName, setFirstName] = useState(user?.firstName ?? 'Петро')
-  const [lastName, setLastName] = useState(user?.lastName ?? 'Петренко')
-  const [nickname, setNickname] = useState(user?.nickname ?? 'petrenkopetro111')
-  const [phone, setPhone] = useState('+380')
-  const [dateOfBirth, setDateOfBirth] = useState('2000-01-01')
+  // 1. Стан полів форми. Ім'я та прізвище від Google вже є в AuthContext (/auth/me),
+  // решту користувач вводить сам — жодних тестових значень за замовчуванням
+  const [firstName, setFirstName] = useState(user?.firstName ?? '')
+  const [lastName, setLastName] = useState(user?.lastName ?? '')
+  const [nickname, setNickname] = useState(user?.nickname ?? '')
+  const [phone, setPhone] = useState(PHONE_PREFIX)
+  const [dateOfBirth, setDateOfBirth] = useState('')
   const [gender, setGender] = useState<'prefer_not_to_say' | 'female' | 'male'>(
     'prefer_not_to_say',
   )
-  const [cityId, setCityId] = useState<number>(1)
+  const [cityId, setCityId] = useState<number | ''>('')
   const [bio, setBio] = useState('')
 
-  // Стан списку міст і помилок
-  const [cities, setCities] = useState<CityItem[]>([
-    { id: 1, name: 'Київ', region: 'Київська' },
-    { id: 2, name: 'Львів', region: 'Львівська' },
-    { id: 3, name: 'Харків', region: 'Харківська' },
-    { id: 4, name: 'Одеса', region: 'Одеська' },
-    { id: 5, name: 'Дніпро', region: 'Дніпропетровська' },
-  ])
+  // Стан помилок
   const [phoneError, setPhoneError] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // 2. Підтягуємо справжні дані від Google (/api/auth/me) та список міст (/api/cities)
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const meRes = await apiClient.get('/auth/me')
-        if (meRes.data?.first_name) setFirstName(meRes.data.first_name)
-        if (meRes.data?.last_name) setLastName(meRes.data.last_name)
-      } catch {
-        // Якщо бекенд ще не піднятий або тестуємо локально — залишаються початкові значення
-      }
-
-      try {
-        const citiesRes = await apiClient.get<CityItem[]>('/cities')
-        if (citiesRes.data?.length) {
-          setCities(citiesRes.data)
-          setCityId(citiesRes.data[0].id)
-        }
-      } catch {
-        // Залишається дефолтний список міст
-      }
-    }
-
-    void fetchInitialData()
-  }, [])
+  // Перше місто зі списку обираємо за замовчуванням
+  if (cityId === '' && cities.length > 0) {
+    setCityId(cities[0].id)
+  }
 
   // 3. Форматування та валідація номера телефону (+380...)
   const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
-    let input = e.target.value
-    if (!input.startsWith('+380')) {
-      input = '+380'
-    }
-    const cleaned = '+' + input.slice(1).replace(/\D/g, '').slice(0, 12)
+    const cleaned = normalizePhone(e.target.value)
     setPhone(cleaned)
-
-    if (!/^\+380\d{9}$/.test(cleaned)) {
-      setPhoneError('Формат: +380XXXXXXXXX (9 цифр після +380)')
-    } else {
-      setPhoneError(null)
-    }
+    setPhoneError(
+      isValidPhone(cleaned)
+        ? null
+        : 'Формат: +380XXXXXXXXX (9 цифр після +380)',
+    )
   }
 
   // 4. Відправка форми реєстрації
@@ -84,8 +51,13 @@ export const RegistrationCompletePage = () => {
     e.preventDefault()
     setErrorMessage(null)
 
-    if (!/^\+380\d{9}$/.test(phone)) {
+    if (!isValidPhone(phone)) {
       setPhoneError('Введіть коректний номер телефону (+380XXXXXXXXX)')
+      return
+    }
+
+    if (!cityId) {
+      setErrorMessage('Оберіть місто зі списку')
       return
     }
 
@@ -104,20 +76,19 @@ export const RegistrationCompletePage = () => {
         bio: bio.trim() || null,
       }
 
-      try {
-        await apiClient.post('/auth/register', payload)
-      } catch (err: unknown) {
-        console.warn(
-          'Сервер не відповів або повернув помилку, продовжуємо для інтерфейсу:',
-          err,
-        )
-      }
+      await apiClient.post('/auth/register', payload)
 
-      // Позначаємо сесію успішною та переходимо у Профіль
-      setProfileComplete(true)
-      navigate('/profile', { replace: true })
-    } catch {
-      setErrorMessage('Не вдалося завершити реєстрацію. Спробуйте ще раз.')
+      // Бекенд замінив cookie `registration` на `session`: оновлюємо стан із /auth/me
+      await refresh()
+      void navigate('/profile', { replace: true })
+    } catch (err: unknown) {
+      // Показуємо помилку бекенду (рядок або список помилок полів FastAPI)
+      setErrorMessage(
+        getApiErrorMessage(
+          err,
+          'Не вдалося завершити реєстрацію. Спробуйте ще раз.',
+        ),
+      )
     } finally {
       setIsSubmitting(false)
     }
@@ -142,6 +113,11 @@ export const RegistrationCompletePage = () => {
           onSubmit={handleSubmit}
           className="flex w-full max-w-3xl flex-col items-center"
         >
+          {citiesError && (
+            <div className="mb-4 w-full rounded bg-red-100 p-2 text-center text-xs text-red-700">
+              {citiesError}
+            </div>
+          )}
           {errorMessage && (
             <div className="mb-4 w-full rounded bg-red-100 p-2 text-center text-xs text-red-700">
               {errorMessage}
@@ -291,7 +267,9 @@ export const RegistrationCompletePage = () => {
           {/* Синя кнопка "Зареєструватись" за макетом Figma */}
           <button
             type="submit"
-            disabled={isSubmitting || Boolean(phoneError)}
+            disabled={
+              isSubmitting || Boolean(phoneError) || cities.length === 0
+            }
             className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed font-['e-Ukraine']"
           >
             {isSubmitting ? 'Збереження...' : 'Зареєструватись'}

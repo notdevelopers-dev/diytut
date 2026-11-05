@@ -1,25 +1,7 @@
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-
 export const LoginPage = () => {
-  const { login } = useAuth()
-  const navigate = useNavigate()
-
-  const handleGoogleSignIn = async () => {
-    try {
-      // 1. Пробуємо реальний бекенд-ендпоінт Google OAuth
-      window.location.href = '/api/auth/google/login'
-    } catch {
-      // 2. Fallback для локальної розробки, якщо бекенд тимчасово вимкнений
-      const mockToken = `google_jwt_${Date.now()}`
-      login(mockToken, 'volunteer', false, {
-        name: 'Петро Петренко',
-        firstName: 'Петро',
-        lastName: 'Петренко',
-        email: 'petrenko.petro@gmail.com',
-      })
-      navigate('/register/complete', { replace: true })
-    }
+  const handleGoogleSignIn = () => {
+    // Бекенд веде на Google і після входу ставить httpOnly cookie сесії
+    window.location.href = '/api/auth/google/login'
   }
 
   return (

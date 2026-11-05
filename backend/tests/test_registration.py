@@ -77,7 +77,7 @@ def test_registration_creates_user_and_session(client: TestClient, form: dict, d
     assert body == correct_dict
 
     me = client.get("/api/auth/me").json()
-    assert me == {"status": "authenticated", "user": body}
+    assert me == {"status": "authenticated", "user": body, "organization": None}
 
     user = db(lambda session: session.get(User, body["id"]))
     assert user.google_sub == GOOGLE_CLAIMS["sub"]
@@ -152,6 +152,9 @@ def test_phone_is_normalized(client: TestClient, form: dict, phone: str) -> None
         ("birth_date", "2099-01-01"),
         ("birth_date", "1800-01-01"),
         ("bio", "x" * 2001),
+        ("city_id", 0),
+        # Більше за integer у БД: без перевірки була б помилка 500
+        ("city_id", 2**31),
     ],
 )
 def test_invalid_field_is_rejected(client: TestClient, form: dict, field: str, value) -> None:

@@ -10,13 +10,14 @@ import { HomePage } from './pages/HomePage'
 import { ProfilePage } from './pages/ProfilePage'
 import { AdminPage } from './pages/AdminPage'
 import { CreateOrganizationPage } from './pages/CreateOrganisationPage'
+import { EditOrganizationPage } from './pages/EditOrganizationPage'
 
 export const App = () => {
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Повноекранні сторінки без рамочок і без глобального меню */}
+          {/* Автономні сторінки без подвійних рамок і шапок */}
           <Route path="/login" element={<LoginPage />} />
           <Route
             path="/register/complete"
@@ -26,8 +27,18 @@ export const App = () => {
               </ProtectedRoute>
             }
           />
+          <Route element={<ProtectedRoute />}>
+            <Route
+              path="/organization/create"
+              element={<CreateOrganizationPage />}
+            />
+            <Route
+              path="/organization/edit"
+              element={<EditOrganizationPage />}
+            />
+          </Route>
 
-          {/* Внутрішній сайт з шапкою та навігацією */}
+          {/* Внутрішній сайт під спільним Layout */}
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />
             <Route
@@ -39,10 +50,6 @@ export const App = () => {
               }
             />
             <Route
-              path="/organization/create"
-              element={<CreateOrganizationPage />}
-            />
-            <Route
               path="/admin"
               element={
                 <AdminRoute>
@@ -50,9 +57,8 @@ export const App = () => {
                 </AdminRoute>
               }
             />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
-
-          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

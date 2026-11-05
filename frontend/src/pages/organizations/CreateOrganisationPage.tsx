@@ -1,83 +1,103 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { FormEvent, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-
-interface CityItem {
-  id: number
-  name: string
-  region: string
-}
+import { apiClient } from '../api/client'
+import { getApiErrorMessage, getErrorStatus } from '../api/errors'
+import { useAuth } from '../context/AuthContext'
+import { useCities } from '../hooks/useCities'
+import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../utils/phone'
 
 export const CreateOrganizationPage = () => {
   const navigate = useNavigate()
+  const { user, refresh } = useAuth()
+  const { cities, error: citiesError } = useCities()
 
-  // 1. Список міст (мокап без потреби в бекенді)
-  const cities: CityItem[] = [
-    { id: 1, name: 'Київ', region: 'Київська' },
-    { id: 2, name: 'Львів', region: 'Львівська' },
-    { id: 3, name: 'Одеса', region: 'Одеська' },
-    { id: 4, name: 'Харків', region: 'Харківська' },
-    { id: 5, name: 'Дніпро', region: 'Дніпропетровська' },
-  ]
-
-  // 2. Стан полів за макетом Figma
+  // Поля форми
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('+380')
-  const [cityId, setCityId] = useState<number>(1)
-  const [edrpou, setEdrpou] = useState('') // Необов'язковий
+  const [phone, setPhone] = useState(PHONE_PREFIX)
+  const [cityId, setCityId] = useState<number | ''>('')
+  const [edrpou, setEdrpou] = useState('')
   const [description, setDescription] = useState('')
 
   const [phoneError, setPhoneError] = useState<string | null>(null)
   const [edrpouError, setEdrpouError] = useState<string | null>(null)
+
+  // Стан для гарних сповіщень
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Організацію щойно створили на цій сторінці: у профіль веде таймер, а не редирект нижче
+  const justCreatedRef = useRef(false)
 
-  // 3. Валідація номера телефону
-  const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
-    let input = e.target.value
-    if (!input.startsWith('+380')) {
-      input = '+380'
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
     }
-    const cleaned = '+' + input.slice(1).replace(/\D/g, '').slice(0, 12)
-    setPhone(cleaned)
+  }, [])
 
-    if (!/^\+380\d{9}$/.test(cleaned)) {
-      setPhoneError('Формат: +380XXXXXXXXX (9 цифр після +380)')
-    } else {
-      setPhoneError(null)
+  // Організація вже є — створювати другу не можна (бекенд поверне 409)
+  const hasOrganization = Boolean(user?.organization)
+  useEffect(() => {
+    if (hasOrganization && !justCreatedRef.current) {
+      void navigate('/profile', { replace: true })
     }
+  }, [hasOrganization, navigate])
+
+  // 1. Перше місто зі списку обираємо за замовчуванням
+  if (cityId === '' && cities.length > 0) {
+    setCityId(cities[0].id)
   }
 
-  // 4. Валідація ЄДРПОУ (необов'язковий, але якщо введений — 8 цифр)
+  // 2. Валідація телефону
+  const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const cleaned = normalizePhone(e.target.value)
+    setPhone(cleaned)
+    setPhoneError(
+      isValidPhone(cleaned)
+        ? null
+        : 'Формат: +380XXXXXXXXX (9 цифр після +380)',
+    )
+  }
+
+  // 3. Валідація ЄДРПОУ (контрольну цифру перевіряє бекенд)
   const handleEdrpouChange = (e: ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 8)
     setEdrpou(value)
 
     if (value.length > 0 && value.length !== 8) {
-      setEdrpouError('Код ЄДРПОУ має містити рівно 8 цифр')
+      setEdrpouError('Код ЄДРПОУ має складатись рівно з 8 цифр')
     } else {
       setEdrpouError(null)
     }
   }
 
-  // 5. Збереження форми
-  const handleSubmit = (e: FormEvent) => {
+  // 4. Відправка форми: нікуди не викидає при помилці, а показує текст!
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    setErrorMessage(null)
+    setSuccessMessage(null)
 
-    if (!/^\+380\d{9}$/.test(phone)) {
+    if (!isValidPhone(phone)) {
       setPhoneError('Введіть коректний номер телефону (+380XXXXXXXXX)')
       return
     }
 
     if (edrpou.length > 0 && edrpou.length !== 8) {
-      setEdrpouError('Код ЄДРПОУ має містити рівно 8 цифр')
+      setEdrpouError('Код ЄДРПОУ має складатись рівно з 8 цифр')
+      return
+    }
+
+    if (!cityId) {
+      setErrorMessage('Оберіть місто зі списку')
       return
     }
 
     setIsSubmitting(true)
 
-    setTimeout(() => {
-      const savedOrg = {
+    try {
+      const payload = {
         name: name.trim(),
         email: email.trim().toLowerCase(),
         phone,
@@ -85,148 +105,210 @@ export const CreateOrganizationPage = () => {
         description: description.trim(),
         edrpou: edrpou.trim() || null,
       }
-      localStorage.setItem('user_organization', JSON.stringify(savedOrg))
+
+      await apiClient.post('/organizations', payload)
+      justCreatedRef.current = true
+      // Організація з'являється в /auth/me
+      await refresh()
+
+      // Якщо бекенд зберіг успішно:
+      setSuccessMessage('Організацію успішно створено! Переходимо в кабінет...')
+      // isSubmitting лишається true до переходу, щоб не можна було відправити форму вдруге
+      timerRef.current = setTimeout(() => {
+        void navigate('/profile', { replace: true })
+      }, 1200)
+    } catch (err: unknown) {
       setIsSubmitting(false)
-      navigate('/profile', { replace: true })
-    }, 400)
+      // 401 сюди не доходить: його обробляє interceptor в api/client.ts
+      const status = getErrorStatus(err)
+      const message = getApiErrorMessage(err, '')
+
+      // Форма залишається на екрані, а юзер бачить точну причину:
+      if (status === 409) {
+        setErrorMessage(
+          message.toLowerCase().includes('already belongs')
+            ? 'Ви вже створили організацію або належите до неї.'
+            : 'Помилка: організація з таким кодом ЄДРПОУ вже зареєстрована.',
+        )
+      } else if (status === 422) {
+        setErrorMessage(
+          message
+            ? `Помилка у полях форми: ${message}`
+            : 'Помилка: перевірте правильність заповнення всіх полів.',
+        )
+      } else {
+        console.error('Не вдалося зв’язатися з сервером:', err)
+        setErrorMessage(
+          'Не вдалося зв’язатися з сервером. Будь ласка, перевірте з’єднання та спробуйте ще раз пізніше.',
+        )
+      }
+    }
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col justify-between py-6 px-4">
-      {/* Шапка форми за макетом */}
-      <div className="mb-6 flex items-center justify-between border-b-2 border-[#70A5F9] pb-4">
-        <h1 className="text-2xl font-bold text-[#5897FB] md:text-3xl">
-          Створити організацію
-        </h1>
-        <button
-          type="button"
-          onClick={() => navigate('/profile')}
-          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg bg-[#F5E6BF] text-xl font-bold text-black transition-transform hover:scale-105 active:scale-95"
-          title="Закрити"
-        >
-          ✕
-        </button>
+    <div className="relative flex min-h-screen w-full flex-col justify-between bg-[#F7FBFF] overflow-x-hidden">
+      {/* Шапка за макетом Figma */}
+      <div className="w-full">
+        <div className="flex items-center justify-between px-8 pt-6 pb-4">
+          <h1 className="text-2xl font-bold text-[#5897FB] md:text-3xl">
+            Створити організацію
+          </h1>
+          <button
+            type="button"
+            onClick={() => navigate('/profile')}
+            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl bg-[#F5E6BF] text-2xl font-bold text-black transition-transform hover:scale-105 active:scale-95"
+            title="Закрити"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="h-[2px] w-full bg-[#70A5F9]" />
       </div>
 
-      {/* Форма за макетом Figma */}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        {/* Назва організації * */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-black">
-            Назва організації <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Волонтери"
-            className="h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
-          />
-        </div>
-
-        {/* Електронна пошта * */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-black">
-            Електронна пошта організації <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="organisation@example.com"
-            className="h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
-          />
-        </div>
-
-        {/* Телефон * */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-black">
-            Телефон <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="tel"
-            required
-            value={phone}
-            onChange={handlePhoneChange}
-            placeholder="+380"
-            className={`h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] ${
-              phoneError
-                ? 'outline-red-500 bg-red-50'
-                : 'outline-sky-300 focus:outline-blue-500'
-            }`}
-          />
-          {phoneError && (
-            <span className="text-[10px] text-red-500">{phoneError}</span>
+      <div className="my-auto flex w-full justify-center px-4 py-8">
+        <form
+          onSubmit={handleSubmit}
+          className="flex w-full max-w-xl flex-col items-center"
+        >
+          {/* ЧЕРВОНА ПЛАШКА ПОМИЛКИ (якщо щось пішло не так) */}
+          {citiesError && (
+            <div className="mb-5 w-full rounded-lg border border-red-200 bg-red-50 p-3.5 text-center text-xs font-medium text-red-700">
+              {citiesError}
+            </div>
           )}
-        </div>
-
-        {/* Місто * */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-black">
-            Місто <span className="text-red-500">*</span>
-          </label>
-          <select
-            value={cityId}
-            onChange={(e) => setCityId(Number(e.target.value))}
-            className="h-9 w-full rounded-[5px] bg-[#DCECFF] px-2 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
-          >
-            {cities.map((city) => (
-              <option key={city.id} value={city.id}>
-                {city.name} {city.region ? `(${city.region})` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Код EDRPOU (необов'язковий) */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-black">Код EDRPOU</label>
-          <input
-            type="text"
-            value={edrpou}
-            onChange={handleEdrpouChange}
-            placeholder="00000000 (8 цифр, якщо є)"
-            className={`h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] ${
-              edrpouError
-                ? 'outline-red-500 bg-red-50'
-                : 'outline-sky-300 focus:outline-blue-500'
-            }`}
-          />
-          {edrpouError && (
-            <span className="text-[10px] text-red-500">{edrpouError}</span>
+          {errorMessage && (
+            <div className="mb-5 w-full rounded-lg border border-red-200 bg-red-50 p-3.5 text-center text-xs font-medium text-red-700 animate-in fade-in">
+              {errorMessage}
+            </div>
           )}
-        </div>
 
-        {/* Опис організації * */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-black">
-            Опис організації <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            rows={3}
-            required
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Діяльність, місія та напрямки допомоги..."
-            className="w-full rounded-[5px] bg-[#DCECFF] p-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
-          />
-        </div>
+          {/* ЗЕЛЕНА ПЛАШКА УСПІХУ (коли все збереглося) */}
+          {successMessage && (
+            <div className="mb-5 w-full rounded-lg border border-green-200 bg-green-50 p-3.5 text-center text-xs font-medium text-green-700 animate-in fade-in">
+              {successMessage}
+            </div>
+          )}
 
-        {/* Кнопка "Зберегти" */}
-        <div className="mt-4 flex justify-center">
+          <div className="flex w-full flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                Назва організації <span className="ml-1 text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Наприклад: БО «Дій Разом»"
+                className="h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                Електронна пошта організації{' '}
+                <span className="ml-1 text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="organisation@example.com"
+                className="h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                Телефон <span className="ml-1 text-red-500">*</span>
+              </label>
+              <input
+                type="tel"
+                required
+                value={phone}
+                onChange={handlePhoneChange}
+                placeholder="+380"
+                className={`h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] font-['e-Ukraine'] ${
+                  phoneError
+                    ? 'outline-red-500 bg-red-50'
+                    : 'outline-sky-300 focus:outline-blue-500'
+                }`}
+              />
+              {phoneError && (
+                <span className="text-[10px] text-red-500">{phoneError}</span>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                Місто <span className="ml-1 text-red-500">*</span>
+              </label>
+              <select
+                required
+                value={cityId}
+                onChange={(e) => setCityId(Number(e.target.value))}
+                className="h-9 w-full rounded-[5px] bg-[#DCECFF] px-2 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+              >
+                {cities.map((city) => (
+                  <option key={city.id} value={city.id}>
+                    {city.name} {city.region ? `(${city.region})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-black font-['e-Ukraine']">
+                Код ЄДРПОУ
+              </label>
+              <input
+                type="text"
+                value={edrpou}
+                onChange={handleEdrpouChange}
+                placeholder="00000000 (8 цифр, якщо зареєстрована ГО)"
+                className={`h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] font-['e-Ukraine'] ${
+                  edrpouError
+                    ? 'outline-red-500 bg-red-50'
+                    : 'outline-sky-300 focus:outline-blue-500'
+                }`}
+              />
+              {edrpouError && (
+                <span className="text-[10px] text-red-500">{edrpouError}</span>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                Опис організації <span className="ml-1 text-red-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                required
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Діяльність, місія та напрямки допомоги організації..."
+                className="w-full rounded-[5px] bg-[#DCECFF] p-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+              />
+            </div>
+          </div>
+
           <button
             type="submit"
             disabled={
-              isSubmitting || Boolean(phoneError) || Boolean(edrpouError)
+              isSubmitting ||
+              Boolean(phoneError) ||
+              Boolean(edrpouError) ||
+              cities.length === 0
             }
-            className="h-11 w-56 cursor-pointer rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed font-['e-Ukraine']"
           >
             {isSubmitting ? 'Збереження...' : 'Зберегти'}
           </button>
-        </div>
-      </form>
+        </form>
+      </div>
+
+      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-[#F1D387]" />
     </div>
   )
 }

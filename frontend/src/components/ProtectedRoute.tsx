@@ -24,8 +24,11 @@ export const ProtectedRoute = ({
   children,
   requireProfileComplete = true,
 }: ProtectedRouteProps) => {
-  const { isAuthenticated, isProfileComplete } = useAuth()
+  const { isLoading, isAuthenticated, isProfileComplete } = useAuth()
   const location = useLocation()
+
+  // Поки /auth/me не відповів, нікуди не редиректимо
+  if (isLoading) return null
 
   // 1. Не авторизований -> на /login
   if (!isAuthenticated) {
