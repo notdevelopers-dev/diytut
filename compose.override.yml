@@ -1,21 +1,36 @@
+# Локально .env не обов'язковий: значення за замовчуванням нижче — лише для розробки,
+# а змінні з .env мають пріоритет
+x-dev-backend: &dev-backend
+  build:
+    context: ./backend
+    target: dev
+    args:
+      UID: ${UID:-1000}
+      GID: ${GID:-1000}
+  environment:
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-diytut}:${POSTGRES_PASSWORD:-diytut}@db:5432/${POSTGRES_DB:-diytut}
+    SECRET_KEY: ${SECRET_KEY:-dev-only-secret-key-do-not-use-in-production}
+    COOKIE_SECURE: "false"
+    # Вхід без Google; для перевірки справжнього входу — DEV_LOGIN=false у .env
+    DEV_LOGIN: ${DEV_LOGIN:-true}
+  # Код змонтовано, тож нові міграції підхоплюються без перезбирання образу
+  volumes:
+    - ./backend:/app
+
 services:
   db:
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-diytut}
+      POSTGRES_USER: ${POSTGRES_USER:-diytut}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diytut}
     ports:
       - "127.0.0.1:5432:5432"
 
+  migrate:
+    <<: *dev-backend
+
   api:
-    build:
-      context: ./backend
-      target: dev
-      args:
-        UID: ${UID:-1000}
-        GID: ${GID:-1000}
-    environment:
-      COOKIE_SECURE: "false"
-      # Вхід без Google; для перевірки справжнього входу — DEV_LOGIN=false у .env
-      DEV_LOGIN: ${DEV_LOGIN:-true}
-    volumes:
-      - ./backend:/app
+    <<: *dev-backend
     ports:
       - "127.0.0.1:8000:8000"
 

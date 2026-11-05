@@ -1,6 +1,6 @@
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     # Має збігатися з одним із redirect URI, дозволених у Google Cloud Console
     google_redirect_uri: str = ""
-    # Підписує JWT і тимчасову cookie зі state для OAuth
-    secret_key: str
+    # Підписує JWT і тимчасову cookie зі state для OAuth; порожній чи короткий ключ легко підібрати
+    secret_key: str = Field(min_length=32)
     # Вимикати лише для локальної розробки без HTTPS
     cookie_secure: bool = True
     # Лише для локальної розробки: вхід без Google, під будь-яким email
