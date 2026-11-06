@@ -7,7 +7,7 @@ from sqlalchemy import event
 from app import auth
 from app.db import engine
 from app.main import app
-from app.models.base import (
+from app.models import (
     City,
     Organization,
     OrganizationMember,
@@ -15,8 +15,8 @@ from app.models.base import (
     OrgStatusEnum,
     User,
 )
-from app.routers import organizations as organizations_router
 from app.schemas.organizations import _check_edrpou
+from app.services import organizations as organizations_service
 
 # Справжні коди ЄДРПОУ з різних діапазонів алгоритму контрольної цифри
 VALID_EDRPOU = ["14360570", "21133352", "40075815", "00032106"]
@@ -159,7 +159,7 @@ def test_second_organization_between_check_and_insert(
     async def no_organization(session, user_id: int) -> None:
         return None
 
-    monkeypatch.setattr(organizations_router, "get_user_organization_id", no_organization)
+    monkeypatch.setattr(organizations_service, "get_user_organization_id", no_organization)
 
     assert create(client, form, edrpou="21133352").status_code == 409
 
@@ -185,7 +185,7 @@ def test_edrpou_taken_between_check_and_insert(
     async def not_taken(session, edrpou: str) -> bool:
         return False
 
-    monkeypatch.setattr(organizations_router, "is_edrpou_taken", not_taken)
+    monkeypatch.setattr(organizations_service, "is_edrpou_taken", not_taken)
     sign_in(client, make_user())
     response = create(client, form)
 

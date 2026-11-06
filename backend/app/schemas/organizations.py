@@ -10,7 +10,7 @@ from pydantic import (
     field_validator,
 )
 
-from app.models.base import OrganizationMember, OrgMemberRoleEnum, OrgStatusEnum
+from app.models import OrganizationMember, OrgMemberRoleEnum, OrgStatusEnum
 from app.schemas.users import CityId, Phone, _empty_to_none
 
 EDRPOU_LENGTH = 8
