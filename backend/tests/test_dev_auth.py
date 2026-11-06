@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app.config import Settings, settings
-from app.models.base import City, User
+from app.models import City, User
 from app.routers import auth as auth_router
 
 

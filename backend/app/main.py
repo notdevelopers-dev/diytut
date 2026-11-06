@@ -13,7 +13,7 @@ app = FastAPI(
 # Тимчасове сховище state, nonce і PKCE між редиректом на Google і поверненням з нього
 app.add_middleware(
     SessionMiddleware,
-    secret_key=settings.secret_key,
+    secret_key=settings.secret_key.get_secret_value(),
     session_cookie="oauth_state",
     max_age=600,
     path="/api/auth/google",

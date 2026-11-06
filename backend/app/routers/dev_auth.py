@@ -7,15 +7,15 @@
 from html import escape
 from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
 
+from app import errors
 from app.auth import GoogleIdentity, start_registration, start_session
 from app.config import settings
-from app.db import SessionDep
-from app.models.base import User
+from app.db import DbSessionDep
 from app.routers.auth import AFTER_LOGIN_URL, REGISTRATION_URL
+from app.services.dev_auth import get_user_id_by_email, list_recent_users
 
 DEV_SUB_PREFIX = "dev:"
 LISTED_USERS = 50
@@ -23,24 +23,16 @@ LISTED_USERS = 50
 
 def require_dev_login() -> None:
     if not settings.dev_login:
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
+        raise errors.dev_login_disabled()
 
 
-router = APIRouter(
-    prefix="/auth/dev",
-    tags=["auth"],
-    dependencies=[Depends(require_dev_login)],
-    include_in_schema=settings.dev_login,
-)
+# Префікс і видимість у документації задаються при підключенні в app.routers
+router = APIRouter(dependencies=[Depends(require_dev_login)])
 
 
 @router.get("/login")
-async def dev_login_page(session: SessionDep) -> HTMLResponse:
-    users = (
-        await session.execute(
-            select(User.email, User.nickname).order_by(User.id.desc()).limit(LISTED_USERS)
-        )
-    ).all()
+async def dev_login_page(db_session: DbSessionDep) -> HTMLResponse:
+    users = await list_recent_users(db_session, LISTED_USERS)
     buttons = "".join(
         f'<button name="email" value="{escape(email)}">{escape(email)}'
         f" <small>@{escape(nickname)}</small></button>"
@@ -81,15 +73,15 @@ async def dev_login_page(session: SessionDep) -> HTMLResponse:
 
 
 @router.post("/login")
-async def dev_login(request: Request, session: SessionDep) -> RedirectResponse:
+async def dev_login(request: Request, db_session: DbSessionDep) -> RedirectResponse:
     # Без python-multipart: форма проста, тож розбираємо тіло самі
     form = {key: values[0] for key, values in parse_qs((await request.body()).decode()).items()}
     email = form.get("email", "").strip().lower()
     if "@" not in email:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Email is required")
+        raise errors.email_required()
 
     # Наявного користувача впізнаємо за email, тож працюють і акаунти, створені через Google
-    user_id = await session.scalar(select(User.id).where(User.email == email))
+    user_id = await get_user_id_by_email(db_session, email)
     if user_id is not None:
         response = RedirectResponse(AFTER_LOGIN_URL, status.HTTP_302_FOUND)
         start_session(response, user_id)

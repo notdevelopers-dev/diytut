@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import auth
-from app.models.base import City, User
+from app.models import City, User
 from app.routers import auth as auth_router
 from tests.conftest import GOOGLE_CLAIMS
 
