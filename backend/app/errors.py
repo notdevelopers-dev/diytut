@@ -18,6 +18,16 @@ def registration_expired() -> HTTPException:
     )
 
 
+def dev_login_disabled() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")
+
+
+def email_required() -> HTTPException:
+    return field_error(
+        status.HTTP_422_UNPROCESSABLE_CONTENT, "email", "email_required", "Email is required"
+    )
+
+
 def user_not_found() -> HTTPException:
     return HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
 

@@ -4,14 +4,25 @@ x-logging: &logging
     max-size: "10m"
     max-file: "3"
 
+# Спільне для api і migrate: той самий образ і ті самі налаштування
+x-backend: &backend
+  build: ./backend
+  environment:
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-}:${POSTGRES_PASSWORD:-}@db:5432/${POSTGRES_DB:-}
+    GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+    GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+    SECRET_KEY: ${SECRET_KEY:-}
+  logging: *logging
+
 services:
   db:
     image: postgres:18
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-}
+      POSTGRES_USER: ${POSTGRES_USER:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
     volumes:
       - pgdata:/var/lib/postgresql
     networks: [data]
@@ -22,20 +33,24 @@ services:
       timeout: 5s
       retries: 5
 
-  api:
-    build: ./backend
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
-      SECRET_KEY: ${SECRET_KEY}
+  # Одноразово застосовує міграції й завершується; api чекає на його успіх
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
     depends_on:
       db:
         condition: service_healthy
+    networks: [data]
+
+  api:
+    <<: *backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     networks: [proxy, data]
-    logging: *logging
 
   nginx:
     build:
@@ -53,7 +68,7 @@ services:
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on: [nginx]
     networks: [proxy]
     logging: *logging

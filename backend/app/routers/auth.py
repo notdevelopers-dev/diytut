@@ -26,12 +26,16 @@ from app.services.users import get_user_id_by_google_sub, register_user
 AFTER_LOGIN_URL = "/"
 REGISTRATION_URL = "/register/complete"
 LOGIN_FAILED_URL = "/login?error=google"
+DEV_LOGIN_URL = "/api/auth/dev/login"
 
 router = APIRouter()
 
 
 @router.get("/google/login")
 async def google_login(request: Request) -> RedirectResponse:
+    if settings.dev_login:
+        # Локальна розробка без ключів Google: замість Google — сторінка dev-входу
+        return RedirectResponse(DEV_LOGIN_URL, status.HTTP_302_FOUND)
     return await oauth.google.authorize_redirect(request, settings.google_redirect_uri)
 
 
