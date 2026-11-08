@@ -1,0 +1,11 @@
+# Інфраструктура і все, що лежить у корені
+*                   @oleh-devlab
+
+# Бекенд
+/backend/           @oleh-devlab @werre79 @Dan4ik27022008
+
+# Фронтенд
+/frontend/          @dashahomichenko @JustNestor @ArseniyKorotin
+
+# CI, Dependabot і решта
+/.github/           @oleh-devlab
