@@ -17,9 +17,11 @@ from app.auth import (
 )
 from app.config import settings
 from app.db import DbSessionDep
+from app.models import LoginMethodEnum
 from app.schemas.auth import Authenticated, RegistrationRequired
 from app.schemas.users import RegistrationRequest, UserRead
 from app.services.auth import get_auth_status
+from app.services.logins import record_login
 from app.services.users import get_user_id_by_google_sub, register_user
 
 # Сторінки фронтенду, куди повертаємо користувача після входу
@@ -57,6 +59,7 @@ async def google_callback(request: Request, db_session: DbSessionDep) -> Redirec
         response = RedirectResponse(REGISTRATION_URL, status.HTTP_302_FOUND)
         start_registration(response, identity)
     else:
+        await record_login(db_session, user_id, LoginMethodEnum.google)
         response = RedirectResponse(AFTER_LOGIN_URL, status.HTTP_302_FOUND)
         start_session(response, user_id)
     return response
@@ -74,6 +77,7 @@ async def register(
         raise errors.registration_expired()
 
     user = await register_user(db_session, identity, data)
+    await record_login(db_session, user.id, LoginMethodEnum.registration)
     start_session(response, user.id)
     return UserRead.model_validate(user)
 

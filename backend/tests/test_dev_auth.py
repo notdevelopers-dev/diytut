@@ -3,9 +3,10 @@ from datetime import date
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from sqlalchemy import select
 
 from app.config import Settings, settings
-from app.models import City, User
+from app.models import City, LoginEvent, LoginMethodEnum, User
 from app.routers import auth as auth_router
 
 
@@ -105,6 +106,14 @@ def test_existing_user_gets_session_by_email(client: TestClient, existing_user: 
     me = client.get("/api/auth/me").json()
     assert me["status"] == "authenticated"
     assert me["user"]["id"] == existing_user
+
+
+@pytest.mark.usefixtures("dev_login")
+def test_dev_login_is_recorded(client: TestClient, db_session, existing_user: int) -> None:
+    dev_sign_in(client, email="taras@example.com")
+
+    events = client.portal.call(db_session.execute, select(LoginEvent.user_id, LoginEvent.method))
+    assert events.all() == [(existing_user, LoginMethodEnum.dev)]
 
 
 @pytest.mark.usefixtures("dev_login")
