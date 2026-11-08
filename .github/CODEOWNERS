@@ -1,5 +1,5 @@
 # Інфраструктура і все, що лежить у корені
-*                   @oleh-devlab
+*                   @oleh-devlab @werre79
 
 # Бекенд
 /backend/           @oleh-devlab @werre79 @Dan4ik27022008
@@ -8,4 +8,4 @@
 /frontend/          @dashahomichenko @JustNestor @ArseniyKorotin
 
 # CI, Dependabot і решта
-/.github/           @oleh-devlab
+/.github/           @oleh-devlab @werre79
