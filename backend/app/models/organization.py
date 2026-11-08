@@ -50,6 +50,7 @@ class Organization(Base):
     creator = relationship("User", foreign_keys=[created_by])
     reviewer = relationship("User", foreign_keys=[reviewed_by])
     members = relationship("OrganizationMember", back_populates="organization")
+    projects = relationship("Project", back_populates="organization")
 
 
 class OrganizationMember(Base):
