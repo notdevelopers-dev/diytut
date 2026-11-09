@@ -8,9 +8,11 @@ from pydantic import (
     ConfigDict,
     StringConstraints,
     field_validator,
+    model_validator,
 )
 
 from app.models import OrganizationMember, OrgMemberRoleEnum, OrgStatusEnum
+from app.schemas.projects import ProjectListItem
 from app.schemas.users import CityId, Phone, _empty_to_none
 
 EDRPOU_LENGTH = 8
@@ -144,3 +146,45 @@ class OrganizationMembership(BaseModel):
             status=organization.status,
             role=membership.role,
         )
+
+
+class OrganizationListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    email: str
+    phone: str
+    city_id: int
+    description: str | None
+    status: OrgStatusEnum
+    created_at: datetime
+
+
+class OrganizationMemberItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: int
+    role: OrgMemberRoleEnum
+    first_name: str | None = None
+    last_name: str | None = None
+    nickname: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def extract_from_member(cls, data: Any) -> Any:
+        if hasattr(data, "user") and data.user is not None:
+            user = data.user
+            return {
+                "user_id": data.user_id,
+                "role": data.role,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "nickname": user.nickname,
+            }
+        return data
+
+
+class OrganizationDetailRead(OrganizationRead):
+    members: list[OrganizationMemberItem] = []
+    projects: list[ProjectListItem] = []
