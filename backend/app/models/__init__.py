@@ -3,6 +3,7 @@
 from app.models.base import Base
 from app.models.city import City
 from app.models.experience import ExperienceLevelEnum
+from app.models.join_request import JoinRequest, JoinRequestStatusEnum, JoinRequestTargetEnum
 from app.models.login_event import LoginEvent, LoginMethodEnum
 from app.models.organization import (
     Organization,
@@ -18,6 +19,9 @@ __all__ = [
     "City",
     "ExperienceLevelEnum",
     "GenderEnum",
+    "JoinRequest",
+    "JoinRequestStatusEnum",
+    "JoinRequestTargetEnum",
     "LoginEvent",
     "LoginMethodEnum",
     "OrgMemberRoleEnum",
