@@ -1,11 +1,15 @@
 # Fonts
 
-The design uses the free Ukrainian state font **e-Ukraine** (Diia). Put the
-`.woff2` files here under these exact names (see `@font-face` in `src/index.css`):
+Typeface **e-Ukraine** (Ministry of Digital Transformation of Ukraine), used in the design:
 
-- `e-Ukraine-Light.woff2`
-- `e-Ukraine-Regular.woff2`
-- `e-Ukraine-Medium.woff2`
-- `e-UkraineHead-Regular.woff2` (headings)
+- `e-Ukraine-Regular.otf`, `e-Ukraine-Medium.otf` — body text and labels
+- `e-UkraineHead-Regular.otf` — headings
+- `e-UkraineHead-LOGO.otf` — the ДійТут logo
 
-Until the files are added, the app falls back to system fonts.
+Source: the official archives `e-Ukraine.zip` and `e-Ukraine-Head.zip` from
+https://thedigital.gov.ua/fonts. The font is published under CC BY 4.0
+(attribution: the Ministry and the Committee for Digital Transformation of Ukraine).
+The archives do not include a license file, so the license is taken from that
+site's statement and from the typeface's public mirror.
+
+The `@font-face` rules are in `src/index.css`.

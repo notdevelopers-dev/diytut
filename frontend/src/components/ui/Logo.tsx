@@ -5,7 +5,7 @@ export const Logo = () => (
   <Link
     to="/"
     aria-label="ДійТут — на головну"
-    className="text-3xl font-bold tracking-tight no-underline"
+    className="font-logo text-3xl no-underline"
   >
     <span className="text-[#5897FB]">Дій</span>
     <span className="text-[#F4B840]">Тут</span>

@@ -50,47 +50,39 @@
   --font-sans:
     'e-Ukraine', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
     Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --font-logo: 'e-Ukraine Head Logo', 'e-Ukraine Head', system-ui, sans-serif;
   --font-head:
     'e-Ukraine Head', 'e-Ukraine', system-ui, -apple-system, BlinkMacSystemFont,
     'Segoe UI', Roboto, sans-serif;
 }
 
 /*
- * Файли шрифтів лежать у public/fonts (див. public/fonts/README.md).
- * local() спершу — щоб не вантажити файл, якщо шрифт встановлено в системі.
- * Якщо файлів немає, браузер тихо переходить на запасні шрифти зі стеку вище.
+ * Шрифти «є-Україна» лежать у public/fonts (джерело й ліцензія — у public/fonts/README.md).
+ * Це .otf: сучасні браузери підтримують їх так само, як woff2.
  */
-@font-face {
-  font-family: 'e-Ukraine';
-  font-weight: 300;
-  font-display: swap;
-  src:
-    local('e-Ukraine Light'),
-    url('/fonts/e-Ukraine-Light.woff2') format('woff2');
-}
 @font-face {
   font-family: 'e-Ukraine';
   font-weight: 400;
   font-display: swap;
-  src:
-    local('e-Ukraine Regular'),
-    url('/fonts/e-Ukraine-Regular.woff2') format('woff2');
+  src: url('/fonts/e-Ukraine-Regular.otf') format('opentype');
 }
 @font-face {
   font-family: 'e-Ukraine';
   font-weight: 500;
   font-display: swap;
-  src:
-    local('e-Ukraine Medium'),
-    url('/fonts/e-Ukraine-Medium.woff2') format('woff2');
+  src: url('/fonts/e-Ukraine-Medium.otf') format('opentype');
 }
 @font-face {
   font-family: 'e-Ukraine Head';
   font-weight: 400;
   font-display: swap;
-  src:
-    local('e-Ukraine Head Regular'),
-    url('/fonts/e-UkraineHead-Regular.woff2') format('woff2');
+  src: url('/fonts/e-UkraineHead-Regular.otf') format('opentype');
+}
+@font-face {
+  font-family: 'e-Ukraine Head Logo';
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/e-UkraineHead-LOGO.otf') format('opentype');
 }
 
 @layer base {
