@@ -2,6 +2,7 @@
 # треба імпортувати тут
 from app.models.base import Base
 from app.models.city import City
+from app.models.experience import ExperienceLevelEnum
 from app.models.login_event import LoginEvent, LoginMethodEnum
 from app.models.organization import (
     Organization,
@@ -9,11 +10,13 @@ from app.models.organization import (
     OrgMemberRoleEnum,
     OrgStatusEnum,
 )
+from app.models.project import Project, ProjectStatusEnum
 from app.models.user import GenderEnum, RoleEnum, User
 
 __all__ = [
     "Base",
     "City",
+    "ExperienceLevelEnum",
     "GenderEnum",
     "LoginEvent",
     "LoginMethodEnum",
@@ -21,6 +24,8 @@ __all__ = [
     "OrgStatusEnum",
     "Organization",
     "OrganizationMember",
+    "Project",
+    "ProjectStatusEnum",
     "RoleEnum",
     "User",
 ]
