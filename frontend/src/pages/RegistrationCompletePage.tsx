@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiClient } from '../api/client'
 import { getApiErrorMessage } from '../api/errors'
+import { CityCombobox } from '../components/CityCombobox'
+import { Logo } from '../components/Logo'
 import { useCities } from '../hooks/useCities'
 import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../utils/phone'
 
@@ -29,11 +31,6 @@ export const RegistrationCompletePage = () => {
   const [phoneError, setPhoneError] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // Перше місто зі списку обираємо за замовчуванням
-  if (cityId === '' && cities.length > 0) {
-    setCityId(cities[0].id)
-  }
 
   // 3. Форматування та валідація номера телефону (+380...)
   const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -99,10 +96,7 @@ export const RegistrationCompletePage = () => {
       {/* Верхня панель: Логотип і синя роздільна смужка за макетом Figma */}
       <div className="w-full">
         <div className="px-8 pt-6 pb-4">
-          <span className="text-3xl font-bold tracking-tight">
-            <span className="text-[#5897FB]">Дій</span>
-            <span className="text-[#F4B840]">Тут</span>
-          </span>
+          <Logo />
         </div>
         <div className="h-[2px] w-full bg-[#70A5F9]" />
       </div>
@@ -129,7 +123,7 @@ export const RegistrationCompletePage = () => {
             <div className="flex flex-col gap-4">
               {/* Ім'я * */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                <label className="flex items-center text-xs font-medium text-black">
                   Ім’я <span className="ml-1 text-red-500">*</span>
                 </label>
                 <input
@@ -138,13 +132,13 @@ export const RegistrationCompletePage = () => {
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="Петро"
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
                 />
               </div>
 
               {/* Прізвище * */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                <label className="flex items-center text-xs font-medium text-black">
                   Прізвище <span className="ml-1 text-red-500">*</span>
                 </label>
                 <input
@@ -153,13 +147,13 @@ export const RegistrationCompletePage = () => {
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Петренко"
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
                 />
               </div>
 
               {/* Телефон * */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                <label className="flex items-center text-xs font-medium text-black">
                   Телефон <span className="ml-1 text-red-500">*</span>
                 </label>
                 <input
@@ -168,7 +162,7 @@ export const RegistrationCompletePage = () => {
                   value={phone}
                   onChange={handlePhoneChange}
                   placeholder="+380"
-                  className={`h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] font-['e-Ukraine'] ${
+                  className={`h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] ${
                     phoneError
                       ? 'outline-red-500 bg-red-50'
                       : 'outline-sky-300 focus:outline-blue-500'
@@ -181,20 +175,16 @@ export const RegistrationCompletePage = () => {
 
               {/* Місто * (Select із довідника міст бекенду) */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                <label className="flex items-center text-xs font-medium text-black">
                   Місто <span className="ml-1 text-red-500">*</span>
                 </label>
-                <select
+                <CityCombobox
+                  cities={cities}
                   value={cityId}
-                  onChange={(e) => setCityId(Number(e.target.value))}
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-2 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
-                >
-                  {cities.map((city) => (
-                    <option key={city.id} value={city.id}>
-                      {city.name} {city.region ? `(${city.region})` : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCityId}
+                  disabled={cities.length === 0}
+                  inputClassName="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
+                />
               </div>
             </div>
 
@@ -202,7 +192,7 @@ export const RegistrationCompletePage = () => {
             <div className="flex flex-col gap-4">
               {/* Нікнейм (без зірочки в макеті) */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-black font-['e-Ukraine']">
+                <label className="text-xs font-medium text-black">
                   Нікнейм
                 </label>
                 <input
@@ -210,13 +200,13 @@ export const RegistrationCompletePage = () => {
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
                   placeholder="petrenkopetro111"
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
                 />
               </div>
 
               {/* Дата народження * */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                <label className="flex items-center text-xs font-medium text-black">
                   Дата народження <span className="ml-1 text-red-500">*</span>
                 </label>
                 <input
@@ -224,13 +214,13 @@ export const RegistrationCompletePage = () => {
                   required
                   value={dateOfBirth}
                   onChange={(e) => setDateOfBirth(e.target.value)}
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
                 />
               </div>
 
               {/* Стать * (значення відповідають GenderEnum бекенду) */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
+                <label className="flex items-center text-xs font-medium text-black">
                   Стать <span className="ml-1 text-red-500">*</span>
                 </label>
                 <select
@@ -240,7 +230,7 @@ export const RegistrationCompletePage = () => {
                       e.target.value as 'prefer_not_to_say' | 'female' | 'male',
                     )
                   }
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-2 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-2 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
                 >
                   <option value="prefer_not_to_say">Волію не вказувати</option>
                   <option value="female">Жіноча</option>
@@ -248,17 +238,18 @@ export const RegistrationCompletePage = () => {
                 </select>
               </div>
 
-              {/* Біографія (без зірочки в макеті) */}
+              {/* Про себе (без зірочки в макеті; бекенд приймає до 2000 символів) */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-black font-['e-Ukraine']">
-                  Біографія
+                <label className="text-xs font-medium text-black">
+                  Про себе
                 </label>
-                <input
-                  type="text"
+                <textarea
+                  rows={5}
+                  maxLength={2000}
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  placeholder="Біографія"
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                  placeholder="Розкажіть про себе: досвід, інтереси, чим хочете допомагати"
+                  className="min-h-28 w-full resize-y rounded-[5px] bg-[#DCECFF] p-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
                 />
               </div>
             </div>
@@ -270,7 +261,7 @@ export const RegistrationCompletePage = () => {
             disabled={
               isSubmitting || Boolean(phoneError) || cities.length === 0
             }
-            className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed font-['e-Ukraine']"
+            className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Збереження...' : 'Зареєструватись'}
           </button>

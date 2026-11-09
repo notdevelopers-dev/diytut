@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
+import { Logo } from './Logo'
 import { useAuth } from '../context/AuthContext'
 import { canEditOrganization, getOrgRoleLabel } from '../utils/organization'
 
@@ -23,12 +24,7 @@ export const Layout = () => {
       {/* 1. Шапка за макетом із Figma: логотип ДійТут + жовта кнопка ☰ */}
       <header className="w-full bg-[#F7FBFF]">
         <div className="flex items-center justify-between px-8 pt-6 pb-4">
-          <Link to="/" className="no-underline">
-            <span className="text-3xl font-bold tracking-tight">
-              <span className="text-[#5897FB]">Дій</span>
-              <span className="text-[#F4B840]">Тут</span>
-            </span>
-          </Link>
+          <Logo />
 
           {/* Жовта кнопка трьох рисочок (☰) */}
           {isAuthenticated ? (

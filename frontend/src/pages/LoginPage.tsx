@@ -1,3 +1,5 @@
+import { Logo } from '../components/Logo'
+
 export const LoginPage = () => {
   const handleGoogleSignIn = () => {
     // Бекенд веде на Google і після входу ставить httpOnly cookie сесії
@@ -9,14 +11,11 @@ export const LoginPage = () => {
       {/* Верхня частина: Логотип і стрічка "Реєстрація" */}
       <div className="w-full">
         <div className="px-8 pt-6 pb-4">
-          <span className="text-3xl font-bold tracking-tight">
-            <span className="text-[#5897FB]">Дій</span>
-            <span className="text-[#F4B840]">Тут</span>
-          </span>
+          <Logo />
         </div>
 
         <div className="flex h-16 w-full items-center justify-center border-y border-[#F1D387] bg-[#FBE2A7]">
-          <h1 className="m-0 text-3xl font-normal text-black md:text-5xl font-['e-Ukraine_Head',sans-serif]">
+          <h1 className="m-0 text-3xl font-normal text-black md:text-5xl font-head">
             Реєстрація
           </h1>
         </div>
@@ -49,7 +48,7 @@ export const LoginPage = () => {
               />
             </svg>
           </div>
-          <span className="text-base font-normal text-black font-['e-Ukraine',sans-serif]">
+          <span className="text-base font-normal text-black">
             Продовжити через Google
           </span>
         </button>

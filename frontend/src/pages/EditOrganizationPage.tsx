@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiClient } from '../api/client'
 import { getApiErrorMessage, getErrorStatus } from '../api/errors'
+import { CityCombobox } from '../components/CityCombobox'
 import { useCities } from '../hooks/useCities'
 import { canEditOrganization } from '../utils/organization'
 import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../utils/phone'
@@ -241,18 +242,13 @@ export const EditOrganizationPage = () => {
               <label className="text-xs font-medium text-black">
                 Місто <span className="text-red-500">*</span>
               </label>
-              <select
+              <CityCombobox
+                cities={cities}
                 value={cityId}
-                onChange={(e) => setCityId(Number(e.target.value))}
-                className="h-9 w-full rounded-[5px] bg-[#DCECFF] px-2 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
-              >
-                {cityId === '' && <option value="">Завантаження...</option>}
-                {cities.map((city) => (
-                  <option key={city.id} value={city.id}>
-                    {city.name} {city.region ? `(${city.region})` : ''}
-                  </option>
-                ))}
-              </select>
+                onChange={setCityId}
+                disabled={cities.length === 0}
+                inputClassName="h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
+              />
             </div>
 
             {/* Код ЄДРПОУ (не редагується) */}
