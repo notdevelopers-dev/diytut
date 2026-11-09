@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext.tsx'
+import { useAuth } from '../../context/AuthContext.tsx'
 
 interface ProtectedRouteProps {
   children?: ReactNode

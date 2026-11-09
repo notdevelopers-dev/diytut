@@ -1,13 +1,23 @@
 import { useState } from 'react'
 import type { FormEvent, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { apiClient } from '../api/client'
-import { getApiErrorMessage } from '../api/errors'
-import { CityCombobox } from '../components/CityCombobox'
-import { Logo } from '../components/Logo'
-import { useCities } from '../hooks/useCities'
-import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../utils/phone'
+import { useAuth } from '../../context/AuthContext'
+import { apiClient } from '../../api/client'
+import { getApiErrorMessage } from '../../api/errors'
+import { CityCombobox } from '../../components/ui/CityCombobox'
+import {
+  FieldError,
+  FieldLabel,
+  RequiredMark,
+} from '../../components/ui/Typography'
+import {
+  inputClass,
+  selectClass,
+  textareaClass,
+} from '../../components/ui/formStyles'
+import { Logo } from '../../components/ui/Logo'
+import { useCities } from '../../hooks/useCities'
+import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../../utils/phone'
 
 export const RegistrationCompletePage = () => {
   const { user, refresh } = useAuth()
@@ -123,67 +133,61 @@ export const RegistrationCompletePage = () => {
             <div className="flex flex-col gap-4">
               {/* Ім'я * */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black">
-                  Ім’я <span className="ml-1 text-red-500">*</span>
-                </label>
+                <FieldLabel>
+                  Ім’я <RequiredMark />
+                </FieldLabel>
                 <input
                   type="text"
                   required
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="Петро"
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
+                  className={inputClass('sm')}
                 />
               </div>
 
               {/* Прізвище * */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black">
-                  Прізвище <span className="ml-1 text-red-500">*</span>
-                </label>
+                <FieldLabel>
+                  Прізвище <RequiredMark />
+                </FieldLabel>
                 <input
                   type="text"
                   required
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Петренко"
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
+                  className={inputClass('sm')}
                 />
               </div>
 
               {/* Телефон * */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black">
-                  Телефон <span className="ml-1 text-red-500">*</span>
-                </label>
+                <FieldLabel>
+                  Телефон <RequiredMark />
+                </FieldLabel>
                 <input
                   type="tel"
                   required
                   value={phone}
                   onChange={handlePhoneChange}
                   placeholder="+380"
-                  className={`h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] ${
-                    phoneError
-                      ? 'outline-red-500 bg-red-50'
-                      : 'outline-sky-300 focus:outline-blue-500'
-                  }`}
+                  className={inputClass('sm', Boolean(phoneError))}
                 />
-                {phoneError && (
-                  <span className="text-[10px] text-red-500">{phoneError}</span>
-                )}
+                {phoneError && <FieldError>{phoneError}</FieldError>}
               </div>
 
               {/* Місто * (Select із довідника міст бекенду) */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black">
-                  Місто <span className="ml-1 text-red-500">*</span>
-                </label>
+                <FieldLabel>
+                  Місто <RequiredMark />
+                </FieldLabel>
                 <CityCombobox
                   cities={cities}
                   value={cityId}
                   onChange={setCityId}
                   disabled={cities.length === 0}
-                  inputClassName="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
+                  inputClassName={inputClass('sm')}
                 />
               </div>
             </div>
@@ -192,37 +196,35 @@ export const RegistrationCompletePage = () => {
             <div className="flex flex-col gap-4">
               {/* Нікнейм (без зірочки в макеті) */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-black">
-                  Нікнейм
-                </label>
+                <FieldLabel>Нікнейм</FieldLabel>
                 <input
                   type="text"
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
                   placeholder="petrenkopetro111"
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
+                  className={inputClass('sm')}
                 />
               </div>
 
               {/* Дата народження * */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black">
-                  Дата народження <span className="ml-1 text-red-500">*</span>
-                </label>
+                <FieldLabel>
+                  Дата народження <RequiredMark />
+                </FieldLabel>
                 <input
                   type="date"
                   required
                   value={dateOfBirth}
                   onChange={(e) => setDateOfBirth(e.target.value)}
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
+                  className={inputClass('sm')}
                 />
               </div>
 
               {/* Стать * (значення відповідають GenderEnum бекенду) */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black">
-                  Стать <span className="ml-1 text-red-500">*</span>
-                </label>
+                <FieldLabel>
+                  Стать <RequiredMark />
+                </FieldLabel>
                 <select
                   value={gender}
                   onChange={(e) =>
@@ -230,7 +232,7 @@ export const RegistrationCompletePage = () => {
                       e.target.value as 'prefer_not_to_say' | 'female' | 'male',
                     )
                   }
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-2 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
+                  className={selectClass('sm')}
                 >
                   <option value="prefer_not_to_say">Волію не вказувати</option>
                   <option value="female">Жіноча</option>
@@ -240,16 +242,14 @@ export const RegistrationCompletePage = () => {
 
               {/* Про себе (без зірочки в макеті; бекенд приймає до 2000 символів) */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-black">
-                  Про себе
-                </label>
+                <FieldLabel>Про себе</FieldLabel>
                 <textarea
                   rows={5}
                   maxLength={2000}
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   placeholder="Розкажіть про себе: досвід, інтереси, чим хочете допомагати"
-                  className="min-h-28 w-full resize-y rounded-[5px] bg-[#DCECFF] p-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
+                  className={`min-h-28 resize-y ${textareaClass}`}
                 />
               </div>
             </div>

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
-import { Logo } from './Logo'
-import { useAuth } from '../context/AuthContext'
-import { canEditOrganization, getOrgRoleLabel } from '../utils/organization'
+import { Logo } from '../ui/Logo'
+import { useAuth } from '../../context/AuthContext'
+import { canEditOrganization, getOrgRoleLabel } from '../../utils/organization'
 
 export const Layout = () => {
   const { isAuthenticated, user, logout } = useAuth()

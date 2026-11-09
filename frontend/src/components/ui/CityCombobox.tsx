@@ -1,6 +1,6 @@
 import { useId, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent } from 'react'
-import type { CityItem } from '../hooks/useCities'
+import type { CityItem } from '../../hooks/useCities'
 
 interface CityComboboxProps {
   cities: CityItem[]

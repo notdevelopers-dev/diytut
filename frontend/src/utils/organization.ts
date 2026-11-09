@@ -1,4 +1,4 @@
-import type { OrganizationData } from '../context/AuthContext'
+import type { OrganizationData } from '../types/auth'
 
 export type OrgRole = 'owner' | 'admin' | 'member'
 export type OrgStatus = 'pending' | 'approved' | 'rejected' | 'blocked'

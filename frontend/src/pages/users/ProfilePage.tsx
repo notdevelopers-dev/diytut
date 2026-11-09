@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext.tsx'
-import { apiClient } from '../api/client'
+import { useAuth } from '../../context/AuthContext.tsx'
+import { apiClient } from '../../api/client'
 import {
   canEditOrganization,
   getOrgRoleLabel,
   getOrgStatusLabel,
-} from '../utils/organization'
+} from '../../utils/organization'
 
 interface OrgProfileData {
   id: number
