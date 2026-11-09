@@ -3,9 +3,10 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app import auth
-from app.models.base import City, User
+from app.models import City, LoginEvent, LoginMethodEnum, User
 from app.routers import auth as auth_router
 from tests.conftest import GOOGLE_CLAIMS
 
@@ -98,6 +99,25 @@ def test_existing_user_gets_session(client: TestClient, google_returns, existing
     assert me["status"] == "authenticated"
     assert me["user"]["id"] == existing_user
     assert me["user"]["nickname"] == "taras"
+
+
+def test_login_is_recorded(client: TestClient, db_session, google_returns, existing_user) -> None:
+    google_returns(GOOGLE_CLAIMS)
+
+    client.get("/api/auth/google/callback?code=abc&state=xyz")
+
+    events = client.portal.call(db_session.execute, select(LoginEvent.user_id, LoginEvent.method))
+    assert events.all() == [(existing_user, LoginMethodEnum.google)]
+
+
+def test_new_user_login_is_not_recorded_before_registration(
+    client: TestClient, db_session, google_returns
+) -> None:
+    google_returns(GOOGLE_CLAIMS)
+
+    client.get("/api/auth/google/callback?code=abc&state=xyz")
+
+    assert client.portal.call(db_session.scalars, select(LoginEvent)).all() == []
 
 
 def test_logout_clears_session(client: TestClient, google_returns, existing_user) -> None:
