@@ -5,6 +5,7 @@ from app.models.city import City
 from app.models.experience import ExperienceLevelEnum
 from app.models.join_request import JoinRequest, JoinRequestStatusEnum, JoinRequestTargetEnum
 from app.models.login_event import LoginEvent, LoginMethodEnum
+from app.models.notification import Notification, NotificationTypeEnum
 from app.models.organization import (
     Organization,
     OrganizationMember,
@@ -24,6 +25,8 @@ __all__ = [
     "JoinRequestTargetEnum",
     "LoginEvent",
     "LoginMethodEnum",
+    "Notification",
+    "NotificationTypeEnum",
     "OrgMemberRoleEnum",
     "OrgStatusEnum",
     "Organization",
