@@ -3,8 +3,9 @@ from unittest.mock import ANY
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
-from app.models import City, User
+from app.models import City, LoginEvent, LoginMethodEnum, User
 from app.services import users as users_service
 from tests.conftest import GOOGLE_CLAIMS
 
@@ -90,6 +91,14 @@ def test_registration_creates_user_and_session(
     user = db(lambda session: session.get(User, body["id"]))
     assert user.google_sub == GOOGLE_CLAIMS["sub"]
     assert user.profile_completed_at is not None
+
+
+@pytest.mark.usefixtures("signed_in_with_google")
+def test_registration_counts_as_login(client: TestClient, form: dict, db) -> None:
+    user_id = register(client, form).json()["id"]
+
+    events = db(lambda session: session.execute(select(LoginEvent.user_id, LoginEvent.method)))
+    assert events.all() == [(user_id, LoginMethodEnum.registration)]
 
 
 @pytest.mark.usefixtures("signed_in_with_google")

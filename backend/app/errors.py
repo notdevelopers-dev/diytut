@@ -73,3 +73,22 @@ def not_organization_editor() -> HTTPException:
 
 def organization_blocked() -> HTTPException:
     return HTTPException(status.HTTP_403_FORBIDDEN, "Organization is blocked")
+
+
+def not_platform_admin() -> HTTPException:
+    return HTTPException(status.HTTP_403_FORBIDDEN, "Administrator access required")
+
+
+def organization_not_found() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "Organization not found")
+
+
+def organization_already_reviewed() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "Organization request has already been reviewed")
+
+
+def invalid_period(message: str) -> HTTPException:
+    return HTTPException(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        [{"type": "invalid_period", "loc": ["query", "date_from"], "msg": message}],
+    )

@@ -3,6 +3,7 @@
 from app.models.base import Base
 from app.models.city import City
 from app.models.experience import ExperienceLevelEnum
+from app.models.login_event import LoginEvent, LoginMethodEnum
 from app.models.organization import (
     Organization,
     OrganizationMember,
@@ -17,6 +18,8 @@ __all__ = [
     "City",
     "ExperienceLevelEnum",
     "GenderEnum",
+    "LoginEvent",
+    "LoginMethodEnum",
     "OrgMemberRoleEnum",
     "OrgStatusEnum",
     "Organization",
