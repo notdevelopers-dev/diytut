@@ -151,19 +151,19 @@ export const EditOrganizationPage = () => {
       {/* Верхня панель: "Редагувати організацію" та помаранчевий хрестик за макетом */}
       <div className="w-full">
         <div className="flex items-center justify-between px-8 pt-6 pb-4">
-          <h1 className="text-2xl font-bold text-[#5897FB] md:text-3xl">
+          <h1 className="text-2xl font-bold text-main md:text-3xl">
             Редагувати організацію
           </h1>
           <button
             type="button"
             onClick={() => void navigate('/profile')}
-            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl bg-[#F5E6BF] text-2xl font-bold text-black transition-transform hover:scale-105 active:scale-95"
+            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl bg-peach text-2xl font-bold text-black transition-transform hover:scale-105 active:scale-95"
             title="Закрити"
           >
             ✕
           </button>
         </div>
-        <div className="h-[2px] w-full bg-[#70A5F9]" />
+        <div className="h-[2px] w-full bg-main" />
       </div>
 
       <div className="my-auto flex w-full justify-center px-4 py-8">
@@ -280,14 +280,14 @@ export const EditOrganizationPage = () => {
               Boolean(phoneError) ||
               cities.length === 0
             }
-            className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-main text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-main-hover active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Збереження...' : 'Зберегти'}
           </button>
         </form>
       </div>
 
-      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-[#F1D387]" />
+      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-info" />
     </div>
   )
 }

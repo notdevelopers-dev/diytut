@@ -7,7 +7,7 @@ export const Logo = () => (
     aria-label="ДійТут — на головну"
     className="font-logo text-3xl no-underline"
   >
-    <span className="text-[#5897FB]">Дій</span>
+    <span className="text-main">Дій</span>
     <span className="text-[#F4B840]">Тут</span>
   </Link>
 )

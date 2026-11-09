@@ -14,7 +14,7 @@ export const LoginPage = () => {
           <Logo />
         </div>
 
-        <div className="flex h-16 w-full items-center justify-center border-y border-[#F1D387] bg-[#FBE2A7]">
+        <div className="flex h-16 w-full items-center justify-center border-y border-info bg-cream">
           <h1 className="m-0 text-3xl font-normal text-black md:text-5xl font-head">
             Реєстрація
           </h1>
@@ -55,7 +55,7 @@ export const LoginPage = () => {
       </div>
 
       {/* Нижня декоративна смужка */}
-      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-[#F1D387]" />
+      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-info" />
     </div>
   )
 }

@@ -108,7 +108,7 @@ export const RegistrationCompletePage = () => {
         <div className="px-8 pt-6 pb-4">
           <Logo />
         </div>
-        <div className="h-[2px] w-full bg-[#70A5F9]" />
+        <div className="h-[2px] w-full bg-main" />
       </div>
 
       {/* Центральна частина: 2 колонки інпутів за макетом */}
@@ -261,7 +261,7 @@ export const RegistrationCompletePage = () => {
             disabled={
               isSubmitting || Boolean(phoneError) || cities.length === 0
             }
-            className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-main text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-main-hover active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Збереження...' : 'Зареєструватись'}
           </button>
@@ -269,7 +269,7 @@ export const RegistrationCompletePage = () => {
       </div>
 
       {/* Нижня смужка з макета Figma */}
-      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-[#F1D387]" />
+      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-info" />
     </div>
   )
 }

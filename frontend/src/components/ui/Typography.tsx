@@ -10,9 +10,7 @@ const join = (...parts: (string | undefined)[]) =>
 
 /** Заголовок сторінки. */
 export const Title = ({ children, className }: TextProps) => (
-  <h1
-    className={join('text-2xl font-bold text-[#5897FB] md:text-3xl', className)}
-  >
+  <h1 className={join('text-2xl font-bold text-main md:text-3xl', className)}>
     {children}
   </h1>
 )

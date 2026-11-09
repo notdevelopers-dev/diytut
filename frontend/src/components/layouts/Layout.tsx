@@ -31,7 +31,7 @@ export const Layout = () => {
             <button
               type="button"
               onClick={() => setIsMenuOpen(true)}
-              className="flex h-10 w-12 cursor-pointer items-center justify-center rounded-xl bg-[#F5E6BF] shadow-sm transition-transform hover:scale-105 active:scale-95"
+              className="flex h-10 w-12 cursor-pointer items-center justify-center rounded-xl bg-info shadow-sm transition-transform hover:scale-105 active:scale-95"
               aria-label="Відкрити меню"
             >
               <div className="flex flex-col gap-1">
@@ -43,13 +43,13 @@ export const Layout = () => {
           ) : (
             <Link
               to="/login"
-              className="rounded-lg bg-[#5897FB] px-4 py-2 text-sm font-medium text-white no-underline"
+              className="rounded-lg bg-main px-4 py-2 text-sm font-medium text-white no-underline"
             >
               Увійти
             </Link>
           )}
         </div>
-        <div className="h-[2px] w-full bg-[#70A5F9]" />
+        <div className="h-[2px] w-full bg-main" />
       </header>
 
       {/* 2. Основний вміст сайту */}
@@ -58,7 +58,7 @@ export const Layout = () => {
       </main>
 
       {/* 3. Нижня декоративна смужка */}
-      <footer className="h-14 w-full bg-[#DCECFF] border-t-2 border-[#F1D387]" />
+      <footer className="h-14 w-full bg-[#DCECFF] border-t-2 border-info" />
 
       {/* 4. ВИСУВНЕ МЕНЮ ОРГАНІЗАЦІЇ (image_2e19c8.png) */}
       {isMenuOpen && (
@@ -66,12 +66,12 @@ export const Layout = () => {
           <div className="relative flex h-full w-full max-w-sm flex-col justify-between bg-[#F7FBFF] shadow-2xl p-6 sm:p-8">
             <div>
               {/* Шапка меню з помаранчевим хрестиком */}
-              <div className="flex items-center justify-between border-b-2 border-[#70A5F9] pb-4 mb-6">
-                <h2 className="text-3xl font-bold text-[#5897FB]">Меню</h2>
+              <div className="flex items-center justify-between border-b-2 border-main pb-4 mb-6">
+                <h2 className="text-3xl font-bold text-main">Меню</h2>
                 <button
                   type="button"
                   onClick={() => setIsMenuOpen(false)}
-                  className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl bg-[#F5E6BF] text-2xl font-bold text-black"
+                  className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl bg-peach text-2xl font-bold text-black"
                 >
                   ✕
                 </button>
@@ -124,7 +124,7 @@ export const Layout = () => {
                         setIsMenuOpen(false)
                         void navigate('/organization/create')
                       }}
-                      className="flex items-center justify-center gap-2 w-full rounded-full bg-[#5897FB] px-4 py-2 text-xs font-medium text-white hover:bg-[#4782e0] cursor-pointer"
+                      className="flex items-center justify-center gap-2 w-full rounded-full bg-main px-4 py-2 text-xs font-medium text-white hover:bg-main-hover cursor-pointer"
                     >
                       + Створити організацію
                     </button>
