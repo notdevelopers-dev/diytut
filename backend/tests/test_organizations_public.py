@@ -195,11 +195,10 @@ def test_list_organizations_invalid_city_id(client: TestClient) -> None:
 # =====================================================================
 
 
-def test_get_organization_details_200_with_members_and_projects(
+def test_get_organization_details_200_with_projects(
     client: TestClient, db, make_user, cities: tuple[int, int]
 ) -> None:
     owner_id = make_user(first_name="Іван", last_name="Франко", nickname="franko")
-    admin_id = make_user(first_name="Леся", last_name="Українка", nickname="ukrainka")
 
     async def setup(session) -> int:
         org = Organization(
@@ -213,7 +212,6 @@ def test_get_organization_details_200_with_members_and_projects(
             created_by=owner_id,
         )
         org.members.append(OrganizationMember(user_id=owner_id, role=OrgMemberRoleEnum.owner))
-        org.members.append(OrganizationMember(user_id=admin_id, role=OrgMemberRoleEnum.admin))
 
         p_published = _project(
             organization_id=0,
@@ -255,14 +253,9 @@ def test_get_organization_details_200_with_members_and_projects(
     assert data["status"] == "approved"
     assert data["edrpou"] == "14360570"
 
-    # Перевірка учасників
-    members = data["members"]
-    assert len(members) == 2
-    member_roles = {
-        m["user_id"]: (m["role"], m["first_name"], m["last_name"], m["nickname"]) for m in members
-    }
-    assert member_roles[owner_id] == ("owner", "Іван", "Франко", "franko")
-    assert member_roles[admin_id] == ("admin", "Леся", "Українка", "ukrainka")
+    # Публічна сторінка не розкриває персональних даних учасників (NF-04)
+    assert "members" not in data
+    assert "Франко" not in response.text
 
     # Перевірка проєктів: лише published
     projects = data["projects"]
