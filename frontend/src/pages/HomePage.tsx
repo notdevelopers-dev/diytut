@@ -53,12 +53,19 @@ export const HomePage = () => {
       </section>
 
       <section className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <div className="card">
-          <h3>Для волонтерів</h3>
-          <p>
-            Знаходьте перевірені збори, допомогу військовим, відбудову та
-            локальні ініціативи у вашому місті.
-          </p>
+        <div className="card flex flex-col justify-between">
+          <div>
+            <h3>Для волонтерів</h3>
+            <p>
+              Знаходьте перевірені збори, допомогу військовим, відбудову та
+              локальні ініціативи у вашому місті.
+            </p>
+          </div>
+          <div className="mt-4">
+            <Link to="/projects" className="btn btn-primary btn-sm">
+              Знайти проєкт →
+            </Link>
+          </div>
         </div>
         <div className="card">
           <h3>Для організацій</h3>

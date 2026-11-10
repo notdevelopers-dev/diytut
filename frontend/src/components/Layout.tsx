@@ -23,12 +23,20 @@ export const Layout = () => {
       {/* 1. Шапка за макетом із Figma: логотип ДійТут + жовта кнопка ☰ */}
       <header className="w-full bg-[#F7FBFF]">
         <div className="flex items-center justify-between px-8 pt-6 pb-4">
-          <Link to="/" className="no-underline">
-            <span className="text-3xl font-bold tracking-tight">
-              <span className="text-[#5897FB]">Дій</span>
-              <span className="text-[#F4B840]">Тут</span>
-            </span>
-          </Link>
+          <div className="flex items-center gap-6">
+            <Link to="/" className="no-underline">
+              <span className="text-3xl font-bold tracking-tight">
+                <span className="text-[#5897FB]">Дій</span>
+                <span className="text-[#F4B840]">Тут</span>
+              </span>
+            </Link>
+            <Link
+              to="/projects"
+              className="text-sm font-semibold text-gray-700 hover:text-[#5897FB] transition-colors hidden sm:inline-block"
+            >
+              Каталог проєктів
+            </Link>
+          </div>
 
           {/* Жовта кнопка трьох рисочок (☰) */}
           {isAuthenticated ? (
@@ -136,6 +144,19 @@ export const Layout = () => {
                 )}
 
                 <div className="h-[1px] w-full bg-gray-100 my-1" />
+
+                {/* Каталог проєктів */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    void navigate('/projects')
+                  }}
+                  className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100 cursor-pointer"
+                >
+                  <span className="text-base">📋</span>
+                  Каталог проєктів
+                </button>
 
                 {/* Посилання на Особистий кабінет / Профіль */}
                 <button
