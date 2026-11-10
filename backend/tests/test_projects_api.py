@@ -17,7 +17,27 @@ from app.models import (
     User,
 )
 
-STARTS_AT = datetime(2026, 12, 1, 10, 0, tzinfo=UTC)
+# Завжди в майбутньому: каталог показує лише проєкти, що ще не завершилися
+STARTS_AT = datetime.now(UTC).replace(microsecond=0) + timedelta(days=30)
+
+
+def project_payload(**changes) -> dict:
+    """Мінімальне коректне тіло запиту на створення проєкту."""
+    return {
+        "title": "Еко-толока 2026",
+        "description": "Прибирання території лісопарку",
+        "starts_at": STARTS_AT.isoformat(),
+        "ends_at": (STARTS_AT + timedelta(hours=3)).isoformat(),
+        "is_online": True,
+        "capacity": 10,
+        "volunteer_hours": "1.0",
+    } | changes
+
+
+def payload_without(field: str) -> dict:
+    payload = project_payload()
+    del payload[field]
+    return payload
 
 
 def sign_in(client: TestClient, user_id: int) -> None:
@@ -115,7 +135,7 @@ def _project(organization_id: int, **changes) -> Project:
 def test_create_project_unauthenticated_401(client: TestClient) -> None:
     response = client.post(
         "/api/projects",
-        json={"title": "Новий проєкт", "description": "Опис нового проєкту"},
+        json=project_payload(),
     )
     assert response.status_code == 401
     assert "Not authenticated" in response.json()["detail"]
@@ -127,7 +147,7 @@ def test_create_project_volunteer_without_org_403(client: TestClient, make_user)
 
     response = client.post(
         "/api/projects",
-        json={"title": "Проєкт від волонтера", "description": "Опис проєкту"},
+        json=project_payload(),
     )
     assert response.status_code == 403
     assert response.json()["detail"] == "User does not belong to an organization"
@@ -141,7 +161,7 @@ def test_create_project_regular_member_cannot_create_403(
 
     response = client.post(
         "/api/projects",
-        json={"title": "Проєкт від мембера", "description": "Опис проєкту"},
+        json=project_payload(),
     )
     assert response.status_code == 403
     assert response.json()["detail"] == "Only organization owner or admin can create projects"
@@ -161,7 +181,7 @@ def test_create_project_blocked_organization_403(
 
     response = client.post(
         "/api/projects",
-        json={"title": "Проєкт заблокованої організації", "description": "Опис проєкту"},
+        json=project_payload(),
     )
     assert response.status_code == 403
     assert response.json()["detail"] == "Organization is blocked"
@@ -181,25 +201,37 @@ def test_create_project_rejected_organization_403(
 
     response = client.post(
         "/api/projects",
-        json={"title": "Проєкт відхиленої організації", "description": "Опис проєкту"},
+        json=project_payload(),
     )
     assert response.status_code == 403
-    assert response.json()["detail"] == "Organization is rejected"
+    assert response.json()["detail"] == "Only approved organizations can create projects"
 
 
-def test_create_project_authorized_owner_201_minimal_payload(
+def test_create_project_pending_organization_403(
+    client: TestClient, db, org_with_members: tuple[int, int, int, int]
+) -> None:
+    # Ще не схвалена адміністратором платформи організація не публікує проєктів (R-12)
+    org_id, owner_id, _, _ = org_with_members
+
+    async def make_pending(session) -> None:
+        org = await session.get(Organization, org_id)
+        org.status = OrgStatusEnum.pending
+
+    db(make_pending)
+    sign_in(client, owner_id)
+
+    response = client.post("/api/projects", json=project_payload())
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only approved organizations can create projects"
+
+
+def test_create_project_authorized_owner_201_required_fields_only(
     client: TestClient, org_with_members: tuple[int, int, int, int]
 ) -> None:
     org_id, owner_id, _, _ = org_with_members
     sign_in(client, owner_id)
 
-    response = client.post(
-        "/api/projects",
-        json={
-            "title": "Еко-толока 2026",
-            "description": "Прибирання території лісопарку",
-        },
-    )
+    response = client.post("/api/projects", json=project_payload())
     assert response.status_code == 201
     data = response.json()
     assert isinstance(data["id"], int)
@@ -263,11 +295,7 @@ def test_create_project_nonexistent_city_422(
 
     response = client.post(
         "/api/projects",
-        json={
-            "title": "Толока в місті",
-            "description": "Опис проєкту",
-            "city_id": 99999999,
-        },
+        json=project_payload(is_online=False, city_id=99999999, address="вул. Шевченка, 1"),
     )
     assert response.status_code == 422
     errs = response.json()["detail"]
@@ -277,19 +305,25 @@ def test_create_project_nonexistent_city_422(
 @pytest.mark.parametrize(
     "payload",
     [
-        {"title": "a", "description": "Короткий заголовок"},
-        {"title": "   ", "description": "Порожній заголовок"},
-        {"title": "Нормальний заголовок", "description": ""},
-        {"title": "Нормальний заголовок", "description": "Опис", "capacity": 0},
-        {"title": "Нормальний заголовок", "description": "Опис", "capacity": -5},
-        {"title": "Нормальний заголовок", "description": "Опис", "volunteer_hours": 0},
-        {
-            "title": "Нормальний заголовок",
-            "description": "Опис",
-            "starts_at": "2026-12-01T12:00:00Z",
-            "ends_at": "2026-12-01T10:00:00Z",
-        },
-        {"title": "Нормальний заголовок", "description": "Опис", "extra_bad_field": 123},
+        project_payload(title="a"),
+        project_payload(title="   "),
+        project_payload(description=""),
+        project_payload(capacity=0),
+        project_payload(capacity=-5),
+        project_payload(volunteer_hours=0),
+        project_payload(
+            starts_at=STARTS_AT.isoformat(),
+            ends_at=(STARTS_AT - timedelta(hours=2)).isoformat(),
+        ),
+        project_payload(extra_bad_field=123),
+        # Обов'язкові поля (R-12, R-22) не мають значень за замовчуванням
+        payload_without("starts_at"),
+        payload_without("ends_at"),
+        payload_without("capacity"),
+        payload_without("volunteer_hours"),
+        # Офлайн-подія без міста чи адреси не перетворюється мовчки на онлайн
+        project_payload(is_online=False),
+        project_payload(is_online=False, address="вул. Франка, 10"),
     ],
 )
 def test_create_project_validation_errors(
@@ -327,6 +361,37 @@ def test_list_projects_returns_only_published(
     assert len(data) == 1
     assert data[0]["title"] == "Опублікований проєкт"
     assert data[0]["status"] == "published"
+
+
+def test_list_projects_excludes_ended(
+    client: TestClient, db, org_with_members: tuple[int, int, int, int]
+) -> None:
+    org_id, _, _, _ = org_with_members
+    now = datetime.now(UTC)
+
+    async def seed(session) -> None:
+        session.add_all(
+            [
+                _project(org_id, title="Майбутній проєкт"),
+                _project(
+                    org_id,
+                    title="Триває зараз",
+                    starts_at=now - timedelta(hours=1),
+                    ends_at=now + timedelta(hours=1),
+                ),
+                _project(
+                    org_id,
+                    title="Вже завершився",
+                    starts_at=now - timedelta(days=2),
+                    ends_at=now - timedelta(days=1),
+                ),
+            ]
+        )
+
+    db(seed)
+
+    titles = {project["title"] for project in client.get("/api/projects").json()}
+    assert titles == {"Майбутній проєкт", "Триває зараз"}
 
 
 def test_list_projects_pagination(
