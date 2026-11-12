@@ -30,28 +30,36 @@ export const Layout = () => {
             </span>
           </Link>
 
-          {/* Жовта кнопка трьох рисочок (☰) */}
-          {isAuthenticated ? (
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen(true)}
-              className="flex h-10 w-12 cursor-pointer items-center justify-center rounded-xl bg-[#F5E6BF] shadow-sm transition-transform hover:scale-105 active:scale-95"
-              aria-label="Відкрити меню"
-            >
-              <div className="flex flex-col gap-1">
-                <span className="h-0.5 w-6 bg-black rounded-full" />
-                <span className="h-0.5 w-6 bg-black rounded-full" />
-                <span className="h-0.5 w-6 bg-black rounded-full" />
-              </div>
-            </button>
-          ) : (
+          {/* Кнопки навігації та меню */}
+          <div className="flex items-center gap-4">
             <Link
-              to="/login"
-              className="rounded-lg bg-[#5897FB] px-4 py-2 text-sm font-medium text-white no-underline"
+              to="/organizations"
+              className="text-sm font-semibold text-[#5897FB] hover:text-[#4782e0] no-underline"
             >
-              Увійти
+              Організації
             </Link>
-          )}
+            {isAuthenticated ? (
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen(true)}
+                className="flex h-10 w-12 cursor-pointer items-center justify-center rounded-xl bg-[#F5E6BF] shadow-sm transition-transform hover:scale-105 active:scale-95"
+                aria-label="Відкрити меню"
+              >
+                <div className="flex flex-col gap-1">
+                  <span className="h-0.5 w-6 bg-black rounded-full" />
+                  <span className="h-0.5 w-6 bg-black rounded-full" />
+                  <span className="h-0.5 w-6 bg-black rounded-full" />
+                </div>
+              </button>
+            ) : (
+              <Link
+                to="/login"
+                className="rounded-lg bg-[#5897FB] px-4 py-2 text-sm font-medium text-white no-underline"
+              >
+                Увійти
+              </Link>
+            )}
+          </div>
         </div>
         <div className="h-[2px] w-full bg-[#70A5F9]" />
       </header>
@@ -136,6 +144,19 @@ export const Layout = () => {
                 )}
 
                 <div className="h-[1px] w-full bg-gray-100 my-1" />
+
+                {/* Посилання на Каталог організацій */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    void navigate('/organizations')
+                  }}
+                  className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100 cursor-pointer"
+                >
+                  <span className="text-base">🏢</span>
+                  Каталог організацій
+                </button>
 
                 {/* Посилання на Особистий кабінет / Профіль */}
                 <button

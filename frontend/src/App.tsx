@@ -11,6 +11,7 @@ import { ProfilePage } from './pages/ProfilePage'
 import { AdminPage } from './pages/AdminPage'
 import { CreateOrganizationPage } from './pages/CreateOrganisationPage'
 import { EditOrganizationPage } from './pages/EditOrganizationPage'
+import { OrganizationsCatalogPage } from './pages/OrganizationsCatalogPage'
 
 export const App = () => {
   return (
@@ -41,6 +42,10 @@ export const App = () => {
           {/* Внутрішній сайт під спільним Layout */}
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />
+            <Route
+              path="/organizations"
+              element={<OrganizationsCatalogPage />}
+            />
             <Route
               path="/profile"
               element={
