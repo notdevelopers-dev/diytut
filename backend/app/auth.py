@@ -132,4 +132,11 @@ async def get_current_user_id(
     return user_id
 
 
+async def get_optional_user_id(
+    session_token: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
+) -> int | None:
+    return read_session_user_id(session_token)
+
+
 CurrentUserId = Annotated[int, Depends(get_current_user_id)]
+OptionalUserId = Annotated[int | None, Depends(get_optional_user_id)]

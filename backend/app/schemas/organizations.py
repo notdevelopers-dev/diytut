@@ -8,9 +8,15 @@ from pydantic import (
     ConfigDict,
     StringConstraints,
     field_validator,
+    model_validator,
 )
 
-from app.models import OrganizationMember, OrgMemberRoleEnum, OrgStatusEnum
+from app.models import (
+    JoinRequestStatusEnum,
+    OrganizationMember,
+    OrgMemberRoleEnum,
+    OrgStatusEnum,
+)
 from app.schemas.users import CityId, Phone, _empty_to_none
 
 EDRPOU_LENGTH = 8
@@ -144,3 +150,43 @@ class OrganizationMembership(BaseModel):
             status=organization.status,
             role=membership.role,
         )
+
+
+class OrganizationPublicView(OrganizationRead):
+    """Публічний перегляд організації для сторінки організації."""
+
+    city_name: str | None = None
+    is_verified: bool = False
+    projects_count: int = 0
+    user_request_status: JoinRequestStatusEnum | None = None
+    is_user_member: bool = False
+
+
+class JoinRequestCreate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    message: str | None = None
+    motivation: str | None = None
+
+    @model_validator(mode="after")
+    def unify_message(self) -> JoinRequestCreate:
+        if not self.message and self.motivation:
+            self.message = self.motivation
+        return self
+
+
+class JoinRequestRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    organization_id: int
+    user_id: int
+    message: str | None = None
+    status: JoinRequestStatusEnum
+    created_at: datetime
+
+
+class JoinRequestStatusResponse(BaseModel):
+    status: JoinRequestStatusEnum | None = None
+    id: int | None = None
+    created_at: datetime | None = None

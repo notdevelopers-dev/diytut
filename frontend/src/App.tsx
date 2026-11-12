@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
+import { ToastProvider } from './context/ToastContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AdminRoute } from './components/AdminRoute'
 import { Layout } from './components/Layout'
@@ -11,56 +12,60 @@ import { ProfilePage } from './pages/ProfilePage'
 import { AdminPage } from './pages/AdminPage'
 import { CreateOrganizationPage } from './pages/CreateOrganisationPage'
 import { EditOrganizationPage } from './pages/EditOrganizationPage'
+import { OrganizationViewPage } from './pages/OrganizationViewPage'
 
 export const App = () => {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Автономні сторінки без подвійних рамок і шапок */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route
-            path="/register/complete"
-            element={
-              <ProtectedRoute requireProfileComplete={false}>
-                <RegistrationCompletePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route element={<ProtectedRoute />}>
+      <ToastProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Автономні сторінки без подвійних рамок і шапок */}
+            <Route path="/login" element={<LoginPage />} />
             <Route
-              path="/organization/create"
-              element={<CreateOrganizationPage />}
-            />
-            <Route
-              path="/organization/edit"
-              element={<EditOrganizationPage />}
-            />
-          </Route>
-
-          {/* Внутрішній сайт під спільним Layout */}
-          <Route element={<Layout />}>
-            <Route path="/" element={<HomePage />} />
-            <Route
-              path="/profile"
+              path="/register/complete"
               element={
-                <ProtectedRoute>
-                  <ProfilePage />
+                <ProtectedRoute requireProfileComplete={false}>
+                  <RegistrationCompletePage />
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/admin"
-              element={
-                <AdminRoute>
-                  <AdminPage />
-                </AdminRoute>
-              }
-            />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+            <Route element={<ProtectedRoute />}>
+              <Route
+                path="/organization/create"
+                element={<CreateOrganizationPage />}
+              />
+              <Route
+                path="/organization/edit"
+                element={<EditOrganizationPage />}
+              />
+            </Route>
+
+            {/* Внутрішній сайт під спільним Layout */}
+            <Route element={<Layout />}>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/organizations/:id" element={<OrganizationViewPage />} />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <ProfilePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <AdminRoute>
+                    <AdminPage />
+                  </AdminRoute>
+                }
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </ToastProvider>
     </AuthProvider>
   )
 }

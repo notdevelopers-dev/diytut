@@ -1,3 +1,5 @@
 export * from './AdminRoute.tsx'
+export * from './JoinRequestModal.tsx'
 export * from './Layout.tsx'
+export * from './ProjectCard.tsx'
 export * from './ProtectedRoute.tsx'
