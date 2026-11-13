@@ -92,3 +92,24 @@ def invalid_period(message: str) -> HTTPException:
         status.HTTP_422_UNPROCESSABLE_CONTENT,
         [{"type": "invalid_period", "loc": ["query", "date_from"], "msg": message}],
     )
+
+
+def project_not_found() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
+
+
+def project_requires_organization() -> HTTPException:
+    # 403, а не 404 як у no_organization(): дія заборонена, а не ресурс відсутній
+    return HTTPException(status.HTTP_403_FORBIDDEN, "User does not belong to an organization")
+
+
+def not_project_manager() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Only organization owner or admin can create projects"
+    )
+
+
+def organization_not_approved() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Only approved organizations can create projects"
+    )
