@@ -10,6 +10,8 @@ from app.models import (
     OrganizationMember,
     OrgMemberRoleEnum,
     OrgStatusEnum,
+    Project,
+    ProjectStatusEnum,
     User,
 )
 from app.schemas.organizations import OrganizationCreate, OrganizationUpdate
@@ -126,3 +128,43 @@ async def update_organization(
     for field, value in changes.items():
         setattr(membership.organization, field, value)
     await db_session.commit()
+
+
+async def list_approved_organizations(
+    db_session: AsyncSession, *, limit: int, offset: int, city_id: int | None = None
+) -> list[Organization]:
+    """Публічний каталог (R-15): лише схвалені організації, нові спершу."""
+    query = select(Organization).where(Organization.status == OrgStatusEnum.approved)
+    if city_id is not None:
+        query = query.where(Organization.city_id == city_id)
+    query = (
+        query.order_by(Organization.created_at.desc(), Organization.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(await db_session.scalars(query))
+
+
+async def get_approved_organization(db_session: AsyncSession, organization_id: int) -> Organization:
+    # Несхвалена організація видима лише творцю через /organizations/me (R-07)
+    organization = await db_session.scalar(
+        select(Organization).where(
+            Organization.id == organization_id,
+            Organization.status == OrgStatusEnum.approved,
+        )
+    )
+    if organization is None:
+        raise errors.organization_not_found()
+    return organization
+
+
+async def list_published_projects(db_session: AsyncSession, organization_id: int) -> list[Project]:
+    query = (
+        select(Project)
+        .where(
+            Project.organization_id == organization_id,
+            Project.status == ProjectStatusEnum.published,
+        )
+        .order_by(Project.created_at.desc(), Project.id.desc())
+    )
+    return list(await db_session.scalars(query))
