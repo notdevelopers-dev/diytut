@@ -1,16 +1,16 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
-import { ProtectedRoute } from './components/ProtectedRoute'
-import { AdminRoute } from './components/AdminRoute'
-import { Layout } from './components/Layout'
+import { ProtectedRoute } from './components/layouts/ProtectedRoute'
+import { AdminRoute } from './components/layouts/AdminRoute'
+import { Layout } from './components/layouts/Layout'
 
-import { LoginPage } from './pages/LoginPage'
-import { RegistrationCompletePage } from './pages/RegistrationCompletePage'
+import { LoginPage } from './pages/auth/LoginPage'
+import { RegistrationCompletePage } from './pages/auth/RegistrationCompletePage'
 import { HomePage } from './pages/HomePage'
-import { ProfilePage } from './pages/ProfilePage'
-import { AdminPage } from './pages/AdminPage'
-import { CreateOrganizationPage } from './pages/CreateOrganisationPage'
-import { EditOrganizationPage } from './pages/EditOrganizationPage'
+import { ProfilePage } from './pages/users/ProfilePage'
+import { AdminPage } from './pages/admin/AdminPage'
+import { CreateOrganizationPage } from './pages/organizations/CreateOrganisationPage'
+import { EditOrganizationPage } from './pages/organizations/EditOrganizationPage'
 
 export const App = () => {
   return (

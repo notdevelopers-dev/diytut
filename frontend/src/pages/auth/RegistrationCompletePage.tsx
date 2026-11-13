@@ -1,11 +1,23 @@
 import { useState } from 'react'
 import type { FormEvent, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { apiClient } from '../api/client'
-import { getApiErrorMessage } from '../api/errors'
-import { useCities } from '../hooks/useCities'
-import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../utils/phone'
+import { useAuth } from '../../context/AuthContext'
+import { apiClient } from '../../api/client'
+import { getApiErrorMessage } from '../../api/errors'
+import { CityCombobox } from '../../components/ui/CityCombobox'
+import {
+  FieldError,
+  FieldLabel,
+  RequiredMark,
+} from '../../components/ui/Typography'
+import {
+  inputClass,
+  selectClass,
+  textareaClass,
+} from '../../components/ui/formStyles'
+import { Logo } from '../../components/ui/Logo'
+import { useCities } from '../../hooks/useCities'
+import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../../utils/phone'
 
 export const RegistrationCompletePage = () => {
   const { user, refresh } = useAuth()
@@ -29,11 +41,6 @@ export const RegistrationCompletePage = () => {
   const [phoneError, setPhoneError] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // Перше місто зі списку обираємо за замовчуванням
-  if (cityId === '' && cities.length > 0) {
-    setCityId(cities[0].id)
-  }
 
   // 3. Форматування та валідація номера телефону (+380...)
   const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -99,12 +106,9 @@ export const RegistrationCompletePage = () => {
       {/* Верхня панель: Логотип і синя роздільна смужка за макетом Figma */}
       <div className="w-full">
         <div className="px-8 pt-6 pb-4">
-          <span className="text-3xl font-bold tracking-tight">
-            <span className="text-[#5897FB]">Дій</span>
-            <span className="text-[#F4B840]">Тут</span>
-          </span>
+          <Logo />
         </div>
-        <div className="h-[2px] w-full bg-[#70A5F9]" />
+        <div className="h-[2px] w-full bg-main" />
       </div>
 
       {/* Центральна частина: 2 колонки інпутів за макетом */}
@@ -129,72 +133,62 @@ export const RegistrationCompletePage = () => {
             <div className="flex flex-col gap-4">
               {/* Ім'я * */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
-                  Ім’я <span className="ml-1 text-red-500">*</span>
-                </label>
+                <FieldLabel>
+                  Ім’я <RequiredMark />
+                </FieldLabel>
                 <input
                   type="text"
                   required
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="Петро"
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                  className={inputClass('sm')}
                 />
               </div>
 
               {/* Прізвище * */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
-                  Прізвище <span className="ml-1 text-red-500">*</span>
-                </label>
+                <FieldLabel>
+                  Прізвище <RequiredMark />
+                </FieldLabel>
                 <input
                   type="text"
                   required
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Петренко"
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                  className={inputClass('sm')}
                 />
               </div>
 
               {/* Телефон * */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
-                  Телефон <span className="ml-1 text-red-500">*</span>
-                </label>
+                <FieldLabel>
+                  Телефон <RequiredMark />
+                </FieldLabel>
                 <input
                   type="tel"
                   required
                   value={phone}
                   onChange={handlePhoneChange}
                   placeholder="+380"
-                  className={`h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] font-['e-Ukraine'] ${
-                    phoneError
-                      ? 'outline-red-500 bg-red-50'
-                      : 'outline-sky-300 focus:outline-blue-500'
-                  }`}
+                  className={inputClass('sm', Boolean(phoneError))}
                 />
-                {phoneError && (
-                  <span className="text-[10px] text-red-500">{phoneError}</span>
-                )}
+                {phoneError && <FieldError>{phoneError}</FieldError>}
               </div>
 
               {/* Місто * (Select із довідника міст бекенду) */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
-                  Місто <span className="ml-1 text-red-500">*</span>
-                </label>
-                <select
+                <FieldLabel>
+                  Місто <RequiredMark />
+                </FieldLabel>
+                <CityCombobox
+                  cities={cities}
                   value={cityId}
-                  onChange={(e) => setCityId(Number(e.target.value))}
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-2 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
-                >
-                  {cities.map((city) => (
-                    <option key={city.id} value={city.id}>
-                      {city.name} {city.region ? `(${city.region})` : ''}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCityId}
+                  disabled={cities.length === 0}
+                  inputClassName={inputClass('sm')}
+                />
               </div>
             </div>
 
@@ -202,37 +196,35 @@ export const RegistrationCompletePage = () => {
             <div className="flex flex-col gap-4">
               {/* Нікнейм (без зірочки в макеті) */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-black font-['e-Ukraine']">
-                  Нікнейм
-                </label>
+                <FieldLabel>Нікнейм</FieldLabel>
                 <input
                   type="text"
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
                   placeholder="petrenkopetro111"
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                  className={inputClass('sm')}
                 />
               </div>
 
               {/* Дата народження * */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
-                  Дата народження <span className="ml-1 text-red-500">*</span>
-                </label>
+                <FieldLabel>
+                  Дата народження <RequiredMark />
+                </FieldLabel>
                 <input
                   type="date"
                   required
                   value={dateOfBirth}
                   onChange={(e) => setDateOfBirth(e.target.value)}
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                  className={inputClass('sm')}
                 />
               </div>
 
               {/* Стать * (значення відповідають GenderEnum бекенду) */}
               <div className="flex flex-col gap-1">
-                <label className="flex items-center text-xs font-medium text-black font-['e-Ukraine']">
-                  Стать <span className="ml-1 text-red-500">*</span>
-                </label>
+                <FieldLabel>
+                  Стать <RequiredMark />
+                </FieldLabel>
                 <select
                   value={gender}
                   onChange={(e) =>
@@ -240,7 +232,7 @@ export const RegistrationCompletePage = () => {
                       e.target.value as 'prefer_not_to_say' | 'female' | 'male',
                     )
                   }
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-2 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                  className={selectClass('sm')}
                 >
                   <option value="prefer_not_to_say">Волію не вказувати</option>
                   <option value="female">Жіноча</option>
@@ -248,17 +240,16 @@ export const RegistrationCompletePage = () => {
                 </select>
               </div>
 
-              {/* Біографія (без зірочки в макеті) */}
+              {/* Про себе (без зірочки в макеті; бекенд приймає до 2000 символів) */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-black font-['e-Ukraine']">
-                  Біографія
-                </label>
-                <input
-                  type="text"
+                <FieldLabel>Про себе</FieldLabel>
+                <textarea
+                  rows={5}
+                  maxLength={2000}
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  placeholder="Біографія"
-                  className="h-8 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500 font-['e-Ukraine']"
+                  placeholder="Розкажіть про себе: досвід, інтереси, чим хочете допомагати"
+                  className={`min-h-28 resize-y ${textareaClass}`}
                 />
               </div>
             </div>
@@ -270,7 +261,7 @@ export const RegistrationCompletePage = () => {
             disabled={
               isSubmitting || Boolean(phoneError) || cities.length === 0
             }
-            className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed font-['e-Ukraine']"
+            className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-main text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-main-hover active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Збереження...' : 'Зареєструватись'}
           </button>
@@ -278,7 +269,7 @@ export const RegistrationCompletePage = () => {
       </div>
 
       {/* Нижня смужка з макета Figma */}
-      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-[#F1D387]" />
+      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-info" />
     </div>
   )
 }

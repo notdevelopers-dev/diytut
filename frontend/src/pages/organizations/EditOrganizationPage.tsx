@@ -1,12 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
 import type { FormEvent, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { apiClient } from '../api/client'
-import { getApiErrorMessage, getErrorStatus } from '../api/errors'
-import { useCities } from '../hooks/useCities'
-import { canEditOrganization } from '../utils/organization'
-import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../utils/phone'
+import { useAuth } from '../../context/AuthContext'
+import { apiClient } from '../../api/client'
+import { getApiErrorMessage, getErrorStatus } from '../../api/errors'
+import { CityCombobox } from '../../components/ui/CityCombobox'
+import {
+  FieldError,
+  FieldLabel,
+  RequiredMark,
+} from '../../components/ui/Typography'
+import { inputClass, textareaClass } from '../../components/ui/formStyles'
+import { useCities } from '../../hooks/useCities'
+import { canEditOrganization } from '../../utils/organization'
+import { PHONE_PREFIX, isValidPhone, normalizePhone } from '../../utils/phone'
 
 export const EditOrganizationPage = () => {
   const navigate = useNavigate()
@@ -144,19 +151,19 @@ export const EditOrganizationPage = () => {
       {/* Верхня панель: "Редагувати організацію" та помаранчевий хрестик за макетом */}
       <div className="w-full">
         <div className="flex items-center justify-between px-8 pt-6 pb-4">
-          <h1 className="text-2xl font-bold text-[#5897FB] md:text-3xl">
+          <h1 className="text-2xl font-bold text-main md:text-3xl">
             Редагувати організацію
           </h1>
           <button
             type="button"
             onClick={() => void navigate('/profile')}
-            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl bg-[#F5E6BF] text-2xl font-bold text-black transition-transform hover:scale-105 active:scale-95"
+            className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl bg-peach text-2xl font-bold text-black transition-transform hover:scale-105 active:scale-95"
             title="Закрити"
           >
             ✕
           </button>
         </div>
-        <div className="h-[2px] w-full bg-[#70A5F9]" />
+        <div className="h-[2px] w-full bg-main" />
       </div>
 
       <div className="my-auto flex w-full justify-center px-4 py-8">
@@ -185,9 +192,7 @@ export const EditOrganizationPage = () => {
           <div className="flex w-full flex-col gap-4">
             {/* Назва (не редагується) */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-black">
-                Назва організації
-              </label>
+              <FieldLabel>Назва організації</FieldLabel>
               <input
                 type="text"
                 disabled
@@ -202,64 +207,50 @@ export const EditOrganizationPage = () => {
 
             {/* Email * */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-black">
-                Електронна пошта організації{' '}
-                <span className="text-red-500">*</span>
-              </label>
+              <FieldLabel>
+                Електронна пошта організації <RequiredMark />
+              </FieldLabel>
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
+                className={inputClass('md')}
               />
             </div>
 
             {/* Телефон * */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-black">
-                Телефон <span className="text-red-500">*</span>
-              </label>
+              <FieldLabel>
+                Телефон <RequiredMark />
+              </FieldLabel>
               <input
                 type="tel"
                 required
                 value={phone}
                 onChange={handlePhoneChange}
-                className={`h-9 w-full rounded-[5px] bg-[#DCECFF] px-3 text-xs text-black outline outline-1 outline-offset-[-1px] ${
-                  phoneError
-                    ? 'outline-red-500 bg-red-50'
-                    : 'outline-sky-300 focus:outline-blue-500'
-                }`}
+                className={inputClass('md', Boolean(phoneError))}
               />
-              {phoneError && (
-                <span className="text-[10px] text-red-500">{phoneError}</span>
-              )}
+              {phoneError && <FieldError>{phoneError}</FieldError>}
             </div>
 
             {/* Місто * */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-black">
-                Місто <span className="text-red-500">*</span>
-              </label>
-              <select
+              <FieldLabel>
+                Місто <RequiredMark />
+              </FieldLabel>
+              <CityCombobox
+                cities={cities}
                 value={cityId}
-                onChange={(e) => setCityId(Number(e.target.value))}
-                className="h-9 w-full rounded-[5px] bg-[#DCECFF] px-2 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
-              >
-                {cityId === '' && <option value="">Завантаження...</option>}
-                {cities.map((city) => (
-                  <option key={city.id} value={city.id}>
-                    {city.name} {city.region ? `(${city.region})` : ''}
-                  </option>
-                ))}
-              </select>
+                onChange={setCityId}
+                disabled={cities.length === 0}
+                inputClassName={inputClass('md')}
+              />
             </div>
 
             {/* Код ЄДРПОУ (не редагується) */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-black">
-                Код ЄДРПОУ
-              </label>
+              <FieldLabel>Код ЄДРПОУ</FieldLabel>
               <input
                 type="text"
                 disabled
@@ -271,14 +262,12 @@ export const EditOrganizationPage = () => {
 
             {/* Опис (необов’язковий) */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-black">
-                Опис організації
-              </label>
+              <FieldLabel>Опис організації</FieldLabel>
               <textarea
                 rows={3}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-[5px] bg-[#DCECFF] p-3 text-xs text-black outline outline-1 outline-offset-[-1px] outline-sky-300 focus:outline-blue-500"
+                className={textareaClass}
               />
             </div>
           </div>
@@ -291,14 +280,14 @@ export const EditOrganizationPage = () => {
               Boolean(phoneError) ||
               cities.length === 0
             }
-            className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-[#70A5F9] text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-[#5b96ee] active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-main text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-main-hover active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Збереження...' : 'Зберегти'}
           </button>
         </form>
       </div>
 
-      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-[#F1D387]" />
+      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-info" />
     </div>
   )
 }
