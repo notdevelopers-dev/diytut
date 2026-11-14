@@ -48,3 +48,20 @@ export const formatProjectsCount = (count: number): string => {
   }
   return `${count} проєктів`
 }
+
+/** Дата й час реєстрації для таблиці: «13.11.2026» і «10:42» окремими рядками. */
+export const formatDateTime = (iso: string): { date: string; time: string } => {
+  const value = new Date(iso)
+  if (Number.isNaN(value.getTime())) return { date: '—', time: '' }
+  return {
+    date: value.toLocaleDateString('uk-UA', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }),
+    time: value.toLocaleTimeString('uk-UA', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+  }
+}
