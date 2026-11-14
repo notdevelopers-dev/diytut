@@ -1,20 +1,6 @@
-import { useQueryClient } from '@tanstack/react-query' // TEST-LOGIN
-import { useNavigate } from 'react-router-dom' // TEST-LOGIN
 import { Logo } from '@/components/ui/Logo'
-import { AUTH_ME_QUERY_KEY } from '@/features/auth/hooks' // TEST-LOGIN
-import { TEST_USER, startTestSession } from '@/features/auth/testSession' // TEST-LOGIN
 
 export const LoginPage = () => {
-  const navigate = useNavigate() // TEST-LOGIN
-  const queryClient = useQueryClient() // TEST-LOGIN
-
-  // TEST-LOGIN: вхід без Google і бекенду, лише для перевірки інтерфейсу
-  const handleTestSignIn = () => {
-    startTestSession()
-    queryClient.setQueryData(AUTH_ME_QUERY_KEY, TEST_USER)
-    void navigate('/profile')
-  }
-
   const handleGoogleSignIn = () => {
     // Бекенд веде на Google і після входу ставить httpOnly cookie сесії
     window.location.href = '/api/auth/google/login'
@@ -65,16 +51,6 @@ export const LoginPage = () => {
           <span className="text-base font-normal text-black">
             Продовжити через Google
           </span>
-        </button>
-
-        {/* TEST-LOGIN: тимчасова кнопка, видалити перед демонстрацією */}
-        <button
-          type="button"
-          onClick={handleTestSignIn}
-          data-testid="test-login-button"
-          className="mt-4 cursor-pointer rounded-xl border border-dashed border-info bg-cream px-6 py-3 text-sm text-black transition-colors hover:bg-info"
-        >
-          Продовжити без Google (для тестування)
         </button>
       </div>
 
