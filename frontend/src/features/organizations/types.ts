@@ -1,32 +1,15 @@
-﻿import type { OrgStatus } from '@/types/common'
+import type { OrgStatus } from '@/types/common'
 
 export type { OrgRole, OrgStatus } from '@/types/common'
 
-export interface CityInfo {
-  id: number
-  name: string
-  region?: string
-}
-
+/** Елемент GET /api/organizations (app.schemas.organizations.OrganizationListItem) */
 export interface OrganizationListItem {
   id: number
   name: string
+  email: string
+  phone: string
   city_id: number
-  city?: string | CityInfo | null
-  description?: string | null
-  logo?: string | null
-  logo_url?: string | null
+  description: string | null
   status: OrgStatus
-  is_verified?: boolean
-  projects_count?: number
-  projectsCount?: number
-  email?: string | null
-  phone?: string | null
-  edrpou?: string | null
-  created_at?: string
-}
-
-export interface OrganizationFilterState {
-  cityId: number | null
-  search?: string
+  created_at: string
 }

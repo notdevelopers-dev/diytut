@@ -1,10 +1,40 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { AUTH_ME_QUERY_KEY } from '@/features/auth/hooks'
 import {
   createOrganization,
   fetchMyOrganization,
+  fetchOrganizations,
   updateMyOrganization,
 } from './api'
+
+export const ORGANIZATIONS_PAGE_SIZE = 6
+
+/**
+ * Каталог організацій: фільтр за містом і пагінація «Завантажити ще» виконуються
+ * на бекенді (city_id, limit, offset). Бекенд не повертає загальну кількість,
+ * тому неповна сторінка означає, що наступної немає.
+ */
+export const useOrganizations = (
+  cityId: number | null,
+  pageSize = ORGANIZATIONS_PAGE_SIZE,
+) =>
+  useInfiniteQuery({
+    queryKey: ['organizations', 'list', { cityId, pageSize }],
+    queryFn: ({ pageParam }) =>
+      fetchOrganizations({
+        city_id: cityId,
+        limit: pageSize,
+        offset: pageParam,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < pageSize ? undefined : allPages.length * pageSize,
+  })
 
 export const MY_ORGANIZATION_QUERY_KEY = ['organizations', 'me'] as const
 

@@ -1,143 +1,53 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { fetchOrganizations } from '@/features/organizations/api'
 import { useCities } from '@/features/cities/hooks'
-import type { OrganizationListItem } from '@/features/organizations/types'
 import { OrganizationCard } from '@/features/organizations/components/OrganizationCard'
+import {
+  ORGANIZATIONS_PAGE_SIZE,
+  useOrganizations,
+} from '@/features/organizations/hooks'
 
 export interface OrganizationsCatalogPageProps {
-  initialOrganizations?: OrganizationListItem[]
-  initialLoading?: boolean
-  initialError?: string | null
   pageSize?: number
 }
 
-const DEFAULT_PAGE_SIZE = 6
-
 export const OrganizationsCatalogPage = ({
-  initialOrganizations,
-  initialLoading = false,
-  initialError = null,
-  pageSize = DEFAULT_PAGE_SIZE,
+  pageSize = ORGANIZATIONS_PAGE_SIZE,
 }: OrganizationsCatalogPageProps) => {
-  const [organizations, setOrganizations] = useState<OrganizationListItem[]>(
-    initialOrganizations || [],
-  )
-  const [isLoading, setIsLoading] = useState<boolean>(
-    initialLoading || !initialOrganizations,
-  )
-  const [error, setError] = useState<string | null>(initialError)
   const [selectedCityId, setSelectedCityId] = useState<number | null>(null)
-  const [visibleCount, setVisibleCount] = useState<number>(pageSize)
-  const [retryCount, setRetryCount] = useState(0)
 
-  // Інтеграція з GET /api/cities через хук useCities
   const { cities, isLoading: isCitiesLoading, error: citiesError } = useCities()
 
-  useEffect(() => {
-    if (initialOrganizations) return
+  // Бекенд повертає лише схвалені організації, фільтрує за містом і ділить на сторінки
+  const {
+    data,
+    isLoading,
+    isError,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    refetch,
+  } = useOrganizations(selectedCityId, pageSize)
 
-    let isMounted = true
+  const displayedOrganizations = useMemo(() => data?.pages.flat() ?? [], [data])
+  const error = isError
+    ? 'Не вдалося завантажити каталог організацій. Будь ласка, перевірте зʼєднання або спробуйте знову.'
+    : null
 
-    fetchOrganizations()
-      .then((data) => {
-        if (isMounted) {
-          setOrganizations(data)
-          setError(null)
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setError(
-            'Не вдалося завантажити каталог організацій. Будь ласка, перевірте зʼєднання або спробуйте знову.',
-          )
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-      })
+  const selectedCity = useMemo(
+    () => cities.find((c) => c.id === selectedCityId) ?? null,
+    [selectedCityId, cities],
+  )
 
-    return () => {
-      isMounted = false
-    }
-  }, [initialOrganizations, retryCount])
-
-  // Критерій приймання: Відображаються лише схвалені/підтверджені організації
-  const verifiedOrganizations = useMemo(() => {
-    return organizations.filter(
-      (org) => org.status === 'approved' || org.is_verified === true,
-    )
-  }, [organizations])
-
-  // Отримуємо назву обраного міста
-  const selectedCity = useMemo(() => {
-    if (selectedCityId === null) return null
-    return cities.find((c) => c.id === selectedCityId) || null
-  }, [selectedCityId, cities])
-
-  // Критерій приймання: Вибір міста оновлює відображені картки організацій
-  const filteredOrganizations = useMemo(() => {
-    if (selectedCityId === null) {
-      return verifiedOrganizations
-    }
-
-    return verifiedOrganizations.filter((org) => {
-      // 1. Пряме співпадіння за city_id
-      if (org.city_id === selectedCityId) {
-        return true
-      }
-
-      // 2. Якщо city є об'єктом з id
-      if (
-        typeof org.city === 'object' &&
-        org.city !== null &&
-        org.city.id === selectedCityId
-      ) {
-        return true
-      }
-
-      // 3. Співпадіння за назвою міста, якщо id не співпав
-      if (
-        selectedCity &&
-        typeof org.city === 'string' &&
-        org.city.trim().toLowerCase() === selectedCity.name.trim().toLowerCase()
-      ) {
-        return true
-      }
-
-      return false
-    })
-  }, [verifiedOrganizations, selectedCityId, selectedCity])
-
-  // Зміна фільтра міста скидає пагінацію на першу сторінку
+  // Зміна міста перезапускає запит із першої сторінки (інший ключ кешу)
   const handleCityChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value
     setSelectedCityId(value ? Number(value) : null)
-    setVisibleCount(pageSize)
   }
 
-  const handleResetCityFilter = () => {
-    setSelectedCityId(null)
-    setVisibleCount(pageSize)
-  }
-
-  // Кнопка пагінації "Завантажити ще"
-  const handleLoadMore = () => {
-    setVisibleCount((prev) => prev + pageSize)
-  }
-
-  const handleRetry = () => {
-    setRetryCount((c) => c + 1)
-  }
-
-  // Зріз організацій відповідно до "Load More" пагінації
-  const displayedOrganizations = useMemo(() => {
-    return filteredOrganizations.slice(0, visibleCount)
-  }, [filteredOrganizations, visibleCount])
-
-  const hasMore = visibleCount < filteredOrganizations.length
+  const handleResetCityFilter = () => setSelectedCityId(null)
+  const handleLoadMore = () => void fetchNextPage()
+  const handleRetry = () => void refetch()
 
   // Допоміжна мапа назв міст для відображення в картці
   const cityNameMap = useMemo(() => {
@@ -234,18 +144,14 @@ export const OrganizationsCatalogPage = ({
       {!isLoading && !error && (
         <div className="mb-6 flex items-center justify-between text-xs sm:text-sm text-ink-muted px-1">
           <span>
-            Знайдено підтверджених організацій:{' '}
-            <strong className="text-ink">{filteredOrganizations.length}</strong>
+            Показано організацій:{' '}
+            <strong className="text-ink">
+              {displayedOrganizations.length}
+            </strong>
             {selectedCityId !== null && (
               <span> у місті {selectedCity?.name}</span>
             )}
           </span>
-          {filteredOrganizations.length > 0 && (
-            <span>
-              Показано {displayedOrganizations.length} із{' '}
-              {filteredOrganizations.length}
-            </span>
-          )}
         </div>
       )}
 
@@ -299,7 +205,7 @@ export const OrganizationsCatalogPage = ({
             Спробувати знову
           </button>
         </div>
-      ) : filteredOrganizations.length === 0 ? (
+      ) : displayedOrganizations.length === 0 ? (
         /* Порожній результат фільтрації */
         <div
           data-testid="empty-state"
@@ -333,38 +239,30 @@ export const OrganizationsCatalogPage = ({
             data-testid="organizations-grid"
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
           >
-            {displayedOrganizations.map((org) => {
-              const cityName =
-                typeof org.city === 'string'
-                  ? org.city
-                  : org.city?.name || cityNameMap.get(org.city_id)
-
-              return (
-                <OrganizationCard
-                  key={org.id}
-                  organization={org}
-                  cityName={cityName}
-                />
-              )
-            })}
+            {displayedOrganizations.map((org) => (
+              <OrganizationCard
+                key={org.id}
+                organization={org}
+                cityName={cityNameMap.get(org.city_id)}
+              />
+            ))}
           </div>
 
           {/* Кнопка пагінації "Завантажити ще" (Load More) */}
-          {hasMore && (
+          {hasNextPage && (
             <div className="mt-10 flex flex-col items-center justify-center gap-2">
               <button
                 type="button"
                 data-testid="load-more-btn"
                 onClick={handleLoadMore}
-                className="flex items-center justify-center gap-2 rounded-xl bg-[#5897FB] px-8 py-3 text-sm font-semibold text-white shadow-sm hover:bg-[#4782e0] active:scale-98 transition-all cursor-pointer"
+                disabled={isFetchingNextPage}
+                className="flex items-center justify-center gap-2 rounded-xl bg-[#5897FB] px-8 py-3 text-sm font-semibold text-white shadow-sm hover:bg-[#4782e0] active:scale-98 transition-all cursor-pointer disabled:cursor-wait disabled:opacity-60"
               >
-                <span>Завантажити ще</span>
+                <span>
+                  {isFetchingNextPage ? 'Завантаження...' : 'Завантажити ще'}
+                </span>
                 <span aria-hidden="true">↓</span>
               </button>
-              <span className="text-xs text-ink-muted">
-                Залишилося {filteredOrganizations.length - visibleCount} з{' '}
-                {filteredOrganizations.length}
-              </span>
             </div>
           )}
         </>
