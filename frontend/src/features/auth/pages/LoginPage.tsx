@@ -1,4 +1,12 @@
+import { Suspense, lazy } from 'react'
 import { Logo } from '@/components/ui/Logo'
+
+// Тестовий вхід існує лише в режимі dev:mock. Умова записана прямо, щоб Vite
+// у продакшні прибрав цей код із бандла
+const MockLoginPanel =
+  import.meta.env.DEV && import.meta.env.VITE_USE_MOCKS === 'true'
+    ? lazy(() => import('@/mocks/MockLoginPanel'))
+    : null
 
 export const LoginPage = () => {
   const handleGoogleSignIn = () => {
@@ -52,6 +60,13 @@ export const LoginPage = () => {
             Продовжити через Google
           </span>
         </button>
+        {MockLoginPanel && (
+          <div className="mt-6 flex w-full justify-center">
+            <Suspense fallback={null}>
+              <MockLoginPanel />
+            </Suspense>
+          </div>
+        )}
       </div>
 
       {/* Нижня декоративна смужка */}
