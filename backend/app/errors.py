@@ -48,12 +48,13 @@ def city_not_found() -> HTTPException:
     )
 
 
-def already_has_organization() -> HTTPException:
-    return HTTPException(status.HTTP_409_CONFLICT, "User already belongs to an organization")
-
-
 def no_organization() -> HTTPException:
     return HTTPException(status.HTTP_404_NOT_FOUND, "User does not belong to an organization")
+
+
+def not_organization_member() -> HTTPException:
+    # 404, а не 403: чужа організація для запиту не відрізняється від неіснуючої
+    return HTTPException(status.HTTP_404_NOT_FOUND, "User does not belong to this organization")
 
 
 def edrpou_taken() -> HTTPException:
@@ -98,9 +99,18 @@ def project_not_found() -> HTTPException:
     return HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
 
 
+def membership_not_found(organization_id: int | None) -> HTTPException:
+    """404 для профілю організації: користувач без організацій або не учасник названої."""
+    return no_organization() if organization_id is None else not_organization_member()
+
+
 def project_requires_organization() -> HTTPException:
     # 403, а не 404 як у no_organization(): дія заборонена, а не ресурс відсутній
     return HTTPException(status.HTTP_403_FORBIDDEN, "User does not belong to an organization")
+
+
+def project_requires_membership() -> HTTPException:
+    return HTTPException(status.HTTP_403_FORBIDDEN, "User does not belong to this organization")
 
 
 def not_project_manager() -> HTTPException:

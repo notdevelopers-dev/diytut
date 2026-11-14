@@ -59,9 +59,10 @@ class OrganizationMember(Base):
     organization_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("organizations.id"), primary_key=True
     )
-    # TODO: дозволити користувачу кілька організацій
+    # Користувач може належати до кількох організацій. Індекс — для пошуку членств
+    # користувача: первинний ключ починається з organization_id і тут не допомагає
     user_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("users.id"), primary_key=True, unique=True
+        BigInteger, ForeignKey("users.id"), primary_key=True, index=True
     )
 
     role: Mapped[OrgMemberRoleEnum] = mapped_column(default=OrgMemberRoleEnum.member)
