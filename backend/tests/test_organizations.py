@@ -142,26 +142,17 @@ def test_session_of_deleted_user_is_rejected(client: TestClient, form: dict) -> 
 
 
 @pytest.mark.usefixtures("user_id")
-def test_user_can_have_only_one_organization(client: TestClient, form: dict) -> None:
-    assert create(client, form).status_code == 201
+def test_user_can_create_several_organizations(client: TestClient, form: dict) -> None:
+    first = create(client, form)
+    second = create(client, form, name="Інший фонд", edrpou="21133352")
 
-    response = create(client, form, edrpou="21133352")
-
-    assert response.status_code == 409
-
-
-@pytest.mark.usefixtures("user_id")
-def test_second_organization_between_check_and_insert(
-    client: TestClient, form: dict, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    assert create(client, form).status_code == 201
-
-    async def no_organization(session, user_id: int) -> None:
-        return None
-
-    monkeypatch.setattr(organizations_service, "get_user_organization_id", no_organization)
-
-    assert create(client, form, edrpou="21133352").status_code == 409
+    assert first.status_code == 201
+    assert second.status_code == 201
+    # Творець — власник кожної з них; список іде від найдавнішої
+    assert client.get("/api/users/me/organizations").json() == [
+        {"id": first.json()["id"], "name": form["name"], "status": "pending", "role": "owner"},
+        {"id": second.json()["id"], "name": "Інший фонд", "status": "pending", "role": "owner"},
+    ]
 
 
 def test_edrpou_must_be_unique(client: TestClient, form: dict, make_user) -> None:
@@ -293,6 +284,95 @@ def stored(db, organization_id: int) -> Organization:
         return organization
 
     return db(load)
+
+
+@pytest.fixture
+def second_organization_id(client: TestClient, form: dict, organization_id: int) -> int:
+    return create(client, form, name="Інший фонд", edrpou="21133352").json()["id"]
+
+
+def test_first_organization_is_the_default(
+    client: TestClient, db, organization_id: int, second_organization_id: int
+) -> None:
+    # Клієнт, що не передає organization_id, завжди працює з однією й тією самою організацією
+    assert client.get("/api/organizations/me").json()["id"] == organization_id
+    assert client.get("/api/auth/me").json()["organization"]["id"] == organization_id
+
+    assert update(client, description="Змінено").status_code == 200
+    assert stored(db, organization_id).description == "Змінено"
+    assert stored(db, second_organization_id).description != "Змінено"
+
+
+def test_organization_is_chosen_by_id(
+    client: TestClient, db, form: dict, organization_id: int, second_organization_id: int
+) -> None:
+    params = {"organization_id": second_organization_id}
+
+    response = client.get("/api/organizations/me", params=params)
+    assert response.status_code == 200
+    assert response.json()["id"] == second_organization_id
+    assert response.json()["name"] == "Інший фонд"
+
+    response = client.patch("/api/organizations/me", params=params, json={"description": "Нове"})
+    assert response.status_code == 200
+    assert response.json()["id"] == second_organization_id
+    assert stored(db, second_organization_id).description == "Нове"
+    assert stored(db, organization_id).description == form["description"]
+
+
+def test_foreign_organization_cannot_be_chosen(
+    client: TestClient, db, make_user, form: dict, organization_id: int
+) -> None:
+    # Чужа організація не відрізняється від неіснуючої, навіть якщо користувач має власну
+    sign_in(client, make_user())
+    assert create(client, form, edrpou="21133352").status_code == 201
+    params = {"organization_id": organization_id}
+
+    assert client.get("/api/organizations/me", params=params).status_code == 404
+    response = client.patch("/api/organizations/me", params=params, json={"description": "x"})
+    assert response.status_code == 404
+    assert stored(db, organization_id).description == form["description"]
+
+
+def test_role_and_status_are_checked_per_organization(
+    client: TestClient, db, make_user, user_id: int, organization_id: int
+) -> None:
+    # Власник своєї організації й рядовий учасник чужої, до того ж заблокованої
+    other_owner = make_user()
+
+    async def add_other(session) -> int:
+        other = Organization(
+            name="Чужий фонд",
+            email="other@example.com",
+            phone="+380671234567",
+            city_id=(await session.get(Organization, organization_id)).city_id,
+            status=OrgStatusEnum.blocked,
+            created_by=other_owner,
+        )
+        session.add(other)
+        await session.flush()
+        return other.id
+
+    other_id = db(add_other)
+    add_member(db, other_id, user_id, OrgMemberRoleEnum.member)
+
+    in_other = client.patch(
+        "/api/organizations/me", params={"organization_id": other_id}, json={"description": "x"}
+    )
+    assert in_other.status_code == 403
+    read_other = client.get("/api/organizations/me", params={"organization_id": other_id})
+    assert read_other.json()["role"] == "member"
+    # Чужі обмеження не заважають керувати власною організацією
+    assert update(client, description="Своє").status_code == 200
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "abc", str(2**31)])
+def test_invalid_organization_id_is_rejected(
+    client: TestClient, organization_id: int, value: str
+) -> None:
+    response = client.get("/api/organizations/me", params={"organization_id": value})
+
+    assert response.status_code == 422
 
 
 def test_owner_reads_own_organization(client: TestClient, form: dict, organization_id: int) -> None:

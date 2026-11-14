@@ -225,6 +225,70 @@ def test_create_project_pending_organization_403(
     assert response.json()["detail"] == "Only approved organizations can create projects"
 
 
+def _add_organization(db, owner_id: int, city_id: int, status: OrgStatusEnum) -> int:
+    async def create(session) -> int:
+        org = Organization(
+            name="Другий фонд",
+            email="second@example.com",
+            phone="+380679998877",
+            city_id=city_id,
+            status=status,
+            created_by=owner_id,
+        )
+        org.members.append(OrganizationMember(user_id=owner_id, role=OrgMemberRoleEnum.owner))
+        session.add(org)
+        await session.flush()
+        return org.id
+
+    return db(create)
+
+
+def test_create_project_for_chosen_organization_201(
+    client: TestClient, db, cities: tuple[int, int], org_with_members
+) -> None:
+    org_id, owner_id, _, _ = org_with_members
+    second_org_id = _add_organization(db, owner_id, cities[0], OrgStatusEnum.approved)
+    sign_in(client, owner_id)
+
+    chosen = client.post("/api/projects", json=project_payload(organization_id=second_org_id))
+    default = client.post("/api/projects", json=project_payload())
+
+    assert chosen.status_code == 201
+    assert chosen.json()["organization_id"] == second_org_id
+    # Без organization_id проєкт створюється в найдавнішій організації користувача
+    assert default.status_code == 201
+    assert default.json()["organization_id"] == org_id
+
+
+def test_create_project_checks_status_of_chosen_organization_403(
+    client: TestClient, db, cities: tuple[int, int], org_with_members
+) -> None:
+    # Схвалена перша організація не дає права публікувати від імені несхваленої другої
+    _, owner_id, _, _ = org_with_members
+    pending_org_id = _add_organization(db, owner_id, cities[0], OrgStatusEnum.pending)
+    sign_in(client, owner_id)
+
+    response = client.post("/api/projects", json=project_payload(organization_id=pending_org_id))
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only approved organizations can create projects"
+
+
+def test_create_project_for_foreign_organization_403(
+    client: TestClient, db, cities: tuple[int, int], make_user, org_with_members
+) -> None:
+    # Власник іншої схваленої організації не може створити проєкт у чужій
+    org_id, _, _, _ = org_with_members
+    stranger_id = make_user()
+    _add_organization(db, stranger_id, cities[0], OrgStatusEnum.approved)
+    sign_in(client, stranger_id)
+
+    response = client.post("/api/projects", json=project_payload(organization_id=org_id))
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "User does not belong to this organization"
+
+
 def test_create_project_authorized_owner_201_required_fields_only(
     client: TestClient, org_with_members: tuple[int, int, int, int]
 ) -> None:

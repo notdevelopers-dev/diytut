@@ -19,6 +19,9 @@ ProjectDescription = Annotated[
 class ProjectCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # Від імені якої з організацій користувача створюється проєкт; без поля —
+    # організація за замовчуванням
+    organization_id: int | None = Field(default=None, gt=0, le=MAX_INT32)
     title: ProjectTitle
     description: ProjectDescription
     # Обов'язкові без значень за замовчуванням (R-12, R-22): від них залежать

@@ -20,16 +20,21 @@ from app.services import organizations as service
 router = APIRouter()
 
 
+# Яку з організацій користувача стосується запит до /me; без параметра — організація
+# за замовчуванням
+OwnOrganizationId = Annotated[int | None, Query(gt=0, le=MAX_INT32)]
+
+
 async def get_current_membership(
-    db_session: DbSessionDep, user_id: CurrentUserId
+    db_session: DbSessionDep, user_id: CurrentUserId, organization_id: OwnOrganizationId = None
 ) -> OrganizationMember:
-    return await service.require_membership(db_session, user_id)
+    return await service.require_membership(db_session, user_id, organization_id)
 
 
 async def get_editor_membership(
-    db_session: DbSessionDep, user_id: CurrentUserId
+    db_session: DbSessionDep, user_id: CurrentUserId, organization_id: OwnOrganizationId = None
 ) -> OrganizationMember:
-    return await service.require_editor_membership(db_session, user_id)
+    return await service.require_editor_membership(db_session, user_id, organization_id)
 
 
 # Читати профіль може будь-який учасник, змінювати — лише owner чи admin
