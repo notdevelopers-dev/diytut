@@ -7,6 +7,7 @@ from app.routers import (
     cities,
     dev_auth,
     health,
+    join_requests,
     notifications,
     organizations,
     projects,
@@ -23,6 +24,7 @@ api_router.include_router(
 )
 api_router.include_router(cities.router, prefix="/cities", tags=["cities"])
 api_router.include_router(organizations.router, prefix="/organizations", tags=["organizations"])
+api_router.include_router(join_requests.router, prefix="/join-requests", tags=["join-requests"])
 api_router.include_router(projects.router, prefix="/projects", tags=["projects"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
