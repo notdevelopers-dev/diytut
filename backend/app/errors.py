@@ -79,6 +79,10 @@ def not_platform_admin() -> HTTPException:
     return HTTPException(status.HTTP_403_FORBIDDEN, "Administrator access required")
 
 
+def notification_not_found() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "Notification not found")
+
+
 def organization_not_found() -> HTTPException:
     return HTTPException(status.HTTP_404_NOT_FOUND, "Organization not found")
 

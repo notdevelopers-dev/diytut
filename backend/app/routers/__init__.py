@@ -1,7 +1,18 @@
 from fastapi import APIRouter
 
 from app.config import settings
-from app.routers import admin, auth, cities, dev_auth, health, organizations, projects, stats, users
+from app.routers import (
+    admin,
+    auth,
+    cities,
+    dev_auth,
+    health,
+    notifications,
+    organizations,
+    projects,
+    stats,
+    users,
+)
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(health.router, tags=["service"])
@@ -14,5 +25,6 @@ api_router.include_router(cities.router, prefix="/cities", tags=["cities"])
 api_router.include_router(organizations.router, prefix="/organizations", tags=["organizations"])
 api_router.include_router(projects.router, prefix="/projects", tags=["projects"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(stats.router, prefix="/stats", tags=["stats"])
