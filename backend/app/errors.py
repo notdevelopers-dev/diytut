@@ -117,3 +117,23 @@ def organization_not_approved() -> HTTPException:
     return HTTPException(
         status.HTTP_403_FORBIDDEN, "Only approved organizations can create projects"
     )
+
+
+def already_organization_member() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "User is already a member of this organization")
+
+
+def join_request_already_pending() -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT, "Join request to this organization is already pending"
+    )
+
+
+def join_request_not_found() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "Join request not found")
+
+
+def not_join_request_reviewer() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Only the owner or an admin can manage join requests"
+    )
