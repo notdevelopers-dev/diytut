@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getErrorStatus } from '@/lib/errors'
 import { fetchMe, logoutRequest, registerUser } from './api'
+import { TEST_USER, clearTestSession, hasTestSession } from './testSession' // TEST-LOGIN
 import type { MeResponse } from './api'
 import type { Role, User } from './types'
 
@@ -51,6 +52,7 @@ export const useCurrentUser = () =>
   useQuery({
     queryKey: AUTH_ME_QUERY_KEY,
     queryFn: async (): Promise<User | null> => {
+      if (hasTestSession()) return TEST_USER // TEST-LOGIN
       try {
         return toUser(await fetchMe())
       } catch (err: unknown) {
@@ -107,7 +109,16 @@ export const useAuth = (): AuthState => {
     await refetch()
   }, [refetch])
 
-  const logout = useCallback(() => logoutMutate(), [logoutMutate])
+  const queryClient = useQueryClient() // TEST-LOGIN
+  const logout = useCallback(() => {
+    // TEST-LOGIN: тестовий вхід не має сесії на бекенді, тож просто очищаємо його
+    if (hasTestSession()) {
+      clearTestSession()
+      queryClient.setQueryData(AUTH_ME_QUERY_KEY, null)
+      return
+    }
+    logoutMutate()
+  }, [logoutMutate, queryClient])
 
   return {
     user,
