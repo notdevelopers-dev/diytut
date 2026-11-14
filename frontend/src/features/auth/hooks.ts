@@ -114,7 +114,6 @@ export const useAuth = (): AuthState => {
     // TEST-LOGIN: тестовий вхід не має сесії на бекенді, тож просто очищаємо його
     if (hasTestSession()) {
       clearTestSession()
-      queryClient.removeQueries({ queryKey: ['cities'] }) // TEST-LOGIN: прибрати вигадані міста
       queryClient.setQueryData(AUTH_ME_QUERY_KEY, null)
       return
     }
