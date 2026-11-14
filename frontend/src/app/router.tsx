@@ -12,6 +12,7 @@ import {
   CreateOrganizationPage,
   EditOrganizationPage,
   OrganizationsCatalogPage,
+  OrganizationViewPage,
 } from '@/features/organizations'
 import { ProfilePage } from '@/features/users'
 
@@ -37,6 +38,7 @@ export const AppRoutes = () => (
     <Route element={<RootLayout />}>
       <Route path="/" element={<HomePage />} />
       <Route path="/organizations" element={<OrganizationsCatalogPage />} />
+      <Route path="/organizations/:id" element={<OrganizationViewPage />} />
       <Route
         path="/profile"
         element={
