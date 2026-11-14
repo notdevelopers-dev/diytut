@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints
 
@@ -14,6 +14,14 @@ class JoinRequestCreate(BaseModel):
 
     # Необов'язковий супровідний лист; порожній рядок зберігаємо як NULL
     message: Annotated[JoinRequestMessage | None, BeforeValidator(_empty_to_none)] = None
+
+
+class JoinRequestReview(BaseModel):
+    """Рішення організації щодо заявки; повернути заявку на розгляд не можна."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal[JoinRequestStatusEnum.accepted, JoinRequestStatusEnum.rejected]
 
 
 class JoinRequestApplicant(BaseModel):
@@ -44,3 +52,9 @@ class OrganizationJoinRequestRead(JoinRequestRead):
     """Заявка в кабінеті організації разом із даними волонтера."""
 
     user: JoinRequestApplicant
+
+
+class JoinRequestReviewRead(JoinRequestRead):
+    """Результат розгляду для організації: хто з її адміністраторів ухвалив рішення."""
+
+    reviewed_by: int | None

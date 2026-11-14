@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,10 +15,15 @@ from app.models import (
     Organization,
     OrganizationMember,
     OrgMemberRoleEnum,
+    OrgStatusEnum,
     User,
 )
-from app.notifications import ORGANIZATION_JOIN_REQUESTS_LINK, create_notification
-from app.schemas.join_requests import JoinRequestCreate
+from app.notifications import (
+    ORGANIZATION_JOIN_REQUESTS_LINK,
+    create_notification,
+    organization_page_link,
+)
+from app.schemas.join_requests import JoinRequestCreate, JoinRequestReview
 from app.services.organizations import (
     EDITOR_ROLES,
     get_approved_organization,
@@ -25,6 +32,8 @@ from app.services.organizations import (
 )
 
 PENDING_ORGANIZATION_REQUEST_INDEX = "uq_join_requests_pending_user_organization"
+# Обмеження, які порушує вставка учасника, що вже належить до організації
+MEMBERSHIP_CONSTRAINTS = ("uq_organization_members_user_id", "pk_organization_members")
 
 
 def _organization_requests():
@@ -146,3 +155,91 @@ async def list_pending_requests(
         .offset(offset)
     )
     return list(await db_session.scalars(query))
+
+
+async def _lock_join_request(db_session: AsyncSession, join_request_id: int) -> JoinRequest | None:
+    # Блокування: дві паралельні відповіді на одну заявку виконуються по черзі, і друга
+    # побачить, що заявку вже розглянуто
+    return await db_session.scalar(
+        select(JoinRequest)
+        .options(joinedload(JoinRequest.organization, innerjoin=True))
+        .where(JoinRequest.id == join_request_id)
+        .with_for_update(of=JoinRequest)
+        .execution_options(populate_existing=True)
+    )
+
+
+def _notify_applicant(db_session: AsyncSession, join_request: JoinRequest) -> None:
+    name = join_request.organization.name
+    if join_request.status == JoinRequestStatusEnum.accepted:
+        type_ = NotificationTypeEnum.join_request_accepted
+        title = "Заявку прийнято"
+        message = f"Організація «{name}» прийняла вашу заявку на вступ."
+    else:
+        type_ = NotificationTypeEnum.join_request_rejected
+        title = "Заявку відхилено"
+        message = f"Організація «{name}» відхилила вашу заявку на вступ."
+    create_notification(
+        db_session,
+        join_request.user_id,
+        type_,
+        title,
+        message,
+        link=organization_page_link(join_request.organization_id),
+    )
+
+
+async def review_join_request(
+    db_session: AsyncSession, user_id: int, join_request_id: int, data: JoinRequestReview
+) -> JoinRequest:
+    # Роль і статус організації рецензента не зміняться до кінця транзакції
+    membership = await get_user_membership(db_session, user_id, lock=True)
+    join_request = await _lock_join_request(db_session, join_request_id)
+    # Чужі заявки для користувача не існують: так не видно, які id зайняті
+    if (
+        join_request is None
+        or membership is None
+        or membership.organization_id != join_request.organization_id
+    ):
+        raise errors.join_request_not_found()
+    if membership.role not in EDITOR_ROLES:
+        raise errors.not_join_request_reviewer()
+    if membership.organization.status == OrgStatusEnum.blocked:
+        raise errors.organization_blocked()
+    # Заявки на проєкти розглядаються з перевіркою кількості місць (R-24), тут лише вступ
+    if join_request.target != JoinRequestTargetEnum.organization:
+        raise errors.project_join_request_not_supported()
+    if join_request.status != JoinRequestStatusEnum.pending:
+        raise errors.join_request_already_reviewed()
+
+    if data.status == JoinRequestStatusEnum.accepted:
+        # Користувач може належати лише до однієї організації: за час розгляду заявки
+        # він міг створити власну чи вступити до іншої
+        if await get_user_membership(db_session, join_request.user_id) is not None:
+            raise errors.applicant_already_has_organization()
+        db_session.add(
+            OrganizationMember(
+                organization_id=join_request.organization_id,
+                user_id=join_request.user_id,
+                role=OrgMemberRoleEnum.member,
+            )
+        )
+
+    join_request.status = data.status
+    join_request.reviewed_by = user_id
+    join_request.reviewed_at = datetime.now(UTC)
+    _notify_applicant(db_session, join_request)
+
+    # Статус заявки, новий учасник і сповіщення зберігаються в одній транзакції
+    try:
+        await db_session.commit()
+    except IntegrityError as error:
+        # Паралельний запит встиг додати волонтера до організації
+        await db_session.rollback()
+        if violated_constraint(error) in MEMBERSHIP_CONSTRAINTS:
+            raise errors.applicant_already_has_organization() from error
+        raise
+
+    # updated_at обчислює БД
+    await db_session.refresh(join_request)
+    return join_request

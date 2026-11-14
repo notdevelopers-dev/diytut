@@ -137,3 +137,17 @@ def not_join_request_reviewer() -> HTTPException:
     return HTTPException(
         status.HTTP_403_FORBIDDEN, "Only the owner or an admin can manage join requests"
     )
+
+
+def join_request_already_reviewed() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "Join request has already been reviewed")
+
+
+def project_join_request_not_supported() -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT, "Project applications cannot be reviewed with this endpoint"
+    )
+
+
+def applicant_already_has_organization() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "Volunteer already belongs to an organization")
