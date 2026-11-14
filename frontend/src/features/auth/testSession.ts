@@ -1,7 +1,8 @@
 // TEST-LOGIN: тимчасовий вхід без Google і бекенду, лише для перевірки інтерфейсу.
 // Перед демонстрацією видалити: цей файл, кнопку в LoginPage.tsx і рядки з
-// позначкою TEST-LOGIN у hooks.ts (знайти: пошук по "TEST-LOGIN").
+// позначкою TEST-LOGIN у auth/hooks.ts і cities/api.ts (знайти: пошук по "TEST-LOGIN").
 
+import type { CityItem } from '@/types/common'
 import type { User } from './types'
 
 const STORAGE_KEY = 'diytut-test-session'
@@ -21,6 +22,12 @@ export const TEST_USER: User = {
   isProfileComplete: true,
   organization: null,
 }
+
+/** Вигадані міста, щоб форми працювали без бекенду (GET /cities). */
+export const TEST_CITIES: CityItem[] = [
+  { id: 1, name: 'Тестоград', region: 'Тестова' },
+  { id: 2, name: 'Вигадане', region: 'Тестова' },
+]
 
 export const hasTestSession = (): boolean => {
   try {
