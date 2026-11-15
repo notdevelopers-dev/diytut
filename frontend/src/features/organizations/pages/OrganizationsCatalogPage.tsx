@@ -1,48 +1,44 @@
 import { useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { Pagination } from '@/components/ui/Pagination'
 import { Body, PageTitle } from '@/components/ui/Typography'
 import { selectClass } from '@/components/ui/formStyles'
 import { useCities } from '@/features/cities/hooks'
 import { OrganizationsTable } from '@/features/organizations/components/OrganizationsTable'
-import {
-  ORGANIZATIONS_PAGE_SIZE,
-  useOrganizations,
-} from '@/features/organizations/hooks'
+import { useOrganizations } from '@/features/organizations/hooks'
 
 export const OrganizationsCatalogPage = () => {
   const [cityId, setCityId] = useState<number | null>(null)
-  const [page, setPage] = useState(1)
 
   const { cities, isLoading: isCitiesLoading, error: citiesError } = useCities()
-  const { data, isLoading, isError, refetch } = useOrganizations(cityId, page)
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useOrganizations(cityId)
 
   const organizations = data?.items ?? []
-  const hasNext = data?.hasNext ?? false
 
   const cityNames = useMemo(
     () => new Map(cities.map((city) => [city.id, city.name])),
     [cities],
   )
 
-  // Зміна міста завжди повертає на першу сторінку
+  // Зміна міста завантажує список із початку
   const handleCityChange = (e: ChangeEvent<HTMLSelectElement>) => {
     setCityId(e.target.value ? Number(e.target.value) : null)
-    setPage(1)
   }
 
-  const resetFilter = () => {
-    setCityId(null)
-    setPage(1)
-  }
+  const resetFilter = () => setCityId(null)
 
-  const from = (page - 1) * ORGANIZATIONS_PAGE_SIZE + 1
-  const to = from + organizations.length - 1
   const selectedCityName = cityId !== null ? cityNames.get(cityId) : undefined
 
   const summary =
     organizations.length > 0
-      ? `Показано ${from}–${to} організацій`
+      ? `Показано організацій: ${organizations.length}`
       : 'Організацій не знайдено'
 
   return (
@@ -126,7 +122,7 @@ export const OrganizationsCatalogPage = () => {
               ? `У місті ${selectedCityName} поки немає підтверджених організацій.`
               : 'У каталозі поки немає підтверджених організацій.'}
           </p>
-          {(cityId !== null || page > 1) && (
+          {cityId !== null && (
             <button
               type="button"
               onClick={resetFilter}
@@ -144,13 +140,17 @@ export const OrganizationsCatalogPage = () => {
           footer={
             <>
               <span>{isLoading ? 'Завантаження...' : summary}</span>
-              <Pagination
-                page={page}
-                hasPrev={page > 1}
-                hasNext={hasNext}
-                onPrev={() => setPage((p) => p - 1)}
-                onNext={() => setPage((p) => p + 1)}
-              />
+              {hasNextPage && (
+                <button
+                  type="button"
+                  data-testid="load-more"
+                  onClick={() => void fetchNextPage()}
+                  disabled={isFetchingNextPage}
+                  className="cursor-pointer rounded-md bg-[#C3D7F2] px-4 py-1.5 text-xs text-black transition-colors hover:bg-main disabled:cursor-wait disabled:opacity-60"
+                >
+                  {isFetchingNextPage ? 'Завантаження...' : 'Показати ще'}
+                </button>
+              )}
             </>
           }
         />

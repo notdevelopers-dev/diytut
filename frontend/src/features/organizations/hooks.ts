@@ -1,5 +1,5 @@
 import {
-  keepPreviousData,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -15,29 +15,28 @@ import {
 export const ORGANIZATIONS_PAGE_SIZE = 10
 
 /**
- * Одна сторінка каталогу: фільтр за містом і зсув виконує бекенд (city_id, limit, offset).
- * Загальної кількості бекенд не повертає, тому просимо на одну організацію більше,
- * ніж показуємо: якщо вона прийшла, наступна сторінка існує.
+ * Каталог із кнопкою «Показати ще»: фільтр за містом і зсув виконує бекенд
+ * (city_id, limit, offset). Загальної кількості бекенд не повертає, тому просимо
+ * на одну організацію більше, ніж показуємо: якщо вона прийшла, є що довантажувати.
  */
 export const useOrganizations = (
   cityId: number | null,
-  page: number,
   pageSize = ORGANIZATIONS_PAGE_SIZE,
 ) =>
-  useQuery({
-    queryKey: ['organizations', 'list', { cityId, page, pageSize }],
-    queryFn: () =>
+  useInfiniteQuery({
+    queryKey: ['organizations', 'list', { cityId, pageSize }],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
       fetchOrganizations({
         city_id: cityId,
         limit: pageSize + 1,
-        offset: (page - 1) * pageSize,
+        offset: pageParam,
       }),
-    select: (rows) => ({
-      items: rows.slice(0, pageSize),
-      hasNext: rows.length > pageSize,
+    getNextPageParam: (lastPage, _pages, lastOffset) =>
+      lastPage.length > pageSize ? lastOffset + pageSize : undefined,
+    select: (data) => ({
+      items: data.pages.flatMap((rows) => rows.slice(0, pageSize)),
     }),
-    // Таблиця не блимає, поки вантажиться сусідня сторінка
-    placeholderData: keepPreviousData,
   })
 
 export const MY_ORGANIZATION_QUERY_KEY = ['organizations', 'me'] as const

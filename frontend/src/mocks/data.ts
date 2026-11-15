@@ -1,4 +1,4 @@
-import type { OrganizationListItem } from '@/features/organizations/types'
+import type { OrganizationListItem } from '@/types/organization'
 import type { CityItem, OrgRole } from '@/types/common'
 
 /*

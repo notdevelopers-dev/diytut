@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import type { OrganizationListItem } from '@/features/organizations/types'
+import type { OrganizationListItem } from '@/types/organization'
 import { formatDateTime } from '@/features/organizations/utils'
 
 interface OrganizationsTableProps {

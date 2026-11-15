@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client'
-import type { OrganizationListItem } from './types'
+import type { OrganizationListItem } from '@/types/organization'
 
 export interface FetchOrganizationsParams {
   city_id?: number | null
