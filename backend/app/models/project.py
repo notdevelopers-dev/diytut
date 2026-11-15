@@ -27,6 +27,45 @@ class ProjectStatusEnum(enum.StrEnum):
     cancelled = enum.auto()
 
 
+class ProjectCategoryEnum(enum.StrEnum):
+    """Сфера проєкту: сталий набір для фільтра каталогу (R-14).
+
+    Зберігається як text[] з CHECK-обмеженням: новий елемент потребує міграції,
+    що оновлює ck_projects_categories_known. Назви українською — у app/schemas/projects.py.
+    """
+
+    ecology = enum.auto()
+    education = enum.auto()
+    children = enum.auto()
+    idp = enum.auto()
+    military = enum.auto()
+    # Адаптація й підтримка ветеранів, окремо від допомоги війську (military)
+    veterans = enum.auto()
+    medicine = enum.auto()
+    mental_health = enum.auto()
+    disability = enum.auto()
+    animals = enum.auto()
+    elderly = enum.auto()
+    # Малозабезпечені сімʼї, безхатьки, сироти
+    social = enum.auto()
+    humanitarian = enum.auto()
+    # Збори коштів, речей і донорство крові поза платформою: збір коштів на самій
+    # платформі поза scope MVP
+    fundraising = enum.auto()
+    legal = enum.auto()
+    culture = enum.auto()
+    sports = enum.auto()
+    tech = enum.auto()
+    media = enum.auto()
+    rebuild = enum.auto()
+    other = enum.auto()
+
+
+MAX_PROJECT_CATEGORIES = 2
+
+_KNOWN_CATEGORIES_SQL = ", ".join(f"'{category}'" for category in ProjectCategoryEnum)
+
+
 class Project(Base):
     __tablename__ = "projects"
     __table_args__ = (
@@ -38,7 +77,17 @@ class Project(Base):
             "is_online OR (city_id IS NOT NULL AND address IS NOT NULL)",
             name="offline_has_location",
         ),
-        # Фільтр каталогу за тегами (R-14): GIN індексує окремі елементи масиву
+        # Від 1 до 2 сфер: інакше проєкт не знайдеться у фільтрі або «засмічуватиме» всі сфери
+        CheckConstraint(
+            f"cardinality(categories) BETWEEN 1 AND {MAX_PROJECT_CATEGORIES}",
+            name="categories_count",
+        ),
+        CheckConstraint(
+            f"categories <@ ARRAY[{_KNOWN_CATEGORIES_SQL}]::text[]",
+            name="categories_known",
+        ),
+        # Фільтри каталогу за сферами й хештегами (R-14): GIN індексує окремі елементи масиву
+        Index("ix_projects_categories", "categories", postgresql_using="gin"),
         Index("ix_projects_tags", "tags", postgresql_using="gin"),
     )
 
@@ -67,6 +116,11 @@ class Project(Base):
     experience_level: Mapped[ExperienceLevelEnum] = mapped_column(
         default=ExperienceLevelEnum.novice
     )
+    # API вимагає сферу явно; значення за замовчуванням — для службових вставок і старих даних
+    categories: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), default=lambda: [ProjectCategoryEnum.other.value]
+    )
+    # Хештеги організації: вільний текст, нормалізований схемою (нижній регістр, без «#»)
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     status: Mapped[ProjectStatusEnum] = mapped_column(default=ProjectStatusEnum.draft)
 
