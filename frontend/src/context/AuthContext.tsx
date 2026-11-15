@@ -8,20 +8,16 @@ import type { Role, User } from '../types/auth'
 export interface AuthContextType {
   user: User | null
   role: Role | null
-  /** Поки чекаємо на першу відповідь /auth/me */
-  isLoading: boolean
+   isLoading: boolean
   isAuthenticated: boolean
   isProfileComplete: boolean
-  /** Повторно запитує /auth/me (наприклад, після реєстрації) */
-  refresh: () => Promise<void>
+   refresh: () => Promise<void>
   logout: () => void
 }
 
-// oxlint-disable-next-line react/only-export-components
-export const AuthContext = createContext<AuthContextType | undefined>(undefined)
+ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Відповідь GET /api/auth/me (app.routers.auth)
-type MeResponse =
+ type MeResponse =
   | {
       status: 'authenticated'
       user: {
@@ -36,8 +32,7 @@ type MeResponse =
         bio: string | null
         platform_role: 'user' | 'admin'
       }
-      // Організація користувача або null (є в /auth/me з гілки be/org-profile)
-      organization?: {
+       organization?: {
         id: number
         name: string
         status: OrgStatus
@@ -53,8 +48,7 @@ type MeResponse =
 
 const toUser = (me: MeResponse): User => {
   if (me.status === 'registration_required') {
-    // Увійшов через Google, але анкету ще не заповнив
-    return {
+     return {
       email: me.email,
       firstName: me.first_name ?? undefined,
       lastName: me.last_name ?? undefined,
@@ -88,8 +82,7 @@ const toUser = (me: MeResponse): User => {
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // Сесія живе в httpOnly cookie, тож стан беремо лише з бекенду (/auth/me)
-  const [session, setSession] = useState<{
+   const [session, setSession] = useState<{
     isLoading: boolean
     user: User | null
   }>({ isLoading: true, user: null })
@@ -100,25 +93,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession({ isLoading: false, user: toUser(response.data) })
     } catch (err: unknown) {
       if (getErrorStatus(err) === 401) {
-        // Не увійшов (або сесія скінчилась)
-        setSession({ isLoading: false, user: null })
+         setSession({ isLoading: false, user: null })
       } else {
-        // Бекенд тимчасово недоступний: не «розлогінюємо» користувача, лишаємо попередній стан
-        console.error('Не вдалося оновити дані сесії:', err)
+         console.error('Не вдалося оновити дані сесії:', err)
         setSession((prev) => ({ ...prev, isLoading: false }))
       }
     }
   }, [])
 
   useEffect(() => {
-    // oxlint-disable-next-line react/set-state-in-effect
-    void refresh()
+     void refresh()
   }, [refresh])
 
   const logout = useCallback(() => {
     setSession({ isLoading: false, user: null })
-    // Бекенд видаляє httpOnly cookie
-    apiClient.post('/auth/logout').catch((error: unknown) => {
+     apiClient.post('/auth/logout').catch((error: unknown) => {
       console.error('Помилка під час виходу:', error)
     })
   }, [])
@@ -152,6 +141,4 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-// oxlint-disable-next-line react/only-export-components
-export { useAuth } from './useAuth.ts'
-export default AuthContext
+ export default AuthContext
