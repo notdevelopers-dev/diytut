@@ -13,6 +13,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.107.1",
     "axios": "^1.21.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",

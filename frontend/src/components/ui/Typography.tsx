@@ -48,3 +48,15 @@ export const FieldError = ({ children, className }: TextProps) => (
     {children}
   </span>
 )
+
+/** Заголовок сторінки на жовтій плашці (як «Сповіщення» в макеті Figma). */
+export const PageTitle = ({ children, className }: TextProps) => (
+  <h1
+    className={join(
+      'inline-block rounded-lg bg-info px-4 py-1 text-2xl font-bold text-black md:text-3xl',
+      className,
+    )}
+  >
+    {children}
+  </h1>
+)
