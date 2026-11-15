@@ -29,29 +29,6 @@ React + TypeScript + Vite. Бекенд піднімається за інстр
 
 Перед комітом мають проходити `format:check`, `lint` і `build`.
 
-## Структура `src/`
-
-Код організовано за фічами; кожна фіча віддає назовні лише те, що перелічено в її `index.ts`.
-
-```text
-src/
-├── main.tsx           # точка входу
-├── app/               # App, router.tsx (усі маршрути), providers.tsx, layouts/
-├── features/          # auth, organizations, users, admin, cities, home
-│   └── <feature>/     # api.ts, hooks.ts, types.ts, components/, pages/, index.ts
-├── components/        # спільні компоненти без бізнес-логіки: ui/, feedback/
-├── hooks/             # спільні хуки (useDebounce)
-├── lib/               # api-client.ts (axios, обробка 401), query-client.ts, errors.ts, phone.ts
-├── config/env.ts      # типізований доступ до import.meta.env
-├── types/             # спільні типи (OrgRole, OrgStatus, CityItem)
-├── styles/globals.css
-└── assets/
-```
-
-- Імпорти між шарами — через аліас `@/` (наприклад, `@/features/auth`), без `../../..`.
-- Усі запити до API йдуть через **React Query**: у `api.ts` фічі лежать «голі» функції запитів, у `hooks.ts` — `useQuery`/`useMutation`, що їх обгортають. Сторінки не викликають `apiClient` напряму.
-- Стан сесії — це запит `GET /auth/me` (`useAuth` у `features/auth/hooks.ts`), окремого контексту немає.
-
 ## Звернення до API
 
 - **У коді — лише відносні шляхи** під `/api`, без домену й порту. У розробці їх пересилає на бекенд Vite, у продакшні — nginx, тож код однаковий для обох середовищ і CORS не потрібен.
