@@ -8,20 +8,26 @@ import {
 } from '@/features/projects/components/ProjectCard'
 import {
   PROJECTS_PAGE_SIZE,
+  useCategories,
   useOrganizationNames,
   useProjects,
 } from '@/features/projects/hooks'
 import { useDebounce } from '@/hooks/useDebounce'
+import type { ProjectCategory } from '@/types/project'
 
 export const ProjectsCatalogPage = () => {
   const [searchInput, setSearchInput] = useState('')
   const [cityId, setCityId] = useState<number | null>(null)
+  const [categories, setCategories] = useState<ProjectCategory[]>([])
 
-  // Запит до бекенду — лише після паузи в наборі, а не на кожну літеру
-  const search = useDebounce(searchInput.trim(), 400)
+  // Запит до бекенду — лише після паузи в наборі, а не на кожну літеру.
+  // Слова з «#» на початку йдуть у фільтр хештегів, решта — у текстовий пошук
+  const query = useDebounce(searchInput.trim(), 400)
 
   const { cities, isLoading: isCitiesLoading, error: citiesError } = useCities()
   const { data: organizationNames } = useOrganizationNames()
+  const { data: categoryItems = [], isError: isCategoriesError } =
+    useCategories()
   const {
     data,
     isLoading,
@@ -31,7 +37,7 @@ export const ProjectsCatalogPage = () => {
     fetchNextPage,
     isFetchingNextPage,
     isPlaceholderData,
-  } = useProjects(search, cityId)
+  } = useProjects({ query, cityId, categories })
 
   const projects = data?.items ?? []
 
@@ -40,11 +46,25 @@ export const ProjectsCatalogPage = () => {
     [cities],
   )
 
-  const hasFilters = searchInput.trim() !== '' || cityId !== null
+  const categoryNames = useMemo(
+    () => new Map(categoryItems.map((item) => [item.key, item.name])),
+    [categoryItems],
+  )
+
+  const hasFilters =
+    searchInput.trim() !== '' || cityId !== null || categories.length > 0
+
+  const toggleCategory = (key: ProjectCategory) =>
+    setCategories((current) =>
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key],
+    )
 
   const resetFilters = () => {
     setSearchInput('')
     setCityId(null)
+    setCategories([])
   }
 
   return (
@@ -64,9 +84,16 @@ export const ProjectsCatalogPage = () => {
             data-testid="project-search"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Пошук за назвою чи описом"
+            placeholder="Пошук або #хештег"
+            aria-describedby="project-search-hint"
             className={inputClass('md')}
           />
+          <span
+            id="project-search-hint"
+            className="mt-1 block text-[10px] text-[#8B99AA]"
+          >
+            Пошук за назвою й описом; #хештег шукає за тегами
+          </span>
         </label>
         {/* label охоплює поле combobox, тож читач екрана чує «Місто» */}
         <label className="block w-full sm:max-w-xs" data-testid="project-city">
@@ -93,6 +120,45 @@ export const ProjectsCatalogPage = () => {
           <span className="text-xs text-red-600">{citiesError}</span>
         )}
       </div>
+
+      {/* Сфери: можна обрати кілька — покажемо проєкти з будь-якою з них */}
+      {categoryItems.length > 0 && (
+        <fieldset className="mb-5 min-w-0">
+          <legend className="sr-only">Сфери проєктів</legend>
+          {/* На телефоні — один ряд із горизонтальною прокруткою, щоб 21 сфера не
+              займала пів екрана; від sm — переносяться на кілька рядів */}
+          <ul
+            className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0"
+            data-testid="category-filter"
+          >
+            {categoryItems.map((item) => {
+              const isSelected = categories.includes(item.key)
+              return (
+                <li key={item.key} className="shrink-0">
+                  <button
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => toggleCategory(item.key)}
+                    className={`cursor-pointer rounded-[5px] border px-2.5 py-1 text-xs whitespace-nowrap text-black transition-colors ${
+                      isSelected
+                        ? 'border-main bg-main'
+                        : 'border-main bg-[#F7FBFF] hover:bg-[#DCECFF]'
+                    }`}
+                  >
+                    {isSelected && <span aria-hidden="true">✓ </span>}
+                    {item.name}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </fieldset>
+      )}
+      {isCategoriesError && (
+        <p className="mb-5 text-xs text-red-600">
+          Не вдалося завантажити сфери проєктів.
+        </p>
+      )}
 
       {isError ? (
         <div
@@ -123,7 +189,7 @@ export const ProjectsCatalogPage = () => {
           </p>
           <p className="mb-4 text-sm text-black/70">
             {hasFilters
-              ? 'Спробуйте змінити пошук або обрати інше місто.'
+              ? 'Спробуйте змінити пошук, сфери або місто.'
               : 'Зараз немає актуальних проєктів.'}
           </p>
           {hasFilters && (
@@ -154,6 +220,7 @@ export const ProjectsCatalogPage = () => {
                   <li key={project.id}>
                     <ProjectCard
                       project={project}
+                      categoryNames={categoryNames}
                       organizationName={organizationNames?.get(
                         project.organization_id,
                       )}

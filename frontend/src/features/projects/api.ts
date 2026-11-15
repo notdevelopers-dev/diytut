@@ -1,10 +1,14 @@
 import { apiClient } from '@/lib/api-client'
-import type { Project } from '@/types/project'
+import type { CategoryItem, Project, ProjectCategory } from '@/types/project'
 
 export interface FetchProjectsParams {
   /** Пошук за назвою й описом (бекенд, ilike) */
   search?: string
   city_id?: number | null
+  /** Проєкти з будь-якою з цих сфер */
+  categories?: ProjectCategory[]
+  /** Проєкти з будь-яким із цих хештегів (без «#») */
+  tags?: string[]
   limit?: number
   offset?: number
 }
@@ -18,9 +22,18 @@ export const fetchProjects = async (
     params: {
       ...(search ? { search } : {}),
       ...(params?.city_id ? { city_id: params.city_id } : {}),
+      // Масиви йдуть як ?tags=a&tags=b (paramsSerializer у lib/api-client)
+      ...(params?.categories?.length ? { categories: params.categories } : {}),
+      ...(params?.tags?.length ? { tags: params.tags } : {}),
       ...(params?.limit ? { limit: params.limit } : {}),
       ...(params?.offset ? { offset: params.offset } : {}),
     },
   })
+  return data
+}
+
+/** Усі сфери для фільтра: GET /api/categories (список змінюється лише з деплоєм) */
+export const fetchCategories = async (): Promise<CategoryItem[]> => {
+  const { data } = await apiClient.get<CategoryItem[]>('/categories')
   return data
 }

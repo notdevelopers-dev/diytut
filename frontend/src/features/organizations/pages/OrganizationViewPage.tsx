@@ -13,6 +13,7 @@ import {
   useOrganization,
 } from '@/features/organizations/hooks'
 import { ProjectCard } from '@/features/projects/components/ProjectCard'
+import { useCategories } from '@/features/projects/hooks'
 import { getErrorStatus } from '@/lib/errors'
 
 /** Публічна сторінка організації за макетом Figma («Public org page»). */
@@ -36,6 +37,7 @@ export const OrganizationViewPage = () => {
     refetch,
   } = useOrganization(organizationId)
   const { cities } = useCities()
+  const { data: categoryItems = [] } = useCategories()
 
   // Заявки й членства має лише користувач із заповненою анкетою
   const canHaveRequests = isAuthenticated && isProfileComplete
@@ -48,6 +50,10 @@ export const OrganizationViewPage = () => {
   const cityNames = useMemo(
     () => new Map(cities.map((city) => [city.id, city.name])),
     [cities],
+  )
+  const categoryNames = useMemo(
+    () => new Map(categoryItems.map((item) => [item.key, item.name])),
+    [categoryItems],
   )
 
   const joinState: JoinState = (() => {
@@ -225,6 +231,7 @@ export const OrganizationViewPage = () => {
                 <ProjectCard
                   project={project}
                   showOrganization={false}
+                  categoryNames={categoryNames}
                   cityName={
                     project.city_id !== null
                       ? cityNames.get(project.city_id)
