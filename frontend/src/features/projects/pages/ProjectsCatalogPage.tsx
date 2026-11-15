@@ -76,8 +76,13 @@ export const ProjectsCatalogPage = () => {
         Актуальні проєкти
       </h1>
 
-      <div className="mb-5 flex flex-wrap items-start gap-3">
-        <label className="block w-full sm:max-w-xs">
+      {/* Пошук і місто ділять ширину навпіл, як сітка карток нижче */}
+      <div
+        className={`mb-5 grid grid-cols-1 items-start gap-3 ${
+          hasFilters ? 'sm:grid-cols-[1fr_1fr_auto]' : 'sm:grid-cols-2'
+        }`}
+      >
+        <label className="block w-full">
           <span className="sr-only">Пошук проєктів</span>
           <input
             type="search"
@@ -96,7 +101,7 @@ export const ProjectsCatalogPage = () => {
           </span>
         </label>
         {/* label охоплює поле combobox, тож читач екрана чує «Місто» */}
-        <label className="block w-full sm:max-w-xs" data-testid="project-city">
+        <label className="block w-full" data-testid="project-city">
           <span className="sr-only">Місто</span>
           <CityCombobox
             cities={cities}
@@ -111,13 +116,15 @@ export const ProjectsCatalogPage = () => {
           <button
             type="button"
             onClick={resetFilters}
-            className="cursor-pointer rounded-[5px] bg-[#DCECFF] px-3 py-1.5 text-xs text-black hover:bg-main sm:mt-1"
+            className="cursor-pointer justify-self-start rounded-[5px] bg-[#DCECFF] px-3 py-1.5 text-xs whitespace-nowrap text-black hover:bg-main sm:mt-1"
           >
             ✕ Скинути фільтри
           </button>
         )}
         {citiesError && (
-          <span className="text-xs text-red-600">{citiesError}</span>
+          <span className="text-xs text-red-600 sm:col-span-3">
+            {citiesError}
+          </span>
         )}
       </div>
 
