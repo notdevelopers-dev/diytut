@@ -1,186 +1,254 @@
-import { useEffect, useState } from 'react'
-import { useAuth } from '../../context/AuthContext.tsx'
+import React, { useState } from 'react';
+import { Search, ChevronDown, Check, X, Bell, User, Menu, ChevronLeft, ChevronRight } from 'lucide-react';
 
-interface LoginStatsData {
-  date_from: string
-  date_to: string
-  timezone: string
-  total_logins: number
-  unique_users: number
-  days: Array<{ date: string; logins: number; unique_users: number }>
+interface OrgRequest {
+  id: string;
+  volunteerName: string;
+  email: string;
+  requestType: string;
+  date: string;
+  time: string;
+  status: 'pending' | 'approved' | 'rejected';
 }
 
-interface Organization {
-  id: number
-  name: string
-  status: string
-  [key: string]: any
-}
+export const AdminPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'pending' | 'processed'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  
+  // Початкові дані (або заміна на виклик API бекенду)
+  const [requests, setRequests] = useState<OrgRequest[]>([
+    {
+      id: '1',
+      volunteerName: 'Марія Коваль',
+      email: 'maria.koval@ukr.net',
+      requestType: 'Вступ до організації\nПереглянути',
+      date: '13.11.2026',
+      time: '10:42',
+      status: 'pending',
+    },
+    {
+      id: '2',
+      volunteerName: 'Андрій Мельник',
+      email: 'andrii.m@ukr.net',
+      requestType: 'Участь у події\nПереглянути',
+      date: '13.11.2026',
+      time: '09:15',
+      status: 'pending',
+    },
+    {
+      id: '3',
+      volunteerName: 'Олена Бондар',
+      email: 'olena.b@ukr.net',
+      requestType: 'Вступ до організації\nВолонтерська допомога',
+      date: '12.11.2026',
+      time: '16:30',
+      status: 'approved',
+    },
+    {
+      id: '4',
+      volunteerName: 'Дмитро Шевченко',
+      email: 'dmytro.sh@ukr.net',
+      requestType: 'Участь у події\nПакування допомоги',
+      date: '11.11.2026',
+      time: '14:05',
+      status: 'rejected',
+    },
+  ]);
 
-export const AdminPage = () => {
-  const { user } = useAuth()
-  const [stats, setStats] = useState<LoginStatsData | null>(null)
-  const [organizations, setOrganizations] = useState<Organization[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [actionMessage, setActionMessage] = useState<string | null>(null)
-
-  const fetchData = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      const statsRes = await fetch('/api/admin/stats/logins', {
-        credentials: 'include',
-      })
-      if (!statsRes.ok) {
-        throw new Error('Не вдалося завантажити статистику входів.')
-      }
-      const statsData: LoginStatsData = await statsRes.json()
-      setStats(statsData)
-
-      const orgsRes = await fetch('/api/admin/organizations?status=pending', {
-        credentials: 'include',
-      })
-      if (!orgsRes.ok) {
-        throw new Error('Не вдалося завантажити список організацій.')
-      }
-      const orgsData = await orgsRes.json()
-      setOrganizations(orgsData.items || orgsData || [])
-    } catch (err: any) {
-      console.error(err)
-      setError(err.message || 'Сталася помилка при завантаженні даних.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchData()
-  }, [])
-
-  const handleReview = async (orgId: number, approve: boolean) => {
-    try {
-      const response = await fetch(`/api/admin/organizations/${orgId}/review`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          decision: approve ? 'approved' : 'rejected',
-          comment: approve 
-            ? 'Схвалено адміністратором платформи' 
-            : 'Відхилено адміністратором через неповні або некоректні дані',
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Не вдалося оновити статус організації.')
-      }
-
-      setActionMessage(`Організацію ID ${orgId} успішно ${approve ? 'схвалено' : 'відхилено'}.`)
-      fetchData()
-    } catch (err: any) {
-      console.error(err)
-      alert(err.message || 'Помилка виконання дії.')
-    }
-  }
+  const handleDecision = (id: string, decision: 'approved' | 'rejected') => {
+    setRequests(prev =>
+      prev.map(req => (req.id === id ? { ...req, status: decision } : req))
+    );
+  };
 
   return (
-    <div className="page-container">
-      <header className="page-header">
-        <div className="badge badge-admin mb-2">Адміністративна зона</div>
-        <h1>Панель керування платформою «ДійТут»</h1>
-        <p className="page-subtitle">
-          Сторінка захищена за допомогою <code>AdminRoute</code>. Доступ мають
-          лише користувачі з роллю <strong>admin</strong>.
-        </p>
+    <div className="min-h-screen bg-[#F7FBFF] text-gray-900 font-sans p-6">
+      {/* Верхня навігаційна панель */}
+      <header className="flex items-center justify-between pb-4 border-b border-[#DCECFF] mb-6">
+        <div className="flex items-center space-x-2">
+          <span className="text-2xl font-bold text-[#79B7FF]">ДійТут</span>
+        </div>
+        
+        <div className="flex-1 max-w-md mx-8 relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            className="w-full pl-10 pr-4 py-2 bg-[#DCECFF] text-gray-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#79B7FF]"
+            placeholder="Пошук"
+          />
+        </div>
+
+        <div className="flex items-center space-x-4">
+          <button className="relative p-2 bg-[#DCECFF] rounded-full hover:bg-[#79B7FF] hover:text-white transition">
+            <Bell className="w-5 h-5" />
+            <span className="absolute top-0 right-0 bg-[#E14848] text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
+              2
+            </span>
+          </button>
+          <div className="bg-[#DCECFF] p-2 rounded-full">
+            <User className="w-5 h-5 text-gray-700" />
+          </div>
+          <div className="bg-[#F1D387] p-2 rounded-lg cursor-pointer">
+            <Menu className="w-5 h-5 text-gray-800" />
+          </div>
+        </div>
       </header>
 
-      <section className="admin-status card mb-6">
-        <h3>Вітаємо, {user?.name || 'Адміністраторе'}!</h3>
-        <p>
-          Тут ви можете здійснювати перегляд та верифікацію запитів організацій і відстежувати статистику входів на платформу.
-        </p>
-        {actionMessage && <div className="mt-2 text-green-600 font-medium">{actionMessage}</div>}
-        {error && <div className="mt-2 text-red-500 font-medium">{error}</div>}
-      </section>
+      {/* Заголовок сторінки з жовтою плашкою як у Figma */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between">
+          <div className="inline-flex items-center bg-[#F1D387] px-4 py-2 rounded-lg shadow-sm">
+            <h1 className="text-xl font-bold text-gray-900">Сповіщення організацій</h1>
+          </div>
+          <button className="text-sm font-medium hover:underline flex items-center space-x-1">
+            <span>✔ Позначити все прочитаним</span>
+          </button>
+        </div>
+        <p className="text-sm text-gray-600 mt-2">2 нові запити чекають на ваш розгляд</p>
+      </div>
 
-      <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 mb-6">
-        <div className="card p-5 text-center">
-          <h4>Загальна кількість входів</h4>
-          <div className="metric-number">
-            {loading ? '...' : (stats?.total_logins ?? 0)}
-          </div>
-          <p className="text-ink-muted">За вибраний період</p>
-        </div>
-        <div className="card p-5 text-center">
-          <h4>Унікальні користувачі</h4>
-          <div className="metric-number">
-            {loading ? '...' : (stats?.unique_users ?? 0)}
-          </div>
-          <p className="text-ink-muted">Активні на платформі</p>
-        </div>
-        <div className="card p-5 text-center">
-          <h4>Організацій на перевірку</h4>
-          <div className="metric-number">
-            {loading ? '...' : organizations.length}
-          </div>
-          <p className="text-ink-muted">Очікують рішення</p>
-        </div>
-      </section>
+      {/* Таби / Фільтри */}
+      <div className="flex items-center space-x-3 mb-6 border-b border-[#DCECFF] pb-4">
+        {[
+          { key: 'all', label: 'Усі', count: 4 },
+          { key: 'unread', label: 'Непрочитані', count: 2 },
+          { key: 'pending', label: 'На розгляді', count: 2 },
+          { key: 'processed', label: 'Опрацьовані', count: 2 },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key as any)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+              activeTab === tab.key
+                ? 'bg-[#79B7FF] text-white shadow'
+                : 'bg-[#DCECFF] text-gray-700 hover:bg-[#79B7FF]/50'
+            }`}
+          >
+            {tab.label} <span className="ml-1 px-1.5 py-0.5 bg-white/50 rounded-full text-xs">{tab.count}</span>
+          </button>
+        ))}
+      </div>
 
-      <section className="card">
-        <h3>Запити на створення організацій</h3>
-        {loading ? (
-          <p className="py-4 text-center">Завантаження даних...</p>
-        ) : organizations.length === 0 ? (
-          <p className="py-4 text-ink-muted">Наразі немає нових запитів на верифікацію.</p>
-        ) : (
-          <div className="overflow-x-auto mt-4">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="py-2 px-3">ID</th>
-                  <th className="py-2 px-3">Назва організації</th>
-                  <th className="py-2 px-3">Статус</th>
-                  <th className="py-2 px-3 text-right">Дії</th>
-                </tr>
-              </thead>
-              <tbody>
-                {organizations.map((org) => (
-                  <tr key={org.id} className="border-b border-gray-100">
-                    <td className="py-3 px-3">{org.id}</td>
-                    <td className="py-3 px-3 font-medium">{org.name}</td>
-                    <td className="py-3 px-3">
-                      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs">
-                        {org.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-right space-x-2">
+      {/* Пошук та фільтри таблиці */}
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Пошук за ім'ям або запитом"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-[#DCECFF]/50 border border-[#79B7FF]/30 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#79B7FF]"
+          />
+        </div>
+        <div className="flex gap-4">
+          <div className="relative">
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="appearance-none bg-[#DCECFF]/50 border border-[#79B7FF]/30 rounded-lg px-4 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-[#79B7FF]"
+            >
+              <option value="all">Статус: усі</option>
+              <option value="pending">На розгляді</option>
+              <option value="approved">Схвалено</option>
+              <option value="rejected">Відхилено</option>
+            </select>
+            <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none" />
+          </div>
+        </div>
+      </div>
+
+      {/* Таблиця */}
+      <div className="bg-white rounded-xl shadow-sm border border-[#DCECFF] overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-[#F1D387] text-gray-900 text-sm font-semibold">
+              <th className="py-3 px-4">Волонтер / контакт</th>
+              <th className="py-3 px-4">Запит</th>
+              <th className="py-3 px-4">Дата подачі</th>
+              <th className="py-3 px-4">Статус</th>
+              <th className="py-3 px-4">Дії</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#DCECFF]">
+            {requests.map(req => (
+              <tr key={req.id} className="hover:bg-[#F7FBFF] transition">
+                <td className="py-4 px-4">
+                  <div className="font-semibold text-gray-900">{req.volunteerName}</div>
+                  <div className="text-xs text-[#8B99AA]">{req.email}</div>
+                </td>
+                <td className="py-4 px-4 text-sm">
+                  <div className="whitespace-pre-line text-gray-800">{req.requestType}</div>
+                </td>
+                <td className="py-4 px-4 text-sm text-gray-600">
+                  <div>{req.date}</div>
+                  <div className="text-xs text-[#8B99AA]">{req.time}</div>
+                </td>
+                <td className="py-4 px-4">
+                  {req.status === 'pending' && (
+                    <span className="inline-block px-3 py-1 bg-[#F1D387] text-gray-900 text-xs font-medium rounded-md">
+                      На розгляді
+                    </span>
+                  )}
+                  {req.status === 'approved' && (
+                    <span className="inline-block px-3 py-1 bg-[#B5F291] text-gray-900 text-xs font-medium rounded-md">
+                      Схвалено
+                    </span>
+                  )}
+                  {req.status === 'rejected' && (
+                    <span className="inline-block px-3 py-1 bg-[#E14848] text-white text-xs font-medium rounded-md">
+                      Відхилено
+                    </span>
+                  )}
+                </td>
+                <td className="py-4 px-4">
+                  {req.status === 'pending' ? (
+                    <div className="flex space-x-2">
                       <button
-                        onClick={() => handleReview(org.id, true)}
-                        className="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition"
+                        onClick={() => handleDecision(req.id, 'approved')}
+                        className="px-3 py-1 bg-[#B5F291] text-gray-900 text-xs font-semibold rounded-md hover:opacity-90 transition flex items-center space-x-1"
                       >
-                        Схвалити
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Схвалити</span>
                       </button>
                       <button
-                        onClick={() => handleReview(org.id, false)}
-                        className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition"
+                        onClick={() => handleDecision(req.id, 'rejected')}
+                        className="px-3 py-1 bg-[#E14848] text-white text-xs font-semibold rounded-md hover:opacity-90 transition flex items-center space-x-1"
                       >
-                        Відхилити
+                        <X className="w-3.5 h-3.5" />
+                        <span>Відхилити</span>
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  ) : (
+                    <button className="px-3 py-1 border border-[#79B7FF] text-[#79B7FF] text-xs font-semibold rounded-md hover:bg-[#DCECFF]/30 transition">
+                      Переглянути
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Футер таблиці */}
+        <div className="flex items-center justify-between px-4 py-3 bg-[#F7FBFF] border-t border-[#DCECFF] text-sm text-gray-600">
+          <span>Показано 1–4 із 4 запитів</span>
+          <div className="flex items-center space-x-2">
+            <button className="p-1.5 rounded-lg border border-[#DCECFF] hover:bg-[#DCECFF] disabled:opacity-50">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="px-3 py-1 bg-[#79B7FF] text-white rounded-lg text-xs font-medium">1</span>
+            <button className="p-1.5 rounded-lg border border-[#DCECFF] hover:bg-[#DCECFF]">
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
-        )}
-      </section>
+        </div>
+      </div>
     </div>
-  )
-}
+  );
+};
 
-export default AdminPage
+export default AdminPage;
