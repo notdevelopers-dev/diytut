@@ -4,6 +4,9 @@ import type { AxiosInstance, AxiosResponse, AxiosError } from 'axios'
 export const apiClient: AxiosInstance = axios.create({
   baseURL: '/api',
   withCredentials: true,
+  // Масиви як ?tags=a&tags=b: так їх читає FastAPI. За замовчуванням Axios шле tags[]=a,
+  // і бекенд мовчки ігнорує такий параметр (фільтри каталогу не спрацюють)
+  paramsSerializer: { indexes: null },
   headers: {
     'Content-Type': 'application/json',
   },
