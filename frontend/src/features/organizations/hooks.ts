@@ -6,8 +6,12 @@ import {
 } from '@tanstack/react-query'
 import { AUTH_ME_QUERY_KEY } from '@/features/auth/hooks'
 import {
+  createJoinRequest,
   createOrganization,
+  fetchMyJoinRequest,
   fetchMyOrganization,
+  fetchMyOrganizations,
+  fetchOrganization,
   fetchOrganizations,
   updateMyOrganization,
 } from './api'
@@ -73,5 +77,47 @@ export const useUpdateOrganization = () => {
   return useMutation({
     mutationFn: updateMyOrganization,
     onSuccess: invalidate,
+  })
+}
+
+/** Публічна сторінка організації /organizations/:id */
+export const useOrganization = (organizationId: number) =>
+  useQuery({
+    queryKey: ['organizations', 'detail', organizationId],
+    queryFn: () => fetchOrganization(organizationId),
+    enabled: Number.isInteger(organizationId) && organizationId > 0,
+    // 404 (немає або не схвалена) не має сенсу повторювати
+    retry: false,
+  })
+
+export const MY_ORGANIZATIONS_QUERY_KEY = ['organizations', 'mine'] as const
+
+/** Членства поточного користувача; лише для того, хто увійшов */
+export const useMyOrganizations = (enabled: boolean) =>
+  useQuery({
+    queryKey: MY_ORGANIZATIONS_QUERY_KEY,
+    queryFn: fetchMyOrganizations,
+    enabled,
+  })
+
+const myJoinRequestKey = (organizationId: number) =>
+  ['organizations', 'join-request', organizationId] as const
+
+/** Остання заявка користувача до організації (або `null`) */
+export const useMyJoinRequest = (organizationId: number, enabled: boolean) =>
+  useQuery({
+    queryKey: myJoinRequestKey(organizationId),
+    queryFn: () => fetchMyJoinRequest(organizationId),
+    enabled,
+  })
+
+/** Подати заявку: після успіху кнопка одразу переходить у «Запит очікує» */
+export const useCreateJoinRequest = (organizationId: number) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (message: string) => createJoinRequest(organizationId, message),
+    onSuccess: (joinRequest) => {
+      queryClient.setQueryData(myJoinRequestKey(organizationId), joinRequest)
+    },
   })
 }

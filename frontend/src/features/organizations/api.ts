@@ -1,5 +1,11 @@
 import { apiClient } from '@/lib/api-client'
-import type { OrganizationListItem } from '@/types/organization'
+import { getErrorStatus } from '@/lib/errors'
+import type {
+  JoinRequest,
+  OrganizationDetail,
+  OrganizationListItem,
+  OrganizationMembership,
+} from '@/types/organization'
 
 export interface FetchOrganizationsParams {
   city_id?: number | null
@@ -67,4 +73,51 @@ export const updateMyOrganization = async (
   payload: OrganizationUpdatePayload,
 ) => {
   await apiClient.patch('/organizations/me', payload)
+}
+
+/** Публічна сторінка схваленої організації разом з її опублікованими проєктами */
+export const fetchOrganization = async (
+  organizationId: number,
+): Promise<OrganizationDetail> => {
+  const { data } = await apiClient.get<OrganizationDetail>(
+    `/organizations/${organizationId}`,
+  )
+  return data
+}
+
+/** Усі організації, учасником яких є поточний користувач */
+export const fetchMyOrganizations = async (): Promise<
+  OrganizationMembership[]
+> => {
+  const { data } = await apiClient.get<OrganizationMembership[]>(
+    '/users/me/organizations',
+  )
+  return data
+}
+
+/** Остання заявка користувача до організації; `null`, якщо заявок ще не було (404) */
+export const fetchMyJoinRequest = async (
+  organizationId: number,
+): Promise<JoinRequest | null> => {
+  try {
+    const { data } = await apiClient.get<JoinRequest>(
+      `/organizations/${organizationId}/my-request-status`,
+    )
+    return data
+  } catch (err: unknown) {
+    if (getErrorStatus(err) === 404) return null
+    throw err
+  }
+}
+
+/** Заявка на вступ; супровідний лист необов'язковий (до 1000 символів) */
+export const createJoinRequest = async (
+  organizationId: number,
+  message: string,
+): Promise<JoinRequest> => {
+  const { data } = await apiClient.post<JoinRequest>(
+    `/organizations/${organizationId}/join-requests`,
+    { message: message.trim() || null },
+  )
+  return data
 }

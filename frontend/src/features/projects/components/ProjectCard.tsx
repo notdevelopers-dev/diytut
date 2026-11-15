@@ -36,6 +36,8 @@ interface ProjectCardProps {
   project: Project
   organizationName?: string
   cityName?: string
+  /** На сторінці самої організації її назву в картці не показуємо (як у макеті) */
+  showOrganization?: boolean
 }
 
 /** Картка проєкту за макетом Figma («Projects section») із бейджами з задачі. */
@@ -43,6 +45,7 @@ export const ProjectCard = ({
   project,
   organizationName,
   cityName,
+  showOrganization = true,
 }: ProjectCardProps) => {
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(false)
   const descriptionId = useId()
@@ -61,9 +64,11 @@ export const ProjectCard = ({
         <img src={cameraIcon} alt="" width={25} height={25} />
       </div>
 
-      <p className="truncate rounded-[5px] bg-[#F7FBFF] px-2 py-0.5 text-center text-[11px] text-black">
-        {organizationName ?? 'Організація'}
-      </p>
+      {showOrganization && (
+        <p className="truncate rounded-[5px] bg-[#F7FBFF] px-2 py-0.5 text-center text-[11px] text-black">
+          {organizationName ?? 'Організація'}
+        </p>
+      )}
 
       <h2 className="rounded-[5px] bg-[#F7FBFF] px-2 py-0.5 text-center text-sm font-normal break-words text-black">
         {project.title}
