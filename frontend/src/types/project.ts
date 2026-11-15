@@ -1,39 +1,28 @@
-export type ExperienceLevel = 'novice' | 'intermediate' | 'advanced'
+/** Рівень досвіду з бекенду (app.models.experience.ExperienceLevelEnum) */
+export type ExperienceLevel =
+  'novice' | 'interested' | 'amateur' | 'experienced' | 'pro'
+
 export type ProjectStatus = 'draft' | 'published' | 'completed' | 'cancelled'
 
-export interface OrganizationInfo {
-  id?: number
-  name: string
-  avatar_url?: string
-}
-
-export interface CityInfo {
-  id?: number
-  name: string
-  region?: string
-}
-
+/** Елемент GET /api/projects (app.schemas.projects.ProjectListItem) */
 export interface Project {
-  id: number | string
+  id: number
+  organization_id: number
   title: string
   description: string
-  organization: string | OrganizationInfo
-  organization_name?: string
+  city_id: number | null
+  status: ProjectStatus
+  created_at: string
+  starts_at: string | null
+  ends_at: string | null
+  is_online: boolean
+  address: string | null
+  capacity: number | null
+  /** Decimal на бекенді приходить рядком */
+  volunteer_hours: string | number | null
+  is_adult_only: boolean
+  experience_level: ExperienceLevel
   tags: string[]
-  starts_at?: string
-  ends_at?: string
-  is_online?: boolean
-  city_id?: number | null
-  city?: string | CityInfo | null
-  address?: string | null
-  capacity?: number
-  volunteer_hours?: number | string
-  is_adult_only?: boolean
-  experience_level?: ExperienceLevel
-  status?: ProjectStatus
-  created_at?: string
-  updated_at?: string
-  image_url?: string
 }
 
 export interface ProjectFilterState {

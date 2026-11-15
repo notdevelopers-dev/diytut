@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import type { ChangeEvent } from 'react'
-import { fetchProjects } from '../api/projects'
+import { fetchOrganizationNames, fetchProjects } from '../api/projects'
+import { useCities } from '../hooks/useCities'
 import type { Project } from '../types/project'
 import {
   ProjectCard,
@@ -29,12 +30,36 @@ export const ProjectsCatalogPage = ({
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [cityId, setCityId] = useState<number | null>(null)
+  const [organizationNames, setOrganizationNames] = useState<
+    Map<number, string>
+  >(new Map())
+
+  const { cities, isLoading: isCitiesLoading, error: citiesError } = useCities()
+  const cityNames = useMemo(
+    () => new Map(cities.map((city) => [city.id, city.name])),
+    [cities],
+  )
+
+  // Назви організацій потрібні лише для підписів: без них картка покаже номер
+  useEffect(() => {
+    let isMounted = true
+    fetchOrganizationNames()
+      .then((names) => {
+        if (isMounted) setOrganizationNames(names)
+      })
+      .catch(() => undefined)
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   useEffect(() => {
     if (initialProjects) return
 
     let isMounted = true
-    fetchProjects()
+    // Місто фільтрує бекенд (city_id), пошук і теги — вже на клієнті
+    fetchProjects({ city_id: cityId })
       .then((data) => {
         if (isMounted) {
           setProjects(data)
@@ -57,7 +82,7 @@ export const ProjectsCatalogPage = ({
     return () => {
       isMounted = false
     }
-  }, [initialProjects, retryCount])
+  }, [initialProjects, retryCount, cityId])
 
   const handleRetry = () => {
     setIsLoading(true)
@@ -93,14 +118,9 @@ export const ProjectsCatalogPage = ({
       // 2. Search query filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase().trim()
-        const orgName =
-          typeof project.organization === 'string'
-            ? project.organization
-            : project.organization?.name || project.organization_name || ''
+        const orgName = organizationNames.get(project.organization_id) ?? ''
         const cityName =
-          typeof project.city === 'string'
-            ? project.city
-            : project.city?.name || ''
+          project.city_id !== null ? (cityNames.get(project.city_id) ?? '') : ''
 
         const matchesTitle = project.title.toLowerCase().includes(query)
         const matchesDescription = project.description
@@ -125,7 +145,7 @@ export const ProjectsCatalogPage = ({
 
       return true
     })
-  }, [projects, selectedTags, searchQuery])
+  }, [projects, selectedTags, searchQuery, organizationNames, cityNames])
 
   const handleToggleTag = (tag: string) => {
     setSelectedTags((prev) =>
@@ -136,9 +156,11 @@ export const ProjectsCatalogPage = ({
   const handleResetFilters = () => {
     setSearchQuery('')
     setSelectedTags([])
+    setCityId(null)
   }
 
-  const isFiltered = searchQuery.trim().length > 0 || selectedTags.length > 0
+  const isFiltered =
+    searchQuery.trim().length > 0 || selectedTags.length > 0 || cityId !== null
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -182,6 +204,34 @@ export const ProjectsCatalogPage = ({
             >
               ✕
             </button>
+          )}
+        </div>
+
+        {/* City filter */}
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <label htmlFor="project-city" className="sr-only">
+            Місто
+          </label>
+          <select
+            id="project-city"
+            data-testid="project-city"
+            value={cityId ?? ''}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+              setCityId(e.target.value ? Number(e.target.value) : null)
+            }
+            disabled={isCitiesLoading && cities.length === 0}
+            className="w-full max-w-xs cursor-pointer rounded-xl border border-border bg-page px-3 py-2.5 text-sm text-ink focus:border-primary focus:outline-none sm:text-base"
+          >
+            <option value="">Усі міста</option>
+            {cities.map((city) => (
+              <option key={city.id} value={city.id}>
+                {city.name}
+                {city.region ? ` (${city.region})` : ''}
+              </option>
+            ))}
+          </select>
+          {citiesError && (
+            <span className="text-xs text-red-600">{citiesError}</span>
           )}
         </div>
 
@@ -299,6 +349,12 @@ export const ProjectsCatalogPage = ({
             <ProjectCard
               key={project.id}
               project={project}
+              organizationName={organizationNames.get(project.organization_id)}
+              cityName={
+                project.city_id !== null
+                  ? cityNames.get(project.city_id)
+                  : undefined
+              }
               selectedTags={selectedTags}
               onTagClick={handleToggleTag}
             />

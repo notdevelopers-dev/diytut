@@ -2,25 +2,27 @@ import type { Project } from '../types/project'
 
 export interface ProjectCardProps {
   project: Project
+  /** Назва організації (бекенд у списку віддає лише organization_id) */
+  organizationName?: string
+  cityName?: string
   selectedTags?: string[]
   onTagClick?: (tag: string) => void
 }
 
 export const ProjectCard = ({
   project,
+  organizationName,
+  cityName,
   selectedTags = [],
   onTagClick,
 }: ProjectCardProps) => {
-  const orgName =
-    typeof project.organization === 'string'
-      ? project.organization
-      : project.organization?.name || project.organization_name || 'Організація'
-
-  const cityName =
-    typeof project.city === 'string' ? project.city : project.city?.name || null
+  const orgName = organizationName ?? `Організація №${project.organization_id}`
 
   return (
-    <article className="card flex flex-col justify-between rounded-xl border border-border bg-white p-6 shadow-xs hover:shadow-md hover:border-sky-300 transition-all duration-200">
+    <article
+      data-testid="project-card"
+      className="card flex flex-col justify-between rounded-xl border border-border bg-white p-6 shadow-xs hover:shadow-md hover:border-sky-300 transition-all duration-200"
+    >
       <div>
         {/* Header: Organization and Location / Format */}
         <div className="flex items-center justify-between gap-2 mb-3">
