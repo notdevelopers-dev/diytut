@@ -80,9 +80,13 @@ export const ProjectCard = ({
       </div>
 
       {showOrganization && (
-        <p className="truncate rounded-[5px] bg-[#F7FBFF] px-2 py-0.5 text-center text-[11px] text-black">
+        <Link
+          to={`/organizations/${project.organization_id}`}
+          title="Сторінка організації"
+          className="block truncate rounded-[5px] bg-[#F7FBFF] px-2 py-0.5 text-center text-[11px] text-black no-underline transition-colors hover:bg-white hover:underline"
+        >
           {organizationName ?? 'Організація'}
-        </p>
+        </Link>
       )}
 
       <h2 className="rounded-[5px] bg-[#F7FBFF] px-2 py-0.5 text-center text-sm font-normal break-words text-black">
