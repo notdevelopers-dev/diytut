@@ -1,4 +1,4 @@
-﻿import type { OrganizationData } from '@/features/auth/types'
+import type { OrganizationData } from '@/features/auth/types'
 import type { OrgRole, OrgStatus } from '@/types/common'
 
 const ORG_ROLE_LABELS: Record<OrgRole, string> = {
