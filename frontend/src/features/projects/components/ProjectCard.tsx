@@ -1,7 +1,7 @@
 import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import cameraIcon from '@/assets/icons/camera.svg'
-import type { ExperienceLevel, Project } from '@/types/project'
+import type { ExperienceLevel, Project, ProjectCategory } from '@/types/project'
 
 /** Назви рівнів досвіду з документа скоупу (R-27) */
 const EXPERIENCE_LABELS: Record<ExperienceLevel, string> = {
@@ -36,6 +36,8 @@ interface ProjectCardProps {
   project: Project
   organizationName?: string
   cityName?: string
+  /** Назви сфер з GET /api/categories; без них сфери не показуються */
+  categoryNames?: Map<ProjectCategory, string>
 }
 
 /** Картка проєкту за макетом Figma («Projects section») із бейджами з задачі. */
@@ -43,6 +45,7 @@ export const ProjectCard = ({
   project,
   organizationName,
   cityName,
+  categoryNames,
 }: ProjectCardProps) => {
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(false)
   const descriptionId = useId()
@@ -68,6 +71,16 @@ export const ProjectCard = ({
       <h2 className="rounded-[5px] bg-[#F7FBFF] px-2 py-0.5 text-center text-sm font-normal break-words text-black">
         {project.title}
       </h2>
+
+      {categoryNames && project.categories.length > 0 && (
+        <ul className="flex flex-wrap gap-1" aria-label="Сфери">
+          {project.categories.map((category) => (
+            <li key={category} className={`${badgeClass} bg-main text-black`}>
+              {categoryNames.get(category) ?? category}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <ul className="flex flex-wrap gap-1" aria-label="Деталі проєкту">
         {project.is_adult_only && (
