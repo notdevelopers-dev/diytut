@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from app.models.experience import ExperienceLevelEnum
 from app.models.project import ProjectStatusEnum
-from app.schemas.users import MAX_INT32
+from app.schemas.users import MAX_BIGINT, MAX_INT32
 
 ProjectTitle = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=2, max_length=200)
@@ -19,6 +19,9 @@ ProjectDescription = Annotated[
 class ProjectCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # Від імені якої з організацій користувача створюється проєкт; без поля —
+    # організація за замовчуванням
+    organization_id: int | None = Field(default=None, gt=0, le=MAX_BIGINT)
     title: ProjectTitle
     description: ProjectDescription
     # Обов'язкові без значень за замовчуванням (R-12, R-22): від них залежать
