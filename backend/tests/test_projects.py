@@ -86,6 +86,7 @@ def test_project_defaults_and_organization_link(db, ids: dict[str, int]) -> None
     assert project.experience_level == ExperienceLevelEnum.novice
     assert project.is_adult_only is False
     assert project.tags == []
+    assert project.categories == ["other"]
     assert project.volunteer_hours == Decimal("2.50")
     assert project.created_at is not None
     assert organization_projects == [project_id]
@@ -127,6 +128,9 @@ def test_projects_can_be_filtered_by_tag(db, ids: dict[str, int]) -> None:
         ({"ends_at": STARTS_AT - timedelta(hours=1)}, "ck_projects_ends_after_start"),
         ({"is_online": False}, "ck_projects_offline_has_location"),
         ({"is_online": False, "address": "вул. 1"}, "ck_projects_offline_has_location"),
+        ({"categories": []}, "ck_projects_categories_count"),
+        ({"categories": ["ecology", "idp", "animals"]}, "ck_projects_categories_count"),
+        ({"categories": ["space"]}, "ck_projects_categories_known"),
     ],
 )
 def test_invalid_project_is_rejected_by_db(

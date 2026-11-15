@@ -2,8 +2,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import errors
-from app.models import OrgStatusEnum, Project, ProjectStatusEnum
-from app.schemas.projects import ProjectCreate
+from app.models import OrgStatusEnum, Project, ProjectCategoryEnum, ProjectStatusEnum
+from app.schemas.projects import ProjectCreate, normalize_tag
 from app.services.cities import ensure_city_exists
 from app.services.organizations import EDITOR_ROLES, get_user_membership
 
@@ -20,8 +20,13 @@ async def list_active_projects(
     offset: int,
     search: str | None = None,
     city_id: int | None = None,
+    categories: list[ProjectCategoryEnum] | None = None,
+    tags: list[str] | None = None,
 ) -> list[Project]:
-    """Каталог: опубліковані проєкти, які ще не завершилися."""
+    """Каталог: опубліковані проєкти, які ще не завершилися.
+
+    Кілька сфер чи хештегів — «будь-який із них»; сфери, хештеги й місто разом — «усі умови».
+    """
     query = select(Project).where(
         Project.status == ProjectStatusEnum.published,
         Project.ends_at > func.now(),
@@ -31,6 +36,14 @@ async def list_active_projects(
         query = query.where(or_(Project.title.ilike(pattern), Project.description.ilike(pattern)))
     if city_id is not None:
         query = query.where(Project.city_id == city_id)
+    # Оператор && (перетин масивів) використовує GIN-індекси на categories і tags
+    if categories:
+        query = query.where(Project.categories.overlap(sorted(set(categories))))
+    # Хештег у фільтрі нормалізуємо так само, як під час збереження: «#Толока» знайде «толока».
+    # Порожні значення (?tags=) ігноруємо, щоб не відфільтрувати все
+    wanted_tags = sorted({tag for raw in tags or [] if (tag := normalize_tag(raw))})
+    if wanted_tags:
+        query = query.where(Project.tags.overlap(wanted_tags))
 
     query = query.order_by(Project.created_at.desc(), Project.id.desc()).limit(limit).offset(offset)
     return list(await db_session.scalars(query))
@@ -79,6 +92,7 @@ async def create_project(db_session: AsyncSession, user_id: int, data: ProjectCr
         volunteer_hours=data.volunteer_hours,
         is_adult_only=data.is_adult_only,
         experience_level=data.experience_level,
+        categories=[category.value for category in data.categories],
         tags=data.tags,
         status=ProjectStatusEnum.published,
     )

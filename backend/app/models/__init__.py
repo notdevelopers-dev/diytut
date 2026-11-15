@@ -14,7 +14,7 @@ from app.models.organization import (
     OrgMemberRoleEnum,
     OrgStatusEnum,
 )
-from app.models.project import Project, ProjectStatusEnum
+from app.models.project import Project, ProjectCategoryEnum, ProjectStatusEnum
 from app.models.user import GenderEnum, RoleEnum, User
 
 __all__ = [
@@ -37,6 +37,7 @@ __all__ = [
     "Organization",
     "OrganizationMember",
     "Project",
+    "ProjectCategoryEnum",
     "ProjectStatusEnum",
     "RoleEnum",
     "User",
