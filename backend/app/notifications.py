@@ -12,12 +12,24 @@ from app.models import Notification, NotificationTypeEnum
 # project_id… або JSONB payload), а шлях з type та id будує фронтенд; це потребує
 # міграції. Докладніше — у README, розділ «Сповіщення».
 #
-# Кабінет організації поточного користувача
-ORGANIZATION_DASHBOARD_LINK = "/organization"
-# Редагування профілю організації, зокрема після відхилення адміністратором
-ORGANIZATION_EDIT_LINK = "/organization/edit"
-# Заявки на вступ у кабінеті організації
-ORGANIZATION_JOIN_REQUESTS_LINK = "/organization/join-requests"
+# Сторінки кабінету організації отримують ?organization_id= так само, як /api/organizations/me:
+# користувач може належати до кількох організацій, і без id незрозуміло, котрої стосується
+# сповіщення.
+
+
+def organization_dashboard_link(organization_id: int) -> str:
+    """Кабінет організації."""
+    return f"/organization?organization_id={organization_id}"
+
+
+def organization_edit_link(organization_id: int) -> str:
+    """Редагування профілю організації, зокрема після відхилення адміністратором."""
+    return f"/organization/edit?organization_id={organization_id}"
+
+
+def organization_join_requests_link(organization_id: int) -> str:
+    """Заявки на вступ у кабінеті організації."""
+    return f"/organization/join-requests?organization_id={organization_id}"
 
 
 def organization_page_link(organization_id: int) -> str:

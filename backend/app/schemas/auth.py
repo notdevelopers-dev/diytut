@@ -9,7 +9,8 @@ from app.schemas.users import UserRead
 class Authenticated(BaseModel):
     status: Literal["authenticated"] = "authenticated"
     user: UserRead
-    # Організація, до якої належить користувач; null, якщо такої немає
+    # Організація користувача за замовчуванням (найдавніша); null, якщо жодної немає.
+    # Усі його організації — у GET /users/me/organizations
     organization: OrganizationMembership | None
 
 

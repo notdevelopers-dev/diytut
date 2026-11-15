@@ -50,8 +50,10 @@ async def get_published_project(db_session: AsyncSession, project_id: int) -> Pr
 
 async def create_project(db_session: AsyncSession, user_id: int, data: ProjectCreate) -> Project:
     # Блокування: роль і статус організації не зміняться, доки проєкт не збережено
-    membership = await get_user_membership(db_session, user_id, lock=True)
+    membership = await get_user_membership(db_session, user_id, data.organization_id, lock=True)
     if membership is None:
+        if data.organization_id is not None:
+            raise errors.project_requires_membership()
         raise errors.project_requires_organization()
     if membership.role not in EDITOR_ROLES:
         raise errors.not_project_manager()

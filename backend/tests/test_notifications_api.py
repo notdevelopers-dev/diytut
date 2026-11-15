@@ -346,7 +346,7 @@ def test_creator_notified_on_approval(client, make_user, pending_org) -> None:
     assert notification["type"] == "organization_approved"
     assert "Добрі справи" in notification["message"]
     assert notification["is_read"] is False
-    assert notification["link"] == "/organization"
+    assert notification["link"] == f"/organization?organization_id={organization_id}"
 
 
 def test_creator_notified_on_rejection_with_reason(client, make_user, pending_org) -> None:
@@ -359,7 +359,7 @@ def test_creator_notified_on_rejection_with_reason(client, make_user, pending_or
 
     assert notification["type"] == "organization_rejected"
     assert "Невірний ЄДРПОУ" in notification["message"]
-    assert notification["link"] == "/organization/edit"
+    assert notification["link"] == f"/organization/edit?organization_id={organization_id}"
 
 
 def test_no_notification_when_review_fails(client, db, make_user, pending_org) -> None:

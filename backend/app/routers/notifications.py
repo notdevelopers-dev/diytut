@@ -5,7 +5,7 @@ from fastapi import APIRouter, Path, Query
 from app.auth import CurrentUserId
 from app.db import DbSessionDep
 from app.schemas.notifications import NotificationRead, ReadAllResult, UnreadCount
-from app.schemas.users import MAX_INT32
+from app.schemas.users import MAX_BIGINT, MAX_INT32
 from app.services import notifications as service
 
 # Більше за раз центру сповіщень у шапці не потрібно
@@ -41,7 +41,7 @@ async def mark_all_notifications_read(
 
 @router.patch("/{notification_id}/read")
 async def mark_notification_read(
-    notification_id: Annotated[int, Path(gt=0, le=2**63 - 1)],
+    notification_id: Annotated[int, Path(gt=0, le=MAX_BIGINT)],
     db_session: DbSessionDep,
     user_id: CurrentUserId,
 ) -> NotificationRead:
