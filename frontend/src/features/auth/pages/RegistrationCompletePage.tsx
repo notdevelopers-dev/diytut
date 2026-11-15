@@ -1,0 +1,276 @@
+import { useState } from 'react'
+import type { FormEvent, ChangeEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth, useRegister } from '@/features/auth/hooks'
+import { getApiErrorMessage } from '@/lib/errors'
+import { CityCombobox } from '@/features/cities/components/CityCombobox'
+import {
+  FieldError,
+  FieldLabel,
+  RequiredMark,
+} from '@/components/ui/Typography'
+import {
+  inputClass,
+  selectClass,
+  textareaClass,
+} from '@/components/ui/formStyles'
+import { Logo } from '@/components/ui/Logo'
+import { useCities } from '@/features/cities/hooks'
+import { PHONE_PREFIX, isValidPhone, normalizePhone } from '@/lib/phone'
+
+export const RegistrationCompletePage = () => {
+  const { user } = useAuth()
+  const registerMutation = useRegister()
+  const navigate = useNavigate()
+  const { cities, error: citiesError } = useCities()
+
+  // 1. Стан полів форми. Ім'я та прізвище від Google вже є в /auth/me (useAuth),
+  // решту користувач вводить сам — жодних тестових значень за замовчуванням
+  const [firstName, setFirstName] = useState(user?.firstName ?? '')
+  const [lastName, setLastName] = useState(user?.lastName ?? '')
+  const [nickname, setNickname] = useState(user?.nickname ?? '')
+  const [phone, setPhone] = useState(PHONE_PREFIX)
+  const [dateOfBirth, setDateOfBirth] = useState('')
+  const [gender, setGender] = useState<'prefer_not_to_say' | 'female' | 'male'>(
+    'prefer_not_to_say',
+  )
+  const [cityId, setCityId] = useState<number | ''>('')
+  const [bio, setBio] = useState('')
+
+  // Стан помилок
+  const [phoneError, setPhoneError] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // 3. Форматування та валідація номера телефону (+380...)
+  const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const cleaned = normalizePhone(e.target.value)
+    setPhone(cleaned)
+    setPhoneError(
+      isValidPhone(cleaned)
+        ? null
+        : 'Формат: +380XXXXXXXXX (9 цифр після +380)',
+    )
+  }
+
+  // 4. Відправка форми реєстрації
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setErrorMessage(null)
+
+    if (!isValidPhone(phone)) {
+      setPhoneError('Введіть коректний номер телефону (+380XXXXXXXXX)')
+      return
+    }
+
+    if (!cityId) {
+      setErrorMessage('Оберіть місто зі списку')
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      // Контракт запиту для бекенду (app.schemas.users.RegistrationRequest)
+      const payload = {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        nickname: nickname.trim() || null,
+        phone,
+        birth_date: dateOfBirth, // саме birth_date, як вимагає Pydantic!
+        gender,
+        city_id: Number(cityId),
+        bio: bio.trim() || null,
+      }
+
+      await registerMutation.mutateAsync(payload)
+
+      // useRegister вже оновив /auth/me (бекенд замінив cookie registration на session)
+      void navigate('/profile', { replace: true })
+    } catch (err: unknown) {
+      // Показуємо помилку бекенду (рядок або список помилок полів FastAPI)
+      setErrorMessage(
+        getApiErrorMessage(
+          err,
+          'Не вдалося завершити реєстрацію. Спробуйте ще раз.',
+        ),
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="relative flex min-h-screen w-full flex-col justify-between bg-[#F7FBFF] overflow-x-hidden">
+      {/* Верхня панель: Логотип і синя роздільна смужка за макетом Figma */}
+      <div className="w-full">
+        <div className="px-8 pt-6 pb-4">
+          <Logo />
+        </div>
+        <div className="h-[2px] w-full bg-main" />
+      </div>
+
+      {/* Центральна частина: 2 колонки інпутів за макетом */}
+      <div className="my-auto flex w-full justify-center px-4 py-8">
+        <form
+          onSubmit={handleSubmit}
+          className="flex w-full max-w-3xl flex-col items-center"
+        >
+          {citiesError && (
+            <div className="mb-4 w-full rounded bg-red-100 p-2 text-center text-xs text-red-700">
+              {citiesError}
+            </div>
+          )}
+          {errorMessage && (
+            <div className="mb-4 w-full rounded bg-red-100 p-2 text-center text-xs text-red-700">
+              {errorMessage}
+            </div>
+          )}
+
+          <div className="grid w-full grid-cols-1 gap-x-12 gap-y-4 md:grid-cols-2">
+            {/* Ліва колонка */}
+            <div className="flex flex-col gap-4">
+              {/* Ім'я * */}
+              <div className="flex flex-col gap-1">
+                <FieldLabel>
+                  Ім’я <RequiredMark />
+                </FieldLabel>
+                <input
+                  type="text"
+                  required
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="Петро"
+                  className={inputClass('sm')}
+                />
+              </div>
+
+              {/* Прізвище * */}
+              <div className="flex flex-col gap-1">
+                <FieldLabel>
+                  Прізвище <RequiredMark />
+                </FieldLabel>
+                <input
+                  type="text"
+                  required
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Петренко"
+                  className={inputClass('sm')}
+                />
+              </div>
+
+              {/* Телефон * */}
+              <div className="flex flex-col gap-1">
+                <FieldLabel>
+                  Телефон <RequiredMark />
+                </FieldLabel>
+                <input
+                  type="tel"
+                  required
+                  value={phone}
+                  onChange={handlePhoneChange}
+                  placeholder="+380"
+                  className={inputClass('sm', Boolean(phoneError))}
+                />
+                {phoneError && <FieldError>{phoneError}</FieldError>}
+              </div>
+
+              {/* Місто * (Select із довідника міст бекенду) */}
+              <div className="flex flex-col gap-1">
+                <FieldLabel>
+                  Місто <RequiredMark />
+                </FieldLabel>
+                <CityCombobox
+                  cities={cities}
+                  value={cityId}
+                  onChange={setCityId}
+                  disabled={cities.length === 0}
+                  inputClassName={inputClass('sm')}
+                />
+              </div>
+            </div>
+
+            {/* Права колонка */}
+            <div className="flex flex-col gap-4">
+              {/* Нікнейм (без зірочки в макеті) */}
+              <div className="flex flex-col gap-1">
+                <FieldLabel>Нікнейм</FieldLabel>
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  placeholder="petrenkopetro111"
+                  className={inputClass('sm')}
+                />
+              </div>
+
+              {/* Дата народження * */}
+              <div className="flex flex-col gap-1">
+                <FieldLabel>
+                  Дата народження <RequiredMark />
+                </FieldLabel>
+                <input
+                  type="date"
+                  required
+                  value={dateOfBirth}
+                  onChange={(e) => setDateOfBirth(e.target.value)}
+                  className={inputClass('sm')}
+                />
+              </div>
+
+              {/* Стать * (значення відповідають GenderEnum бекенду) */}
+              <div className="flex flex-col gap-1">
+                <FieldLabel>
+                  Стать <RequiredMark />
+                </FieldLabel>
+                <select
+                  value={gender}
+                  onChange={(e) =>
+                    setGender(
+                      e.target.value as 'prefer_not_to_say' | 'female' | 'male',
+                    )
+                  }
+                  className={selectClass('sm')}
+                >
+                  <option value="prefer_not_to_say">Волію не вказувати</option>
+                  <option value="female">Жіноча</option>
+                  <option value="male">Чоловіча</option>
+                </select>
+              </div>
+
+              {/* Про себе (без зірочки в макеті; бекенд приймає до 2000 символів) */}
+              <div className="flex flex-col gap-1">
+                <FieldLabel>Про себе</FieldLabel>
+                <textarea
+                  rows={5}
+                  maxLength={2000}
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="Розкажіть про себе: досвід, інтереси, чим хочете допомагати"
+                  className={`min-h-28 resize-y ${textareaClass}`}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Синя кнопка "Зареєструватись" за макетом Figma */}
+          <button
+            type="submit"
+            disabled={
+              isSubmitting || Boolean(phoneError) || cities.length === 0
+            }
+            className="mt-8 flex h-11 w-56 cursor-pointer items-center justify-center rounded-xl bg-main text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition-all hover:bg-main-hover active:scale-95 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? 'Збереження...' : 'Зареєструватись'}
+          </button>
+        </form>
+      </div>
+
+      {/* Нижня смужка з макета Figma */}
+      <div className="h-14 w-full bg-[#DCECFF] border-t-2 border-info" />
+    </div>
+  )
+}
+
+export default RegistrationCompletePage
