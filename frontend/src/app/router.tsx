@@ -14,6 +14,7 @@ import {
   OrganizationsCatalogPage,
   OrganizationViewPage,
 } from '@/features/organizations'
+import { ProjectsCatalogPage, ProjectViewPage } from '@/features/projects'
 import { ProfilePage } from '@/features/users'
 
 /** Усі маршрути застосунку в одному місці. */
@@ -39,6 +40,8 @@ export const AppRoutes = () => (
       <Route path="/" element={<HomePage />} />
       <Route path="/organizations" element={<OrganizationsCatalogPage />} />
       <Route path="/organizations/:id" element={<OrganizationViewPage />} />
+      <Route path="/projects" element={<ProjectsCatalogPage />} />
+      <Route path="/projects/:id" element={<ProjectViewPage />} />
       <Route
         path="/profile"
         element={
