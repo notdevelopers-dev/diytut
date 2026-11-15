@@ -1,10 +1,15 @@
 import { useMemo, useState } from 'react'
-import type { ChangeEvent } from 'react'
-import { Body, PageTitle } from '@/components/ui/Typography'
-import { selectClass } from '@/components/ui/formStyles'
+import { inputClass } from '@/components/ui/formStyles'
+import { CityCombobox } from '@/features/cities/components/CityCombobox'
 import { useCities } from '@/features/cities/hooks'
-import { OrganizationsTable } from '@/features/organizations/components/OrganizationsTable'
-import { useOrganizations } from '@/features/organizations/hooks'
+import {
+  OrganizationCard,
+  OrganizationCardSkeleton,
+} from '@/features/organizations/components/OrganizationCard'
+import {
+  ORGANIZATIONS_PAGE_SIZE,
+  useOrganizations,
+} from '@/features/organizations/hooks'
 
 export const OrganizationsCatalogPage = () => {
   const [cityId, setCityId] = useState<number | null>(null)
@@ -28,59 +33,40 @@ export const OrganizationsCatalogPage = () => {
   )
 
   // Зміна міста завантажує список із початку
-  const handleCityChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    setCityId(e.target.value ? Number(e.target.value) : null)
-  }
+  const handleCityChange = (value: number | '') =>
+    setCityId(value === '' ? null : value)
 
   const resetFilter = () => setCityId(null)
 
   const selectedCityName = cityId !== null ? cityNames.get(cityId) : undefined
 
-  const summary =
-    organizations.length > 0
-      ? `Показано організацій: ${organizations.length}`
-      : 'Організацій не знайдено'
-
   return (
     <div
       data-testid="organizations-catalog-page"
-      className="mx-auto max-w-6xl px-4 py-8 sm:px-8"
+      className="mx-auto w-full max-w-5xl px-3 py-4 sm:px-4 sm:py-6"
     >
-      <header className="mb-6">
-        <PageTitle>Організації</PageTitle>
-        <Body className="mt-2">
-          Підтверджені благодійні фонди та громадські організації, які приймають
-          волонтерів.
-        </Body>
-      </header>
+      <h1 className="mx-auto mb-5 w-full max-w-[569px] rounded-[5px] bg-main py-0.5 text-center text-2xl font-normal text-black">
+        Організації
+      </h1>
 
       <div className="mb-5 flex flex-wrap items-center gap-3">
-        <div className="w-full max-w-xs">
-          <label htmlFor="city-filter" className="sr-only">
-            Місто
-          </label>
-          <select
-            id="city-filter"
-            data-testid="city-filter"
+        {/* label охоплює поле combobox, тож читач екрана чує «Місто» */}
+        <label className="block w-full sm:max-w-xs" data-testid="city-filter">
+          <span className="sr-only">Місто</span>
+          <CityCombobox
+            cities={cities}
             value={cityId ?? ''}
             onChange={handleCityChange}
             disabled={isCitiesLoading && cities.length === 0}
-            className={`${selectClass('md')} cursor-pointer`}
-          >
-            <option value="">Усі міста</option>
-            {cities.map((city) => (
-              <option key={city.id} value={city.id}>
-                {city.name}
-                {city.region ? ` (${city.region})` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
+            placeholder="Усі міста"
+            inputClassName={inputClass('md')}
+          />
+        </label>
         {cityId !== null && (
           <button
             type="button"
             onClick={resetFilter}
-            className="cursor-pointer rounded-md bg-[#DCECFF] px-3 py-1.5 text-xs text-black hover:bg-main"
+            className="cursor-pointer rounded-[5px] bg-[#DCECFF] px-3 py-1.5 text-xs text-black hover:bg-main"
           >
             ✕ Скинути фільтр
           </button>
@@ -93,7 +79,7 @@ export const OrganizationsCatalogPage = () => {
       {isError ? (
         <div
           data-testid="error-state"
-          className="rounded-lg border border-red-300 bg-red-50 p-8 text-center"
+          className="rounded-[5px] border border-red-300 bg-red-50 p-8 text-center"
         >
           <p className="mb-1 text-base font-bold text-black">
             Не вдалося завантажити організації
@@ -104,7 +90,7 @@ export const OrganizationsCatalogPage = () => {
           <button
             type="button"
             onClick={() => void refetch()}
-            className="cursor-pointer rounded-lg bg-main px-4 py-2 text-sm font-medium text-black hover:bg-main-hover"
+            className="cursor-pointer rounded-[5px] bg-main px-4 py-2 text-sm text-black hover:bg-main-hover"
           >
             Спробувати знову
           </button>
@@ -112,7 +98,7 @@ export const OrganizationsCatalogPage = () => {
       ) : !isLoading && organizations.length === 0 ? (
         <div
           data-testid="empty-state"
-          className="rounded-lg border border-main bg-[#F7FBFF] p-10 text-center"
+          className="rounded-[5px] border border-main bg-[#DCECFF] p-10 text-center"
         >
           <p className="mb-1 text-base font-bold text-black">
             Організацій не знайдено
@@ -126,34 +112,45 @@ export const OrganizationsCatalogPage = () => {
             <button
               type="button"
               onClick={resetFilter}
-              className="cursor-pointer rounded-lg bg-info px-4 py-2 text-sm font-medium text-black hover:opacity-90"
+              className="cursor-pointer rounded-[5px] bg-info px-4 py-2 text-sm text-black hover:opacity-90"
             >
               Показати всі міста
             </button>
           )}
         </div>
       ) : (
-        <OrganizationsTable
-          organizations={organizations}
-          cityNames={cityNames}
-          isLoading={isLoading}
-          footer={
-            <>
-              <span>{isLoading ? 'Завантаження...' : summary}</span>
-              {hasNextPage && (
-                <button
-                  type="button"
-                  data-testid="load-more"
-                  onClick={() => void fetchNextPage()}
-                  disabled={isFetchingNextPage}
-                  className="cursor-pointer rounded-md bg-[#C3D7F2] px-4 py-1.5 text-xs text-black transition-colors hover:bg-main disabled:cursor-wait disabled:opacity-60"
-                >
-                  {isFetchingNextPage ? 'Завантаження...' : 'Показати ще'}
-                </button>
-              )}
-            </>
-          }
-        />
+        <>
+          <ul className="grid grid-cols-2 gap-4 md:grid-cols-3">
+            {isLoading
+              ? Array.from({ length: ORGANIZATIONS_PAGE_SIZE }, (_, i) => (
+                  <li key={i}>
+                    <OrganizationCardSkeleton />
+                  </li>
+                ))
+              : organizations.map((organization) => (
+                  <li key={organization.id}>
+                    <OrganizationCard
+                      organization={organization}
+                      cityName={cityNames.get(organization.city_id)}
+                    />
+                  </li>
+                ))}
+          </ul>
+
+          {hasNextPage && (
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                data-testid="load-more"
+                onClick={() => void fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="cursor-pointer rounded-[5px] bg-main px-6 py-1.5 text-sm text-black transition-colors hover:bg-main-hover disabled:cursor-wait disabled:opacity-60"
+              >
+                {isFetchingNextPage ? 'Завантаження...' : 'Показати ще'}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

@@ -12,7 +12,7 @@ import {
   updateMyOrganization,
 } from './api'
 
-export const ORGANIZATIONS_PAGE_SIZE = 10
+export const ORGANIZATIONS_PAGE_SIZE = 12
 
 /**
  * Каталог із кнопкою «Показати ще»: фільтр за містом і зсув виконує бекенд
