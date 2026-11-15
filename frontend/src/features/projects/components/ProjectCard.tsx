@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import cameraIcon from '@/assets/icons/camera.svg'
+import { projectsCatalogUrl } from '@/features/projects/utils'
 import type { ExperienceLevel, Project, ProjectCategory } from '@/types/project'
 
 /** Назви рівнів досвіду з документа скоупу (R-27) */
@@ -32,12 +33,21 @@ const formatHours = (hours: string | null) => {
 
 const badgeClass = 'rounded-[5px] px-1.5 py-0.5 text-[10px] leading-tight'
 
+const clickableBadge =
+  'block cursor-pointer no-underline transition-colors hover:brightness-95 focus-visible:outline-2 focus-visible:outline-blue-500'
+
 interface ProjectCardProps {
   project: Project
   organizationName?: string
   cityName?: string
   /** Назви сфер з GET /api/categories; без них сфери не показуються */
   categoryNames?: Map<ProjectCategory, string>
+  /**
+   * Клік по хештегу чи сфері. У каталозі фільтр застосовується на місці; без
+   * обробника (сторінка організації) бейдж веде в каталог із цим фільтром.
+   */
+  onTagClick?: (tag: string) => void
+  onCategoryClick?: (category: ProjectCategory) => void
 }
 
 /** Картка проєкту за макетом Figma («Projects section») із бейджами з задачі. */
@@ -46,6 +56,8 @@ export const ProjectCard = ({
   organizationName,
   cityName,
   categoryNames,
+  onTagClick,
+  onCategoryClick,
 }: ProjectCardProps) => {
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(false)
   const descriptionId = useId()
@@ -75,8 +87,14 @@ export const ProjectCard = ({
       {categoryNames && project.categories.length > 0 && (
         <ul className="flex flex-wrap gap-1" aria-label="Сфери">
           {project.categories.map((category) => (
-            <li key={category} className={`${badgeClass} bg-main text-black`}>
-              {categoryNames.get(category) ?? category}
+            <li key={category}>
+              <FilterBadge
+                className={`${badgeClass} bg-main text-black`}
+                label={categoryNames.get(category) ?? category}
+                title="Показати проєкти цієї сфери"
+                to={projectsCatalogUrl({ category })}
+                onClick={onCategoryClick && (() => onCategoryClick(category))}
+              />
             </li>
           ))}
         </ul>
@@ -107,11 +125,14 @@ export const ProjectCard = ({
       {project.tags.length > 0 && (
         <ul className="flex flex-wrap gap-1" aria-label="Теги">
           {project.tags.map((tag) => (
-            <li
-              key={tag}
-              className={`${badgeClass} border border-main text-black`}
-            >
-              #{tag}
+            <li key={tag}>
+              <FilterBadge
+                className={`${badgeClass} border border-main bg-[#F7FBFF] text-black`}
+                label={`#${tag}`}
+                title="Показати проєкти з цим хештегом"
+                to={projectsCatalogUrl({ tag })}
+                onClick={onTagClick && (() => onTagClick(tag))}
+              />
             </li>
           ))}
         </ul>
@@ -164,3 +185,34 @@ export const ProjectCardSkeleton = () => (
     <div className="mx-auto mt-auto h-6 w-28 rounded-[5px] bg-[#B5F291]/60" />
   </div>
 )
+
+interface FilterBadgeProps {
+  className: string
+  label: string
+  title: string
+  to: string
+  onClick?: () => void
+}
+
+/** Бейдж-фільтр: кнопка в каталозі, посилання на каталог деінде. */
+const FilterBadge = ({
+  className,
+  label,
+  title,
+  to,
+  onClick,
+}: FilterBadgeProps) =>
+  onClick ? (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`${className} ${clickableBadge}`}
+    >
+      {label}
+    </button>
+  ) : (
+    <Link to={to} title={title} className={`${className} ${clickableBadge}`}>
+      {label}
+    </Link>
+  )

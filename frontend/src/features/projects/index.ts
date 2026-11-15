@@ -1,5 +1,6 @@
 export * from './api.ts'
 export * from './hooks.ts'
+export * from './utils.ts'
 export * from './components/ProjectCard.tsx'
 export * from './pages/ProjectsCatalogPage.tsx'
 export * from './pages/ProjectViewPage.tsx'

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { inputClass } from '@/components/ui/formStyles'
 import { CityCombobox } from '@/features/cities/components/CityCombobox'
 import { useCities } from '@/features/cities/hooks'
@@ -12,13 +13,26 @@ import {
   useOrganizationNames,
   useProjects,
 } from '@/features/projects/hooks'
+import { isProjectCategory } from '@/features/projects/utils'
 import { useDebounce } from '@/hooks/useDebounce'
 import type { ProjectCategory } from '@/types/project'
 
 export const ProjectsCatalogPage = () => {
-  const [searchInput, setSearchInput] = useState('')
+  // Початкові фільтри з посилання (клік по хештегу чи сфері на іншій сторінці):
+  // /projects?q=%23толока або /projects?categories=ecology
+  const [searchParams] = useSearchParams()
+  const [searchInput, setSearchInput] = useState(
+    () => searchParams.get('q') ?? '',
+  )
   const [cityId, setCityId] = useState<number | null>(null)
-  const [categories, setCategories] = useState<ProjectCategory[]>([])
+  const [categories, setCategories] = useState<ProjectCategory[]>(() => [
+    ...new Set(
+      searchParams
+        .getAll('categories')
+        .flatMap((value) => value.split(','))
+        .filter(isProjectCategory),
+    ),
+  ])
 
   // Запит до бекенду — лише після паузи в наборі, а не на кожну літеру.
   // Слова з «#» на початку йдуть у фільтр хештегів, решта — у текстовий пошук
@@ -60,6 +74,20 @@ export const ProjectsCatalogPage = () => {
         ? current.filter((item) => item !== key)
         : [...current, key],
     )
+
+  // Клік по хештегу в картці: шукаємо саме за ним
+  const handleTagClick = (tag: string) => {
+    setSearchInput(`#${tag}`)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // Клік по сфері в картці: додаємо її до вибраних (повторний клік нічого не ламає)
+  const handleCategoryClick = (key: ProjectCategory) => {
+    setCategories((current) =>
+      current.includes(key) ? current : [...current, key],
+    )
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const resetFilters = () => {
     setSearchInput('')
@@ -228,6 +256,8 @@ export const ProjectsCatalogPage = () => {
                     <ProjectCard
                       project={project}
                       categoryNames={categoryNames}
+                      onTagClick={handleTagClick}
+                      onCategoryClick={handleCategoryClick}
                       organizationName={organizationNames?.get(
                         project.organization_id,
                       )}
