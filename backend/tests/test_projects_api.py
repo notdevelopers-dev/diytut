@@ -742,6 +742,34 @@ def test_get_project_details_404_for_cancelled(
     assert response.json()["detail"] == "Project not found"
 
 
+@pytest.mark.parametrize("project_id", ["0", "-1", str(2**63), "abc"])
+def test_get_project_details_invalid_id_422(client: TestClient, project_id: str) -> None:
+    # Без межі id понад bigint падав би з 500 у БД
+    assert client.get(f"/api/projects/{project_id}").status_code == 422
+
+
+@pytest.mark.parametrize("value", [0, 2**63])
+def test_create_project_invalid_organization_id_422(
+    client: TestClient, org_with_members, value: int
+) -> None:
+    _, owner_id, _, _ = org_with_members
+    sign_in(client, owner_id)
+
+    response = client.post("/api/projects", json=project_payload(organization_id=value))
+
+    assert response.status_code == 422
+
+
+def test_create_project_bigint_organization_id_403(client: TestClient, org_with_members) -> None:
+    # id організацій — bigint: id понад межу integer валідний, але організація не своя
+    _, owner_id, _, _ = org_with_members
+    sign_in(client, owner_id)
+
+    response = client.post("/api/projects", json=project_payload(organization_id=2**31))
+
+    assert response.status_code == 403
+
+
 def test_get_project_details_404_for_nonexistent(client: TestClient) -> None:
     response = client.get("/api/projects/99999999")
     assert response.status_code == 404

@@ -159,5 +159,7 @@ def project_join_request_not_supported() -> HTTPException:
     )
 
 
-def applicant_already_has_organization() -> HTTPException:
-    return HTTPException(status.HTTP_409_CONFLICT, "Volunteer already belongs to an organization")
+def applicant_already_member() -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT, "Volunteer is already a member of this organization"
+    )

@@ -153,11 +153,14 @@ def get_request(db, request_id: int) -> JoinRequest:
     return db(fetch)
 
 
-def get_membership(db, user_id: int) -> OrganizationMember | None:
+def get_membership(db, user_id: int, organization_id: int) -> OrganizationMember | None:
     async def fetch(session) -> OrganizationMember | None:
         return await session.scalar(
             select(OrganizationMember)
-            .where(OrganizationMember.user_id == user_id)
+            .where(
+                OrganizationMember.user_id == user_id,
+                OrganizationMember.organization_id == organization_id,
+            )
             .execution_options(populate_existing=True)
         )
 
@@ -193,7 +196,7 @@ def test_accept_adds_member_and_notifies(client, db, pending) -> None:
     assert body["reviewed_by"] == pending["owner"]
     assert body["reviewed_at"] is not None
 
-    membership = get_membership(db, pending["volunteer"])
+    membership = get_membership(db, pending["volunteer"], pending["org"])
     assert membership is not None
     assert membership.organization_id == pending["org"]
     assert membership.role is OrgMemberRoleEnum.member
@@ -213,7 +216,7 @@ def test_reject_does_not_add_member(client, db, pending) -> None:
     assert response.status_code == 200
     assert response.json()["status"] == "rejected"
     assert response.json()["reviewed_by"] == pending["owner"]
-    assert get_membership(db, pending["volunteer"]) is None
+    assert get_membership(db, pending["volunteer"], pending["org"]) is None
     [notification] = get_notifications(db, pending["volunteer"])
     assert notification.type is NotificationTypeEnum.join_request_rejected
 
@@ -288,7 +291,7 @@ def test_applicant_cannot_review_own_request(client, db, pending) -> None:
     response = client.patch(review_url(pending["request"]), json={"status": "accepted"})
 
     assert response.status_code == 404
-    assert get_membership(db, pending["volunteer"]) is None
+    assert get_membership(db, pending["volunteer"], pending["org"]) is None
 
 
 def test_member_cannot_review(client, db, make_user, pending) -> None:
@@ -300,7 +303,7 @@ def test_member_cannot_review(client, db, make_user, pending) -> None:
 
     assert response.status_code == 403
     assert response.json() == {"detail": "Only the owner or an admin can manage join requests"}
-    assert get_membership(db, pending["volunteer"]) is None
+    assert get_membership(db, pending["volunteer"], pending["org"]) is None
 
 
 def test_blocked_organization_cannot_review(client, db, make_org, make_user) -> None:
@@ -312,7 +315,7 @@ def test_blocked_organization_cannot_review(client, db, make_org, make_user) -> 
     response = client.patch(review_url(request_id), json={"status": "accepted"})
 
     assert response.status_code == 403
-    assert get_membership(db, volunteer_id) is None
+    assert get_membership(db, volunteer_id, org_id) is None
 
 
 @pytest.mark.parametrize("status", [JoinRequestStatusEnum.accepted, JoinRequestStatusEnum.rejected])
@@ -326,7 +329,7 @@ def test_already_reviewed(client, db, make_org, make_user, status) -> None:
 
     assert response.status_code == 409
     assert response.json() == {"detail": "Join request has already been reviewed"}
-    assert get_membership(db, volunteer_id) is None
+    assert get_membership(db, volunteer_id, org_id) is None
     assert get_notifications(db, volunteer_id) == []
 
 
@@ -339,34 +342,82 @@ def test_second_review_conflicts(client, db, pending) -> None:
     response = client.patch(review_url(pending["request"]), json={"status": "accepted"})
 
     assert response.status_code == 409
-    assert get_membership(db, pending["volunteer"]) is None
+    assert get_membership(db, pending["volunteer"], pending["org"]) is None
     assert len(get_notifications(db, pending["volunteer"])) == 1
 
 
-def test_accept_when_applicant_joined_another_organization(client, db, make_org, pending) -> None:
+def test_accept_when_applicant_belongs_to_another_organization(
+    client, db, make_org, pending
+) -> None:
     other_org, _ = make_org()
     add_member(db, other_org, pending["volunteer"], OrgMemberRoleEnum.member)
     sign_in(client, pending["owner"])
 
     response = client.patch(review_url(pending["request"]), json={"status": "accepted"})
 
+    # Користувач може належати до кількох організацій
+    assert response.status_code == 200
+    assert get_membership(db, pending["volunteer"], pending["org"]) is not None
+    assert get_membership(db, pending["volunteer"], other_org) is not None
+
+
+def test_accept_when_applicant_already_member_here(client, db, pending) -> None:
+    # Волонтер став учасником цієї організації, поки заявка чекала на розгляд
+    add_member(db, pending["org"], pending["volunteer"], OrgMemberRoleEnum.admin)
+    sign_in(client, pending["owner"])
+
+    response = client.patch(review_url(pending["request"]), json={"status": "accepted"})
+
     assert response.status_code == 409
-    assert response.json() == {"detail": "Volunteer already belongs to an organization"}
-    # Транзакцію відкочено: заявка лишається на розгляді, сповіщення немає
+    assert response.json() == {"detail": "Volunteer is already a member of this organization"}
+    # Транзакцію відкочено: роль не змінилася, заявка на розгляді, сповіщення немає
+    membership = get_membership(db, pending["volunteer"], pending["org"])
+    assert membership.role is OrgMemberRoleEnum.admin
     assert get_request(db, pending["request"]).status is JoinRequestStatusEnum.pending
-    assert get_membership(db, pending["volunteer"]).organization_id == other_org
     assert get_notifications(db, pending["volunteer"]) == []
 
 
-def test_reject_when_applicant_joined_another_organization(client, db, make_org, pending) -> None:
-    other_org, _ = make_org()
-    add_member(db, other_org, pending["volunteer"], OrgMemberRoleEnum.member)
+def test_reject_when_applicant_already_member_here(client, db, pending) -> None:
+    add_member(db, pending["org"], pending["volunteer"], OrgMemberRoleEnum.member)
     sign_in(client, pending["owner"])
 
     # Відхилити таку заявку можна: інакше вона висіла б у кабінеті вічно
     response = client.patch(review_url(pending["request"]), json={"status": "rejected"})
 
     assert response.status_code == 200
+
+
+def test_owner_of_several_organizations_reviews_non_default(
+    client, db, make_org, make_user
+) -> None:
+    _, owner_id = make_org()
+    second_org, _ = make_org()
+    # Друга організація власника, не за замовчуванням
+    add_member(db, second_org, owner_id, OrgMemberRoleEnum.owner)
+    volunteer_id = make_user()
+    request_id = make_request(db, second_org, volunteer_id)
+    sign_in(client, owner_id)
+
+    response = client.patch(review_url(request_id), json={"status": "accepted"})
+
+    assert response.status_code == 200
+    assert response.json()["reviewed_by"] == owner_id
+    assert get_membership(db, volunteer_id, second_org) is not None
+
+
+def test_role_checked_in_request_organization(client, db, make_org, make_user) -> None:
+    _, owner_id = make_org()
+    other_org, _ = make_org()
+    # Власник своєї організації, але лише учасник організації заявки
+    add_member(db, other_org, owner_id, OrgMemberRoleEnum.member)
+    volunteer_id = make_user()
+    request_id = make_request(db, other_org, volunteer_id)
+    sign_in(client, owner_id)
+
+    response = client.patch(review_url(request_id), json={"status": "accepted"})
+
+    assert response.status_code == 403
+    assert get_membership(db, volunteer_id, other_org) is None
 
 
 def test_project_request_not_supported(client, db, make_org, make_user) -> None:
@@ -379,4 +430,4 @@ def test_project_request_not_supported(client, db, make_org, make_user) -> None:
 
     assert response.status_code == 409
     assert get_request(db, request_id).status is JoinRequestStatusEnum.pending
-    assert get_membership(db, volunteer_id) is None
+    assert get_membership(db, volunteer_id, org_id) is None

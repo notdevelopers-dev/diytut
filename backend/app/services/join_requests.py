@@ -19,8 +19,8 @@ from app.models import (
     User,
 )
 from app.notifications import (
-    ORGANIZATION_JOIN_REQUESTS_LINK,
     create_notification,
+    organization_join_requests_link,
     organization_page_link,
 )
 from app.schemas.join_requests import JoinRequestCreate, JoinRequestReview
@@ -32,8 +32,8 @@ from app.services.organizations import (
 )
 
 PENDING_ORGANIZATION_REQUEST_INDEX = "uq_join_requests_pending_user_organization"
-# Обмеження, які порушує вставка учасника, що вже належить до організації
-MEMBERSHIP_CONSTRAINTS = ("uq_organization_members_user_id", "pk_organization_members")
+# Обмеження, яке порушує вставка учасника, що вже належить до цієї організації
+MEMBERSHIP_PRIMARY_KEY = "pk_organization_members"
 
 
 def _organization_requests():
@@ -69,7 +69,7 @@ async def _notify_owners(db_session: AsyncSession, organization: Organization) -
             NotificationTypeEnum.join_request_received,
             "Нова заявка на вступ",
             f"До організації «{organization.name}» надійшла нова заявка на вступ.",
-            link=ORGANIZATION_JOIN_REQUESTS_LINK,
+            link=organization_join_requests_link(organization.id),
         )
 
 
@@ -82,13 +82,9 @@ async def create_join_request(
     # Несхвалена організація (чернетка, відхилена, заблокована) для волонтера не існує (R-07)
     organization = await get_approved_organization(db_session, organization_id)
 
-    membership = await get_user_membership(db_session, user_id)
-    if membership is not None:
-        if membership.organization_id == organization.id:
-            raise errors.already_organization_member()
-        # Користувач може належати лише до однієї організації (organization_members.user_id
-        # унікальний), тож таку заявку неможливо було б прийняти
-        raise errors.already_has_organization()
+    # Членство в інших організаціях не заважає: користувач може належати до кількох
+    if await get_user_membership(db_session, user_id, organization.id) is not None:
+        raise errors.already_organization_member()
 
     if await _has_pending_request(db_session, user_id, organization.id):
         raise errors.join_request_already_pending()
@@ -131,9 +127,14 @@ async def get_my_request(
     return join_request
 
 
-async def require_request_reviewer(db_session: AsyncSession, user_id: int) -> OrganizationMember:
-    """Членство, з яким можна переглядати заявки на вступ до організації."""
-    membership = await require_membership(db_session, user_id)
+async def require_request_reviewer(
+    db_session: AsyncSession, user_id: int, organization_id: int | None = None
+) -> OrganizationMember:
+    """Членство, з яким можна переглядати заявки на вступ до організації.
+
+    Без organization_id — в організації користувача за замовчуванням.
+    """
+    membership = await require_membership(db_session, user_id, organization_id)
     if membership.role not in EDITOR_ROLES:
         raise errors.not_join_request_reviewer()
     return membership
@@ -192,15 +193,17 @@ def _notify_applicant(db_session: AsyncSession, join_request: JoinRequest) -> No
 async def review_join_request(
     db_session: AsyncSession, user_id: int, join_request_id: int, data: JoinRequestReview
 ) -> JoinRequest:
-    # Роль і статус організації рецензента не зміняться до кінця транзакції
-    membership = await get_user_membership(db_session, user_id, lock=True)
     join_request = await _lock_join_request(db_session, join_request_id)
+    if join_request is None:
+        raise errors.join_request_not_found()
+    # Членство саме в організації заявки, а не в організації за замовчуванням: у
+    # користувача їх може бути кілька. Блокування: роль і статус організації не
+    # зміняться до кінця транзакції
+    membership = await get_user_membership(
+        db_session, user_id, join_request.organization_id, lock=True
+    )
     # Чужі заявки для користувача не існують: так не видно, які id зайняті
-    if (
-        join_request is None
-        or membership is None
-        or membership.organization_id != join_request.organization_id
-    ):
+    if membership is None:
         raise errors.join_request_not_found()
     if membership.role not in EDITOR_ROLES:
         raise errors.not_join_request_reviewer()
@@ -213,10 +216,13 @@ async def review_join_request(
         raise errors.join_request_already_reviewed()
 
     if data.status == JoinRequestStatusEnum.accepted:
-        # Користувач може належати лише до однієї організації: за час розгляду заявки
-        # він міг створити власну чи вступити до іншої
-        if await get_user_membership(db_session, join_request.user_id) is not None:
-            raise errors.applicant_already_has_organization()
+        # Членство в інших організаціях не заважає; у цій волонтер міг з'явитися за час
+        # розгляду заявки
+        membership_here = await get_user_membership(
+            db_session, join_request.user_id, join_request.organization_id
+        )
+        if membership_here is not None:
+            raise errors.applicant_already_member()
         db_session.add(
             OrganizationMember(
                 organization_id=join_request.organization_id,
@@ -234,10 +240,10 @@ async def review_join_request(
     try:
         await db_session.commit()
     except IntegrityError as error:
-        # Паралельний запит встиг додати волонтера до організації
+        # Паралельний запит встиг додати волонтера до цієї організації
         await db_session.rollback()
-        if violated_constraint(error) in MEMBERSHIP_CONSTRAINTS:
-            raise errors.applicant_already_has_organization() from error
+        if violated_constraint(error) == MEMBERSHIP_PRIMARY_KEY:
+            raise errors.applicant_already_member() from error
         raise
 
     # updated_at обчислює БД

@@ -7,9 +7,9 @@ from sqlalchemy.orm import joinedload
 from app import errors
 from app.models import NotificationTypeEnum, Organization, OrgStatusEnum, RoleEnum, User
 from app.notifications import (
-    ORGANIZATION_DASHBOARD_LINK,
-    ORGANIZATION_EDIT_LINK,
     create_notification,
+    organization_dashboard_link,
+    organization_edit_link,
 )
 from app.schemas.admin import OrganizationReview
 
@@ -61,13 +61,13 @@ def _notify_creator(db_session: AsyncSession, organization: Organization) -> Non
     if organization.status == OrgStatusEnum.approved:
         type_ = NotificationTypeEnum.organization_approved
         title = "Організацію схвалено"
-        link = ORGANIZATION_DASHBOARD_LINK
+        link = organization_dashboard_link(organization.id)
         message = f"Організацію «{organization.name}» перевірено: тепер можна публікувати проєкти."
     else:
         type_ = NotificationTypeEnum.organization_rejected
         title = "Організацію відхилено"
         # Організація має виправити дані, тож одразу на редагування
-        link = ORGANIZATION_EDIT_LINK
+        link = organization_edit_link(organization.id)
         # Причина відхилення обов'язкова (OrganizationReview)
         message = (
             f"Організацію «{organization.name}» відхилено. Причина: {organization.review_comment}"

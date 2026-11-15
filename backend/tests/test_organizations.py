@@ -366,13 +366,20 @@ def test_role_and_status_are_checked_per_organization(
     assert update(client, description="Своє").status_code == 200
 
 
-@pytest.mark.parametrize("value", ["0", "-1", "abc", str(2**31)])
+@pytest.mark.parametrize("value", ["0", "-1", "abc", str(2**63)])
 def test_invalid_organization_id_is_rejected(
     client: TestClient, organization_id: int, value: str
 ) -> None:
     response = client.get("/api/organizations/me", params={"organization_id": value})
 
     assert response.status_code == 422
+
+
+def test_bigint_organization_id_is_accepted(client: TestClient, organization_id: int) -> None:
+    # id організацій — bigint: id понад межу integer валідний і просто не знаходиться
+    response = client.get("/api/organizations/me", params={"organization_id": str(2**31)})
+
+    assert response.status_code == 404
 
 
 def test_owner_reads_own_organization(client: TestClient, form: dict, organization_id: int) -> None:

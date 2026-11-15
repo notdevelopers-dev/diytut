@@ -19,19 +19,18 @@ from app.schemas.organizations import (
     OrganizationUpdate,
 )
 from app.schemas.projects import ProjectListItem
-from app.schemas.users import MAX_INT32
+from app.schemas.users import MAX_BIGINT, MAX_INT32
 from app.services import join_requests as join_requests_service
 from app.services import organizations as service
 
 router = APIRouter()
 
-# id організацій у БД — bigint
-OrganizationId = Annotated[int, Path(gt=0, le=2**63 - 1)]
+OrganizationId = Annotated[int, Path(gt=0, le=MAX_BIGINT)]
 
 
 # Яку з організацій користувача стосується запит до /me; без параметра — організація
 # за замовчуванням
-OwnOrganizationId = Annotated[int | None, Query(gt=0, le=MAX_INT32)]
+OwnOrganizationId = Annotated[int | None, Query(gt=0, le=MAX_BIGINT)]
 
 
 async def get_current_membership(
@@ -89,10 +88,13 @@ async def update_my_organization(
 async def list_my_organization_join_requests(
     db_session: DbSessionDep,
     user_id: CurrentUserId,
+    organization_id: OwnOrganizationId = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
 ) -> list[OrganizationJoinRequestRead]:
-    membership = await join_requests_service.require_request_reviewer(db_session, user_id)
+    membership = await join_requests_service.require_request_reviewer(
+        db_session, user_id, organization_id
+    )
     join_requests = await join_requests_service.list_pending_requests(
         db_session, membership.organization_id, limit=limit, offset=offset
     )
@@ -101,7 +103,7 @@ async def list_my_organization_join_requests(
 
 @router.get("/{organization_id}")
 async def get_organization(
-    organization_id: int, db_session: DbSessionDep
+    organization_id: OrganizationId, db_session: DbSessionDep
 ) -> OrganizationDetailRead:
     organization = await service.get_approved_organization(db_session, organization_id)
     projects = await service.list_published_projects(db_session, organization_id)

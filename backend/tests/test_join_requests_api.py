@@ -252,15 +252,29 @@ def test_member_cannot_join_own_organization(client, make_org, db) -> None:
     assert count_requests(db) == 0
 
 
-def test_member_of_other_organization_cannot_join(client, make_org, db) -> None:
+def test_member_of_other_organization_can_join(client, make_org) -> None:
+    # Користувач може належати до кількох організацій
     org_id, _ = make_org()
     _, other_owner_id = make_org()
     sign_in(client, other_owner_id)
 
     response = client.post(join_url(org_id), json={})
 
+    assert response.status_code == 201
+    assert response.json()["organization_id"] == org_id
+
+
+def test_member_of_this_organization_among_several_cannot_join(client, make_org, db) -> None:
+    org_id, _ = make_org()
+    _, user_id = make_org()
+    # Друга організація користувача, не за замовчуванням
+    add_member(db, org_id, user_id, OrgMemberRoleEnum.member)
+    sign_in(client, user_id)
+
+    response = client.post(join_url(org_id), json={})
+
     assert response.status_code == 409
-    assert response.json() == {"detail": "User already belongs to an organization"}
+    assert response.json() == {"detail": "User is already a member of this organization"}
     assert count_requests(db) == 0
 
 
@@ -283,7 +297,7 @@ def test_owner_notified_about_new_request(client, make_org, make_user, db) -> No
 
     [notification] = get_notifications(db, owner_id)
     assert notification.type is NotificationTypeEnum.join_request_received
-    assert notification.link == "/organization/join-requests"
+    assert notification.link == f"/organization/join-requests?organization_id={org_id}"
     assert "Фонд" in notification.message
     assert notification.is_read is False
     # Лише власнику (за задачею); волонтер сповіщення про власну дію не отримує
@@ -444,6 +458,46 @@ def test_dashboard_forbidden_for_member(client, make_org, make_user, db) -> None
 
     assert response.status_code == 403
     assert response.json() == {"detail": "Only the owner or an admin can manage join requests"}
+
+
+def test_dashboard_selects_organization(client, make_org, make_user, db) -> None:
+    default_org, owner_id = make_org()
+    second_org, _ = make_org()
+    add_member(db, second_org, owner_id, OrgMemberRoleEnum.owner)
+    for target in (default_org, second_org):
+        sign_in(client, make_user())
+        client.post(join_url(target), json={})
+    sign_in(client, owner_id)
+
+    default_page = client.get(DASHBOARD_URL).json()
+    second_page = client.get(DASHBOARD_URL, params={"organization_id": second_org}).json()
+
+    # Без параметра — організація за замовчуванням (найдавніша)
+    assert [item["organization_id"] for item in default_page] == [default_org]
+    assert [item["organization_id"] for item in second_page] == [second_org]
+
+
+def test_dashboard_role_checked_in_selected_organization(client, make_org, db) -> None:
+    _, owner_id = make_org()
+    other_org, _ = make_org()
+    add_member(db, other_org, owner_id, OrgMemberRoleEnum.member)
+    sign_in(client, owner_id)
+
+    # Власник своєї організації, але лише учасник обраної
+    response = client.get(DASHBOARD_URL, params={"organization_id": other_org})
+
+    assert response.status_code == 403
+
+
+def test_dashboard_foreign_organization(client, make_org) -> None:
+    _, owner_id = make_org()
+    other_org, _ = make_org()
+    sign_in(client, owner_id)
+
+    response = client.get(DASHBOARD_URL, params={"organization_id": other_org})
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "User does not belong to this organization"}
 
 
 def test_dashboard_without_organization(client, make_user) -> None:
