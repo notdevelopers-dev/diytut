@@ -76,7 +76,7 @@ export const ProjectsCatalogPage = () => {
         Актуальні проєкти
       </h1>
 
-      <div className="mb-5 flex flex-wrap items-center gap-3">
+      <div className="mb-5 flex flex-wrap items-start gap-3">
         <label className="block w-full sm:max-w-xs">
           <span className="sr-only">Пошук проєктів</span>
           <input
@@ -111,7 +111,7 @@ export const ProjectsCatalogPage = () => {
           <button
             type="button"
             onClick={resetFilters}
-            className="cursor-pointer rounded-[5px] bg-[#DCECFF] px-3 py-1.5 text-xs text-black hover:bg-main"
+            className="cursor-pointer rounded-[5px] bg-[#DCECFF] px-3 py-1.5 text-xs text-black hover:bg-main sm:mt-1"
           >
             ✕ Скинути фільтри
           </button>
