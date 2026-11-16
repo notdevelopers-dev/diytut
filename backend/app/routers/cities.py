@@ -1,15 +1,12 @@
 from fastapi import APIRouter
-from sqlalchemy import select
 
-from app.db import SessionDep
-from app.models.base import City
+from app.db import DbSessionDep
 from app.schemas.users import CityRead
+from app.services import cities as service
 
-router = APIRouter(prefix="/cities", tags=["cities"])
+router = APIRouter()
 
 
 @router.get("")
-async def list_cities(session: SessionDep) -> list[CityRead]:
-    # Українська абетка: без цього Є, І та Ї опиняються перед А
-    cities = await session.scalars(select(City).order_by(City.name.collate("uk-x-icu")))
-    return [CityRead.model_validate(city) for city in cities]
+async def list_cities(db_session: DbSessionDep) -> list[CityRead]:
+    return [CityRead.model_validate(city) for city in await service.list_cities(db_session)]

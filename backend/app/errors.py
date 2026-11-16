@@ -1,0 +1,165 @@
+from fastapi import HTTPException, status
+
+
+def field_error(status_code: int, field: str, error_type: str, message: str) -> HTTPException:
+    """Помилка поля в тому ж форматі, що й помилки валідації FastAPI (422)."""
+    return HTTPException(
+        status_code, [{"type": error_type, "loc": ["body", field], "msg": message}]
+    )
+
+
+def not_authenticated() -> HTTPException:
+    return HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
+
+
+def registration_expired() -> HTTPException:
+    return HTTPException(
+        status.HTTP_401_UNAUTHORIZED, "Registration expired, sign in with Google again"
+    )
+
+
+def dev_login_disabled() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "Not Found")
+
+
+def email_required() -> HTTPException:
+    return field_error(
+        status.HTTP_422_UNPROCESSABLE_CONTENT, "email", "email_required", "Email is required"
+    )
+
+
+def user_not_found() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+
+def user_already_registered() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "User is already registered")
+
+
+def nickname_taken() -> HTTPException:
+    return field_error(
+        status.HTTP_409_CONFLICT, "nickname", "nickname_taken", "Nickname is already taken"
+    )
+
+
+def city_not_found() -> HTTPException:
+    return field_error(
+        status.HTTP_422_UNPROCESSABLE_CONTENT, "city_id", "city_not_found", "City not found"
+    )
+
+
+def no_organization() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "User does not belong to an organization")
+
+
+def not_organization_member() -> HTTPException:
+    # 404, а не 403: чужа організація для запиту не відрізняється від неіснуючої
+    return HTTPException(status.HTTP_404_NOT_FOUND, "User does not belong to this organization")
+
+
+def edrpou_taken() -> HTTPException:
+    return field_error(
+        status.HTTP_409_CONFLICT,
+        "edrpou",
+        "edrpou_taken",
+        "Organization with this EDRPOU code is already registered",
+    )
+
+
+def not_organization_editor() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Only the owner or an admin can edit the organization"
+    )
+
+
+def organization_blocked() -> HTTPException:
+    return HTTPException(status.HTTP_403_FORBIDDEN, "Organization is blocked")
+
+
+def not_platform_admin() -> HTTPException:
+    return HTTPException(status.HTTP_403_FORBIDDEN, "Administrator access required")
+
+
+def notification_not_found() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "Notification not found")
+
+
+def organization_not_found() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "Organization not found")
+
+
+def organization_already_reviewed() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "Organization request has already been reviewed")
+
+
+def invalid_period(message: str) -> HTTPException:
+    return HTTPException(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        [{"type": "invalid_period", "loc": ["query", "date_from"], "msg": message}],
+    )
+
+
+def project_not_found() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
+
+
+def membership_not_found(organization_id: int | None) -> HTTPException:
+    """404 для профілю організації: користувач без організацій або не учасник названої."""
+    return no_organization() if organization_id is None else not_organization_member()
+
+
+def project_requires_organization() -> HTTPException:
+    # 403, а не 404 як у no_organization(): дія заборонена, а не ресурс відсутній
+    return HTTPException(status.HTTP_403_FORBIDDEN, "User does not belong to an organization")
+
+
+def project_requires_membership() -> HTTPException:
+    return HTTPException(status.HTTP_403_FORBIDDEN, "User does not belong to this organization")
+
+
+def not_project_manager() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Only organization owner or admin can create projects"
+    )
+
+
+def organization_not_approved() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Only approved organizations can create projects"
+    )
+
+
+def already_organization_member() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "User is already a member of this organization")
+
+
+def join_request_already_pending() -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT, "Join request to this organization is already pending"
+    )
+
+
+def join_request_not_found() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "Join request not found")
+
+
+def not_join_request_reviewer() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Only the owner or an admin can manage join requests"
+    )
+
+
+def join_request_already_reviewed() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "Join request has already been reviewed")
+
+
+def project_join_request_not_supported() -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT, "Project applications cannot be reviewed with this endpoint"
+    )
+
+
+def applicant_already_member() -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT, "Volunteer is already a member of this organization"
+    )

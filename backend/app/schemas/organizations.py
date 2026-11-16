@@ -10,7 +10,8 @@ from pydantic import (
     field_validator,
 )
 
-from app.models.base import OrganizationMember, OrgMemberRoleEnum, OrgStatusEnum
+from app.models import OrganizationMember, OrgMemberRoleEnum, OrgStatusEnum
+from app.schemas.projects import ProjectListItem
 from app.schemas.users import CityId, Phone, _empty_to_none
 
 EDRPOU_LENGTH = 8
@@ -144,3 +145,22 @@ class OrganizationMembership(BaseModel):
             status=organization.status,
             role=membership.role,
         )
+
+
+class OrganizationListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    email: str
+    phone: str
+    city_id: int
+    description: str | None
+    status: OrgStatusEnum
+    created_at: datetime
+
+
+class OrganizationDetailRead(OrganizationRead):
+    """Публічна сторінка організації (R-16): профіль і опубліковані проєкти."""
+
+    projects: list[ProjectListItem] = []

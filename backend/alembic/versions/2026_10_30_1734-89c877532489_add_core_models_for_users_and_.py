@@ -139,3 +139,8 @@ def downgrade() -> None:
     op.drop_table("users")
     op.drop_table("cities")
     # ### end Alembic commands ###
+    # drop_table не видаляє типи enum, а без цього повторний upgrade впаде на CREATE TYPE
+    sa.Enum(name="orgmemberroleenum").drop(op.get_bind())
+    sa.Enum(name="orgstatusenum").drop(op.get_bind())
+    sa.Enum(name="roleenum").drop(op.get_bind())
+    sa.Enum(name="genderenum").drop(op.get_bind())

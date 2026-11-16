@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from app import auth
-from app.db import engine, get_session
+from app.db import engine, get_db_session
 from app.main import app
 
 GOOGLE_CLAIMS = {
@@ -66,7 +66,7 @@ def client(_shared_client: TestClient, db_session: AsyncSession) -> Iterator[Tes
     async def get_test_session() -> AsyncIterator[AsyncSession]:
         yield db_session
 
-    app.dependency_overrides[get_session] = get_test_session
+    app.dependency_overrides[get_db_session] = get_test_session
     yield _shared_client
     app.dependency_overrides.clear()
     _shared_client.cookies.clear()
