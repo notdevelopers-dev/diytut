@@ -142,3 +142,5 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 }
 
  export default AuthContext
+
+export { useAuth } from './useAuth.ts'
