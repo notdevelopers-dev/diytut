@@ -1,20 +1,29 @@
-import React, { useState } from 'react';
-import { Search, ChevronDown, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react'
+import {
+  Search,
+  ChevronDown,
+  Check,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react'
 
 interface OrgRequest {
-  id: string;
-  volunteerName: string;
-  email: string;
-  requestType: string;
-  date: string;
-  time: string;
-  status: 'pending' | 'approved' | 'rejected';
+  id: string
+  volunteerName: string
+  email: string
+  requestType: string
+  date: string
+  time: string
+  status: 'pending' | 'approved' | 'rejected'
 }
 
 export const AdminPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'all' | 'unread' | 'pending' | 'processed'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [activeTab, setActiveTab] = useState<
+    'all' | 'unread' | 'pending' | 'processed'
+  >('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   // Початкові дані (або заміна на виклик API бекенду)
   const [requests, setRequests] = useState<OrgRequest[]>([
@@ -54,34 +63,35 @@ export const AdminPage: React.FC = () => {
       time: '14:05',
       status: 'rejected',
     },
-  ]);
+  ])
 
   const handleDecision = (id: string, decision: 'approved' | 'rejected') => {
-    setRequests(prev =>
-      prev.map(req => (req.id === id ? { ...req, status: decision } : req))
-    );
-  };
+    setRequests((prev) =>
+      prev.map((req) => (req.id === id ? { ...req, status: decision } : req)),
+    )
+  }
 
-  const filteredRequests = requests.filter(req => {
+  const filteredRequests = requests.filter((req) => {
     // Таби (поки що "Непрочитані" = "На розгляді", бо окремого поля немає)
     const matchesTab =
       activeTab === 'all' ||
-      ((activeTab === 'pending' || activeTab === 'unread') && req.status === 'pending') ||
-      (activeTab === 'processed' && req.status !== 'pending');
+      ((activeTab === 'pending' || activeTab === 'unread') &&
+        req.status === 'pending') ||
+      (activeTab === 'processed' && req.status !== 'pending')
 
     // Випадаючий список статусу
-    const matchesStatus = statusFilter === 'all' || req.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' || req.status === statusFilter
 
     // Пошук за ім'ям, email або типом запиту
-    const query = searchQuery.trim().toLowerCase();
+    const query = searchQuery.trim().toLowerCase()
     const matchesSearch =
       query === '' ||
       req.volunteerName.toLowerCase().includes(query) ||
       req.email.toLowerCase().includes(query) ||
-      req.requestType.toLowerCase().includes(query);
+      req.requestType.toLowerCase().includes(query)
 
-    return matchesTab && matchesStatus && matchesSearch;
-  });
+    return matchesTab && matchesStatus && matchesSearch
+  })
 
   return (
     <div className="min-h-screen bg-[#F7FBFF] text-black font-sans p-6">
@@ -95,7 +105,9 @@ export const AdminPage: React.FC = () => {
             <span>✔ Позначити все прочитаним</span>
           </button>
         </div>
-        <p className="text-sm text-[#8B99AA] mt-2">2 нові запити чекають на ваш розгляд</p>
+        <p className="text-sm text-[#8B99AA] mt-2">
+          2 нові запити чекають на ваш розгляд
+        </p>
       </div>
 
       {/* Таби */}
@@ -105,7 +117,7 @@ export const AdminPage: React.FC = () => {
           { key: 'unread', label: 'Непрочитані', count: 2 },
           { key: 'pending', label: 'На розгляді', count: 2 },
           { key: 'processed', label: 'Опрацьовані', count: 2 },
-        ].map(tab => (
+        ].map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key as typeof activeTab)}
@@ -116,7 +128,9 @@ export const AdminPage: React.FC = () => {
             }`}
           >
             {tab.label}{' '}
-            <span className="ml-1 px-1.5 py-0.5 bg-white/60 rounded-full text-xs">{tab.count}</span>
+            <span className="ml-1 px-1.5 py-0.5 bg-white/60 rounded-full text-xs">
+              {tab.count}
+            </span>
           </button>
         ))}
       </div>
@@ -132,7 +146,7 @@ export const AdminPage: React.FC = () => {
             type="text"
             placeholder="Пошук за ім'ям або запитом"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 bg-transparent px-3 text-sm font-bold placeholder:text-[#8B99AA] placeholder:font-bold focus:outline-none"
           />
         </div>
@@ -140,7 +154,7 @@ export const AdminPage: React.FC = () => {
         <div className="relative">
           <select
             value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
+            onChange={(e) => setStatusFilter(e.target.value)}
             className="appearance-none bg-[#DCECFF] border border-[#79B7FF] rounded-lg px-4 py-2.5 pr-9 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#79B7FF]"
           >
             <option value="all">Статус: усі</option>
@@ -165,7 +179,7 @@ export const AdminPage: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#DCECFF]">
-            {filteredRequests.map(req => (
+            {filteredRequests.map((req) => (
               <tr key={req.id} className="hover:bg-[#F7FBFF] transition">
                 <td className="py-4 px-4">
                   <div className="font-bold">{req.volunteerName}</div>
@@ -232,7 +246,9 @@ export const AdminPage: React.FC = () => {
             <button className="p-1.5 rounded-lg border border-[#C2D4EA] text-[#8B99AA] cursor-not-allowed">
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="px-3 py-1 bg-[#79B7FF] text-black rounded-lg text-xs font-bold">1</span>
+            <span className="px-3 py-1 bg-[#79B7FF] text-black rounded-lg text-xs font-bold">
+              1
+            </span>
             <button className="p-1.5 rounded-lg border border-[#C2D4EA] text-[#8B99AA] cursor-not-allowed">
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -240,7 +256,7 @@ export const AdminPage: React.FC = () => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default AdminPage;
+export default AdminPage
