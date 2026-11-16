@@ -5,7 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app import errors
-from app.models import Organization, OrgStatusEnum, RoleEnum, User
+from app.models import NotificationTypeEnum, Organization, OrgStatusEnum, RoleEnum, User
+from app.notifications import (
+    create_notification,
+    organization_dashboard_link,
+    organization_edit_link,
+)
 from app.schemas.admin import OrganizationReview
 
 
@@ -52,6 +57,24 @@ async def get_organization_request(db_session: AsyncSession, organization_id: in
     return organization
 
 
+def _notify_creator(db_session: AsyncSession, organization: Organization) -> None:
+    if organization.status == OrgStatusEnum.approved:
+        type_ = NotificationTypeEnum.organization_approved
+        title = "Організацію схвалено"
+        link = organization_dashboard_link(organization.id)
+        message = f"Організацію «{organization.name}» перевірено: тепер можна публікувати проєкти."
+    else:
+        type_ = NotificationTypeEnum.organization_rejected
+        title = "Організацію відхилено"
+        # Організація має виправити дані, тож одразу на редагування
+        link = organization_edit_link(organization.id)
+        # Причина відхилення обов'язкова (OrganizationReview)
+        message = (
+            f"Організацію «{organization.name}» відхилено. Причина: {organization.review_comment}"
+        )
+    create_notification(db_session, organization.created_by, type_, title, message, link=link)
+
+
 async def review_organization(
     db_session: AsyncSession, admin_id: int, organization_id: int, review: OrganizationReview
 ) -> Organization:
@@ -71,5 +94,7 @@ async def review_organization(
     organization.reviewed_by = admin_id
     organization.reviewed_at = datetime.now(UTC)
     organization.review_comment = review.comment
+    _notify_creator(db_session, organization)
+    # Рішення й сповіщення про нього зберігаються разом
     await db_session.commit()
     return await get_organization_request(db_session, organization_id)

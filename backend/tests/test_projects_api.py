@@ -13,6 +13,7 @@ from app.models import (
     OrgMemberRoleEnum,
     OrgStatusEnum,
     Project,
+    ProjectCategoryEnum,
     ProjectStatusEnum,
     User,
 )
@@ -31,6 +32,7 @@ def project_payload(**changes) -> dict:
         "is_online": True,
         "capacity": 10,
         "volunteer_hours": "1.0",
+        "categories": ["ecology"],
     } | changes
 
 
@@ -225,6 +227,70 @@ def test_create_project_pending_organization_403(
     assert response.json()["detail"] == "Only approved organizations can create projects"
 
 
+def _add_organization(db, owner_id: int, city_id: int, status: OrgStatusEnum) -> int:
+    async def create(session) -> int:
+        org = Organization(
+            name="Другий фонд",
+            email="second@example.com",
+            phone="+380679998877",
+            city_id=city_id,
+            status=status,
+            created_by=owner_id,
+        )
+        org.members.append(OrganizationMember(user_id=owner_id, role=OrgMemberRoleEnum.owner))
+        session.add(org)
+        await session.flush()
+        return org.id
+
+    return db(create)
+
+
+def test_create_project_for_chosen_organization_201(
+    client: TestClient, db, cities: tuple[int, int], org_with_members
+) -> None:
+    org_id, owner_id, _, _ = org_with_members
+    second_org_id = _add_organization(db, owner_id, cities[0], OrgStatusEnum.approved)
+    sign_in(client, owner_id)
+
+    chosen = client.post("/api/projects", json=project_payload(organization_id=second_org_id))
+    default = client.post("/api/projects", json=project_payload())
+
+    assert chosen.status_code == 201
+    assert chosen.json()["organization_id"] == second_org_id
+    # Без organization_id проєкт створюється в найдавнішій організації користувача
+    assert default.status_code == 201
+    assert default.json()["organization_id"] == org_id
+
+
+def test_create_project_checks_status_of_chosen_organization_403(
+    client: TestClient, db, cities: tuple[int, int], org_with_members
+) -> None:
+    # Схвалена перша організація не дає права публікувати від імені несхваленої другої
+    _, owner_id, _, _ = org_with_members
+    pending_org_id = _add_organization(db, owner_id, cities[0], OrgStatusEnum.pending)
+    sign_in(client, owner_id)
+
+    response = client.post("/api/projects", json=project_payload(organization_id=pending_org_id))
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only approved organizations can create projects"
+
+
+def test_create_project_for_foreign_organization_403(
+    client: TestClient, db, cities: tuple[int, int], make_user, org_with_members
+) -> None:
+    # Власник іншої схваленої організації не може створити проєкт у чужій
+    org_id, _, _, _ = org_with_members
+    stranger_id = make_user()
+    _add_organization(db, stranger_id, cities[0], OrgStatusEnum.approved)
+    sign_in(client, stranger_id)
+
+    response = client.post("/api/projects", json=project_payload(organization_id=org_id))
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "User does not belong to this organization"
+
+
 def test_create_project_authorized_owner_201_required_fields_only(
     client: TestClient, org_with_members: tuple[int, int, int, int]
 ) -> None:
@@ -242,6 +308,8 @@ def test_create_project_authorized_owner_201_required_fields_only(
     assert data["is_online"] is True
     assert data["capacity"] == 10
     assert float(data["volunteer_hours"]) == 1.0
+    assert data["categories"] == ["ecology"]
+    assert data["tags"] == []
     assert data["starts_at"] is not None
     assert data["ends_at"] is not None
     assert data["created_at"] is not None
@@ -269,6 +337,7 @@ def test_create_project_authorized_admin_201_full_payload(
         "volunteer_hours": "3.5",
         "is_adult_only": False,
         "experience_level": "amateur",
+        "categories": ["education", "children"],
         "tags": ["освіта", "робототехніка"],
     }
     response = client.post("/api/projects", json=payload)
@@ -283,8 +352,27 @@ def test_create_project_authorized_admin_201_full_payload(
     assert data["capacity"] == 30
     assert float(data["volunteer_hours"]) == 3.5
     assert data["experience_level"] == "amateur"
+    assert data["categories"] == ["education", "children"]
     assert data["tags"] == ["освіта", "робототехніка"]
     assert data["status"] == "published"
+
+
+def test_create_project_normalizes_tags_and_categories(
+    client: TestClient, org_with_members: tuple[int, int, int, int]
+) -> None:
+    _, owner_id, _, _ = org_with_members
+    sign_in(client, owner_id)
+
+    payload = project_payload(
+        categories=["idp", "education", "idp"],
+        tags=["#Толока", " толока ", "Пам'ять", "пам’ять", "Великий  день", "#НМТ-2026"],
+    )
+    response = client.post("/api/projects", json=payload)
+    assert response.status_code == 201
+    data = response.json()
+    # Дублікати відкидаються, порядок першої появи зберігається
+    assert data["categories"] == ["idp", "education"]
+    assert data["tags"] == ["толока", "памʼять", "великий_день", "нмт-2026"]
 
 
 def test_create_project_nonexistent_city_422(
@@ -324,6 +412,21 @@ def test_create_project_nonexistent_city_422(
         # Офлайн-подія без міста чи адреси не перетворюється мовчки на онлайн
         project_payload(is_online=False),
         project_payload(is_online=False, address="вул. Франка, 10"),
+        # Сфера обов'язкова, зі сталого набору, не більше двох
+        payload_without("categories"),
+        project_payload(categories=[]),
+        project_payload(categories=["space"]),
+        project_payload(categories=["ecology", "idp", "animals"]),
+        # Статус проєкту задає сервер, а не клієнт
+        project_payload(status="draft"),
+        # Хештеги: не порожні, без спецсимволів, до 30 символів, не більше п'яти
+        project_payload(tags=[""]),
+        project_payload(tags=["#"]),
+        project_payload(tags=["тег!"]),
+        project_payload(tags=["a/b"]),
+        project_payload(tags=["_тег"]),
+        project_payload(tags=["т" * 31]),
+        project_payload(tags=[f"тег{i}" for i in range(6)]),
     ],
 )
 def test_create_project_validation_errors(
@@ -570,6 +673,141 @@ def test_list_projects_filter_by_city(
     assert res_empty == []
 
 
+def test_list_projects_filter_by_tags(
+    client: TestClient, db, org_with_members: tuple[int, int, int, int]
+) -> None:
+    org_id, _, _, _ = org_with_members
+
+    async def seed(session) -> None:
+        session.add_all(
+            [
+                _project(org_id, title="Екологія", tags=["екологія"]),
+                _project(org_id, title="Діти", tags=["діти", "освіта"]),
+                _project(org_id, title="Тварини", tags=["тварини"]),
+                _project(org_id, title="Без тегів", tags=[]),
+                _project(
+                    org_id,
+                    title="Чернетка з тегом",
+                    tags=["екологія"],
+                    status=ProjectStatusEnum.draft,
+                ),
+            ]
+        )
+
+    db(seed)
+
+    def titles(query: str) -> set[str]:
+        res = client.get(f"/api/projects?{query}")
+        assert res.status_code == 200
+        return {project["title"] for project in res.json()}
+
+    assert titles("tags=екологія") == {"Екологія"}
+    # Кілька тегів: будь-який із них
+    assert titles("tags=екологія&tags=освіта") == {"Екологія", "Діти"}
+    assert titles("tags=невідомий") == set()
+    # Порожні й пробільні значення не фільтрують
+    assert titles("tags=&tags=%20") == {"Екологія", "Діти", "Тварини", "Без тегів"}
+    assert titles("tags=%20діти%20") == {"Діти"}
+    # Фільтр нормалізує хештег так само, як збереження
+    assert titles("tags=%23Екологія") == {"Екологія"}
+
+
+def test_list_projects_filter_by_tags_and_city(
+    client: TestClient, db, cities: tuple[int, int], org_with_members: tuple[int, int, int, int]
+) -> None:
+    c1, c2 = cities
+    org_id, _, _, _ = org_with_members
+
+    async def seed(session) -> None:
+        offline = {"is_online": False, "address": "вул. Шевченка, 1"}
+        session.add_all(
+            [
+                _project(org_id, title="Львів", tags=["діти"], city_id=c1, **offline),
+                _project(org_id, title="Київ", tags=["діти"], city_id=c2, **offline),
+            ]
+        )
+
+    db(seed)
+
+    res = client.get(f"/api/projects?tags=діти&city_id={c1}").json()
+    assert [project["title"] for project in res] == ["Львів"]
+
+
+def test_list_projects_too_many_tags_422(client: TestClient) -> None:
+    query = "&".join(f"tags=t{i}" for i in range(21))
+    assert client.get(f"/api/projects?{query}").status_code == 422
+
+
+def test_list_projects_too_long_tag_422(client: TestClient) -> None:
+    assert client.get(f"/api/projects?tags={'т' * 101}").status_code == 422
+
+
+def test_list_projects_filter_by_categories(
+    client: TestClient, db, org_with_members: tuple[int, int, int, int]
+) -> None:
+    org_id, _, _, _ = org_with_members
+
+    async def seed(session) -> None:
+        session.add_all(
+            [
+                _project(org_id, title="Толока", categories=["ecology"], tags=["толока"]),
+                _project(org_id, title="Уроки", categories=["education", "idp"]),
+                _project(org_id, title="Притулок", categories=["animals"], tags=["толока"]),
+                _project(
+                    org_id,
+                    title="Чернетка",
+                    categories=["ecology"],
+                    status=ProjectStatusEnum.draft,
+                ),
+            ]
+        )
+
+    db(seed)
+
+    def titles(query: str) -> set[str]:
+        res = client.get(f"/api/projects?{query}")
+        assert res.status_code == 200
+        return {project["title"] for project in res.json()}
+
+    assert titles("categories=ecology") == {"Толока"}
+    assert titles("categories=idp") == {"Уроки"}
+    # Кілька сфер: будь-яка з них
+    assert titles("categories=ecology&categories=idp") == {"Толока", "Уроки"}
+    assert titles("categories=elderly") == set()
+    # Сфера й хештег разом: обидві умови
+    assert titles("categories=animals&tags=толока") == {"Притулок"}
+    # Повтор сфери не змінює результат
+    assert titles("categories=ecology&categories=ecology") == {"Толока"}
+
+    item = client.get("/api/projects?categories=idp").json()[0]
+    assert item["categories"] == ["education", "idp"]
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "categories=space",
+        "categories=",
+        "categories=Ecology",
+        # Більше значень, ніж сфер загалом
+        "&".join(["categories=ecology"] * (len(ProjectCategoryEnum) + 1)),
+    ],
+)
+def test_list_projects_invalid_categories_422(client: TestClient, query: str) -> None:
+    assert client.get(f"/api/projects?{query}").status_code == 422
+
+
+def test_list_categories(client: TestClient) -> None:
+    response = client.get("/api/categories")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "public, max-age=3600"
+    data = response.json()
+    assert [item["key"] for item in data] == [category.value for category in ProjectCategoryEnum]
+    assert data[0] == {"key": "ecology", "name": "Екологія"}
+    assert data[-1] == {"key": "other", "name": "Інше"}
+    assert all(item["name"] for item in data)
+
+
 def test_list_projects_invalid_city_id(client: TestClient) -> None:
     assert client.get("/api/projects?city_id=0").status_code == 422
     assert client.get("/api/projects?city_id=-1").status_code == 422
@@ -676,6 +914,34 @@ def test_get_project_details_404_for_cancelled(
     response = client.get(f"/api/projects/{cancelled_id}")
     assert response.status_code == 404
     assert response.json()["detail"] == "Project not found"
+
+
+@pytest.mark.parametrize("project_id", ["0", "-1", str(2**63), "abc"])
+def test_get_project_details_invalid_id_422(client: TestClient, project_id: str) -> None:
+    # Без межі id понад bigint падав би з 500 у БД
+    assert client.get(f"/api/projects/{project_id}").status_code == 422
+
+
+@pytest.mark.parametrize("value", [0, 2**63])
+def test_create_project_invalid_organization_id_422(
+    client: TestClient, org_with_members, value: int
+) -> None:
+    _, owner_id, _, _ = org_with_members
+    sign_in(client, owner_id)
+
+    response = client.post("/api/projects", json=project_payload(organization_id=value))
+
+    assert response.status_code == 422
+
+
+def test_create_project_bigint_organization_id_403(client: TestClient, org_with_members) -> None:
+    # id організацій — bigint: id понад межу integer валідний, але організація не своя
+    _, owner_id, _, _ = org_with_members
+    sign_in(client, owner_id)
+
+    response = client.post("/api/projects", json=project_payload(organization_id=2**31))
+
+    assert response.status_code == 403
 
 
 def test_get_project_details_404_for_nonexistent(client: TestClient) -> None:

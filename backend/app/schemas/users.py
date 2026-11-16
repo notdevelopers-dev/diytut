@@ -16,8 +16,12 @@ from app.models import GenderEnum, RoleEnum
 
 MIN_AGE = 18
 MAX_AGE = 120
-# Найбільше значення integer у PostgreSQL; більший id БД відхилила б з помилкою 500
+# Межі id і чисел у запитах мають відповідати типу колонки: значення, більше за неї,
+# asyncpg не зможе передати в БД, і запит упаде з 500 замість 422.
+# Найбільше значення integer у PostgreSQL: id міст, offset
 MAX_INT32 = 2**31 - 1
+# Найбільше значення bigint: id користувачів, організацій, проєктів та решти таблиць
+MAX_BIGINT = 2**63 - 1
 PHONE_DIGITS = re.compile(r"^(?:\+?38)?0(\d{9})$")
 
 

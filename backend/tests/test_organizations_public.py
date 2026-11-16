@@ -312,6 +312,12 @@ def test_get_organization_details_projects_isolated_by_organization(
     assert res2.json()["projects"][0]["title"] == "Проєкт 2"
 
 
+@pytest.mark.parametrize("organization_id", ["0", "-1", str(2**63), "abc"])
+def test_get_organization_details_invalid_id_422(client: TestClient, organization_id: str) -> None:
+    # Без межі id понад bigint падав би з 500 у БД
+    assert client.get(f"/api/organizations/{organization_id}").status_code == 422
+
+
 def test_get_organization_details_404_for_nonexistent(client: TestClient) -> None:
     response = client.get("/api/organizations/99999999")
     assert response.status_code == 404

@@ -13,7 +13,7 @@ from app.schemas.admin import (
     OrganizationRequestPage,
     OrganizationReview,
 )
-from app.schemas.users import MAX_INT32
+from app.schemas.users import MAX_BIGINT, MAX_INT32
 from app.services import admin as service
 from app.services import logins as logins_service
 
@@ -23,7 +23,7 @@ async def get_current_admin_id(db_session: DbSessionDep, user_id: CurrentUserId)
 
 
 CurrentAdminId = Annotated[int, Depends(get_current_admin_id)]
-OrganizationId = Annotated[int, Path(gt=0, le=2**63 - 1)]
+OrganizationId = Annotated[int, Path(gt=0, le=MAX_BIGINT)]
 
 # Кожен ендпоінт адмін-панелі доступний лише адміністраторам платформи
 router = APIRouter(dependencies=[Depends(get_current_admin_id)])
