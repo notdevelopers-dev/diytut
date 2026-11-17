@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/hooks'
 import { useCities } from '@/features/cities'
 import { useMyOrganization } from '@/features/organizations/hooks'
@@ -9,11 +9,9 @@ import {
   getOrgRoleLabel,
   getOrgStatusLabel,
 } from '@/features/organizations/utils'
-import {
-  inputClass,
-  selectClass,
-  textareaClass,
-} from '@/components/ui/formStyles'
+import logoutIcon from '@/assets/icons/menu/logout.svg'
+import organizationIcon from '@/assets/icons/menu/organization.svg'
+import settingsIcon from '@/assets/icons/menu/settings.svg'
 import { getApiErrorMessage, getErrorStatus } from '@/lib/errors'
 import { isValidPhone, normalizePhone } from '@/lib/phone'
 import type { Gender, VolunteerProfile } from '../api'
@@ -84,7 +82,7 @@ const Chip = ({
   </span>
 )
 
-/** Значення поля у режимі перегляду. */
+/** Значення поля у режимі перегляду: коротка «пігулка» фіксованої ширини, як у макеті. */
 const ValuePill = ({
   children,
   multiline = false,
@@ -93,8 +91,8 @@ const ValuePill = ({
   multiline?: boolean
 }) => (
   <div
-    className={`w-full rounded-[5px] border border-[#DCECFF] bg-white px-3 text-xs text-gray-500 ${
-      multiline ? 'min-h-8 whitespace-pre-wrap py-2' : 'flex h-8 items-center'
+    className={`w-full max-w-[317px] rounded-[5px] border border-[#DCECFF] bg-white px-3 text-xs text-gray-500 ${
+      multiline ? 'min-h-6 whitespace-pre-wrap py-1' : 'flex h-6 items-center'
     }`}
   >
     {children}
@@ -117,15 +115,15 @@ const FieldRow = ({
   hintIsError?: boolean
   children: ReactNode
 }) => (
-  <div className="grid gap-1 sm:grid-cols-[11rem_1fr] sm:items-start sm:gap-4">
+  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-4">
     <label
       htmlFor={htmlFor}
-      className="flex h-8 items-center text-xs font-bold text-black"
+      className="flex h-6 shrink-0 items-center text-sm font-bold whitespace-nowrap text-black"
     >
       {label}
       {required && <span className="ml-1 text-red-500">*</span>}
     </label>
-    <div className="flex flex-col gap-1">
+    <div className="flex w-full flex-col gap-1">
       {children}
       {hint && (
         <span
@@ -142,12 +140,14 @@ const FieldRow = ({
 const ActionButton = ({
   children,
   icon,
+  iconSrc,
   type = 'button',
   onClick,
   disabled = false,
 }: {
   children: ReactNode
   icon?: string
+  iconSrc?: string
   type?: 'button' | 'submit'
   onClick?: () => void
   disabled?: boolean
@@ -156,8 +156,9 @@ const ActionButton = ({
     type={type}
     onClick={onClick}
     disabled={disabled}
-    className="flex h-7 min-w-44 cursor-pointer items-center justify-center gap-2 rounded-sm bg-[#DCECFF] px-4 text-xs font-medium text-black transition-colors hover:bg-[#cde2fe] disabled:cursor-not-allowed disabled:opacity-50"
+    className="flex h-[22px] min-w-[195px] cursor-pointer items-center gap-2 rounded-[5px] bg-[#DCECFF] px-2.5 text-xs text-black transition-colors hover:bg-[#cde2fe] disabled:cursor-not-allowed disabled:opacity-50"
   >
+    {iconSrc && <img src={iconSrc} alt="" width={16} height={16} />}
     {icon && (
       <span aria-hidden="true" className="text-main">
         {icon}
@@ -170,6 +171,7 @@ const ActionButton = ({
 export const ProfilePage = () => {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const { cities, error: citiesError } = useCities()
 
   // Повні дані анкети: у /auth/me немає міста, тому тягнемо їх з GET /users/me
@@ -217,6 +219,26 @@ export const ProfilePage = () => {
     setIsSaved(false)
     setIsEditing(true)
   }
+
+  // «Редагувати профіль» у меню відкриває сторінку одразу в режимі редагування:
+  // navigate('/profile', { state: { edit: true } }). Вмикаємо його один раз на кожен
+  // такий перехід, щойно є дані анкети (оновлення стану під час рендеру, без ефекту)
+  const wantsEdit = Boolean((location.state as { edit?: boolean } | null)?.edit)
+  const [handledEditKey, setHandledEditKey] = useState<string | null>(null)
+  if (wantsEdit && profile && handledEditKey !== location.key) {
+    setHandledEditKey(location.key)
+    setForm(toForm(profile))
+    setPhoneError(null)
+    setFormError(null)
+    setIsSaved(false)
+    setIsEditing(true)
+  }
+  // Прибираємо прапорець з історії, щоб оновлення сторінки не відкривало форму знову
+  useEffect(() => {
+    if (wantsEdit && handledEditKey === location.key) {
+      void navigate('/profile', { replace: true, state: null })
+    }
+  }, [wantsEdit, handledEditKey, location.key, navigate])
 
   const cancelEditing = () => {
     setPhoneError(null)
@@ -290,13 +312,14 @@ export const ProfilePage = () => {
   return (
     <div className="flex flex-col">
       {/* Жовта смуга із заголовком сторінки (макет «volunteer info page») */}
-      <div className="border-y border-info bg-cream px-4 py-2 sm:px-8">
+      <div className="border-y border-info bg-cream px-3 py-1">
         <h1 className="text-3xl font-normal text-black">Особистий кабінет</h1>
       </div>
 
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6 sm:px-8">
+      {/* Макет: увесь вміст притиснутий до лівого краю (відступ ~13px) */}
+      <div className="flex w-full flex-col gap-5 px-3 py-4">
         {/* Аватар, ім’я, пошта й роль */}
-        <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
+        <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
           <div className="flex size-32 shrink-0 items-center justify-center rounded-full bg-main text-white">
             <svg
               width="96"
@@ -309,7 +332,7 @@ export const ProfilePage = () => {
               <path d="M3.5 21c0-4.2 3.8-7 8.5-7s8.5 2.8 8.5 7z" />
             </svg>
           </div>
-          <div className="flex flex-col items-center gap-3 sm:items-start">
+          <div className="flex flex-col items-start gap-3">
             <Chip>{user?.name ?? 'Користувач'}</Chip>
             <Chip>{user?.email}</Chip>
             <Chip tone="role">{roleLabel}</Chip>
@@ -338,156 +361,189 @@ export const ProfilePage = () => {
             {profileError}
           </div>
         ) : isEditing && form ? (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {formError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-xs font-medium text-red-700">
+              <div className="rounded-lg bg-red-100 p-2.5 text-center text-xs text-red-700">
                 {formError}
               </div>
             )}
 
-            <FieldRow label="Електронна пошта" htmlFor="profile-email">
-              <input
-                id="profile-email"
-                type="email"
-                disabled
-                value={profile?.email ?? ''}
-                title="Пошта пов’язана з обліковим записом Google, змінити її тут не можна"
-                className={`${inputClass()} cursor-not-allowed text-gray-500 opacity-70`}
-              />
-            </FieldRow>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {/* Електронна пошта не редагується: її дає обліковий запис Google */}
+              <div className="form-group sm:col-span-2">
+                <label htmlFor="profile-email">Електронна пошта</label>
+                <input
+                  id="profile-email"
+                  type="email"
+                  disabled
+                  value={profile?.email ?? ''}
+                  className="form-input cursor-not-allowed bg-page text-ink-muted"
+                  title="Пошта пов’язана з обліковим записом Google, змінити її тут не можна"
+                />
+                <span className="text-xs text-ink-muted">
+                  Пошта надходить із Google-акаунта, змінити її тут не можна
+                </span>
+              </div>
 
-            <FieldRow label="Ім’я" htmlFor="profile-first-name" required>
-              <input
-                id="profile-first-name"
-                type="text"
-                required
-                value={form.first_name}
-                onChange={(e) => updateForm({ first_name: e.target.value })}
-                className={inputClass()}
-              />
-            </FieldRow>
+              {/* Ім'я * */}
+              <div className="form-group">
+                <label htmlFor="profile-first-name">
+                  Ім’я <span className="text-danger">*</span>
+                </label>
+                <input
+                  id="profile-first-name"
+                  type="text"
+                  required
+                  value={form.first_name}
+                  onChange={(e) => updateForm({ first_name: e.target.value })}
+                  className="form-input"
+                />
+              </div>
 
-            <FieldRow label="Прізвище" htmlFor="profile-last-name" required>
-              <input
-                id="profile-last-name"
-                type="text"
-                required
-                value={form.last_name}
-                onChange={(e) => updateForm({ last_name: e.target.value })}
-                className={inputClass()}
-              />
-            </FieldRow>
+              {/* Прізвище * */}
+              <div className="form-group">
+                <label htmlFor="profile-last-name">
+                  Прізвище <span className="text-danger">*</span>
+                </label>
+                <input
+                  id="profile-last-name"
+                  type="text"
+                  required
+                  value={form.last_name}
+                  onChange={(e) => updateForm({ last_name: e.target.value })}
+                  className="form-input"
+                />
+              </div>
 
-            <FieldRow
-              label="Нікнейм"
-              htmlFor="profile-nickname"
-              required
-              hint="3–30 символів: латиниця, цифри, «_» і «.»"
-            >
-              <input
-                id="profile-nickname"
-                type="text"
-                required
-                maxLength={30}
-                value={form.nickname}
-                onChange={(e) => updateForm({ nickname: e.target.value })}
-                className={inputClass()}
-              />
-            </FieldRow>
+              {/* Нікнейм * */}
+              <div className="form-group">
+                <label htmlFor="profile-nickname">
+                  Нікнейм <span className="text-danger">*</span>
+                </label>
+                <input
+                  id="profile-nickname"
+                  type="text"
+                  required
+                  maxLength={30}
+                  value={form.nickname}
+                  onChange={(e) => updateForm({ nickname: e.target.value })}
+                  className="form-input"
+                />
+                <span className="text-xs text-ink-muted">
+                  3–30 символів: латиниця, цифри, «_» і «.»
+                </span>
+              </div>
 
-            <FieldRow
-              label="Дата народження"
-              htmlFor="profile-birth-date"
-              required
-              hint="Платформою можуть користуватися особи від 18 років"
-            >
-              <input
-                id="profile-birth-date"
-                type="date"
-                required
-                max={MAX_BIRTH_DATE}
-                value={form.birth_date}
-                onChange={(e) => updateForm({ birth_date: e.target.value })}
-                className={inputClass()}
-              />
-            </FieldRow>
-
-            <FieldRow label="Стать" htmlFor="profile-gender">
-              <select
-                id="profile-gender"
-                value={form.gender}
-                onChange={(e) =>
-                  updateForm({ gender: e.target.value as Gender })
-                }
-                className={selectClass()}
-              >
-                <option value="prefer_not_to_say">Волію не вказувати</option>
-                <option value="female">Жіноча</option>
-                <option value="male">Чоловіча</option>
-              </select>
-            </FieldRow>
-
-            <FieldRow
-              label="Телефон"
-              htmlFor="profile-phone"
-              required
-              hint={phoneError ?? undefined}
-              hintIsError={Boolean(phoneError)}
-            >
-              <input
-                id="profile-phone"
-                type="tel"
-                required
-                value={form.phone}
-                onChange={handlePhoneChange}
-                className={inputClass('sm', Boolean(phoneError))}
-              />
-            </FieldRow>
-
-            <FieldRow label="Місто" htmlFor="profile-city" required>
-              <select
-                id="profile-city"
-                value={form.city_id}
-                onChange={(e) =>
-                  updateForm({
-                    city_id: e.target.value ? Number(e.target.value) : '',
-                  })
-                }
-                className={selectClass()}
-              >
-                {form.city_id === '' && (
-                  <option value="" disabled>
-                    {cities.length > 0
-                      ? 'Оберіть місто'
-                      : 'Завантаження міст...'}
-                  </option>
+              {/* Телефон * */}
+              <div className="form-group">
+                <label htmlFor="profile-phone">
+                  Телефон <span className="text-danger">*</span>
+                </label>
+                <input
+                  id="profile-phone"
+                  type="tel"
+                  required
+                  value={form.phone}
+                  onChange={handlePhoneChange}
+                  className={`form-input ${phoneError ? 'border-danger' : ''}`}
+                />
+                {phoneError && (
+                  <span className="text-xs text-danger">{phoneError}</span>
                 )}
-                {cities.map((city) => (
-                  <option key={city.id} value={city.id}>
-                    {city.name} {city.region ? `(${city.region})` : ''}
-                  </option>
-                ))}
-              </select>
-            </FieldRow>
+              </div>
 
-            <FieldRow
-              label="Біографія"
-              htmlFor="profile-bio"
-              hint="До 2000 символів; порожнє поле прибирає біографію"
-            >
-              <textarea
-                id="profile-bio"
-                rows={4}
-                maxLength={2000}
-                value={form.bio}
-                onChange={(e) => updateForm({ bio: e.target.value })}
-                className={textareaClass}
-              />
-            </FieldRow>
+              {/* Дата народження * */}
+              <div className="form-group">
+                <label htmlFor="profile-birth-date">
+                  Дата народження <span className="text-danger">*</span>
+                </label>
+                <input
+                  id="profile-birth-date"
+                  type="date"
+                  required
+                  max={MAX_BIRTH_DATE}
+                  value={form.birth_date}
+                  onChange={(e) => updateForm({ birth_date: e.target.value })}
+                  className="form-input"
+                />
+                <span className="text-xs text-ink-muted">
+                  Платформою можуть користуватися особи від 18 років
+                </span>
+              </div>
 
-            <div className="mt-4 flex flex-wrap gap-4">
-              <ActionButton
+              {/* Стать (значення відповідають GenderEnum бекенду) */}
+              <div className="form-group">
+                <label htmlFor="profile-gender">Стать</label>
+                <select
+                  id="profile-gender"
+                  value={form.gender}
+                  onChange={(e) =>
+                    updateForm({ gender: e.target.value as Gender })
+                  }
+                  className="form-select"
+                >
+                  <option value="prefer_not_to_say">Волію не вказувати</option>
+                  <option value="female">Жіноча</option>
+                  <option value="male">Чоловіча</option>
+                </select>
+              </div>
+
+              {/* Місто * */}
+              <div className="form-group sm:col-span-2">
+                <label htmlFor="profile-city">
+                  Місто <span className="text-danger">*</span>
+                </label>
+                <select
+                  id="profile-city"
+                  value={form.city_id}
+                  onChange={(e) =>
+                    updateForm({
+                      city_id: e.target.value ? Number(e.target.value) : '',
+                    })
+                  }
+                  className="form-select"
+                >
+                  {form.city_id === '' && (
+                    <option value="" disabled>
+                      {cities.length > 0
+                        ? 'Оберіть місто'
+                        : 'Завантаження міст...'}
+                    </option>
+                  )}
+                  {cities.map((city) => (
+                    <option key={city.id} value={city.id}>
+                      {city.name} {city.region ? `(${city.region})` : ''}
+                    </option>
+                  ))}
+                </select>
+                {cities.length === 0 && !citiesError && (
+                  <span className="text-xs text-ink-muted">
+                    Список міст ще завантажується
+                  </span>
+                )}
+              </div>
+
+              {/* Біографія (необов’язкова) */}
+              <div className="form-group sm:col-span-2">
+                <label htmlFor="profile-bio">Біографія</label>
+                <textarea
+                  id="profile-bio"
+                  rows={4}
+                  maxLength={2000}
+                  value={form.bio}
+                  onChange={(e) => updateForm({ bio: e.target.value })}
+                  className="form-textarea"
+                />
+                <span className="text-xs text-ink-muted">
+                  До 2000 символів; порожнє поле прибирає біографію
+                </span>
+              </div>
+            </div>
+
+            <div className="button-group">
+              <button
                 type="submit"
+                className="btn btn-primary"
                 disabled={
                   isSubmitting ||
                   Boolean(phoneError) ||
@@ -496,14 +552,19 @@ export const ProfilePage = () => {
                 }
               >
                 {isSubmitting ? 'Збереження...' : 'Зберегти зміни'}
-              </ActionButton>
-              <ActionButton onClick={cancelEditing} disabled={isSubmitting}>
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={cancelEditing}
+                disabled={isSubmitting}
+              >
                 Скасувати
-              </ActionButton>
+              </button>
             </div>
           </form>
         ) : profile ? (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
             <FieldRow label="Електронна пошта">
               <ValuePill>{profile.email}</ValuePill>
             </FieldRow>
@@ -540,20 +601,18 @@ export const ProfilePage = () => {
 
         {/* Кнопки дій: редагувати, організація, вийти */}
         {!isEditing && (
-          <div className="mt-2 flex flex-wrap items-center gap-4">
+          <div className="mt-4 flex flex-wrap items-center gap-x-9 gap-y-3">
             <ActionButton
               onClick={startEditing}
               disabled={isProfileLoading || !profile}
-              icon="⚙"
+              iconSrc={settingsIcon}
             >
               Редагувати профіль
             </ActionButton>
             {user?.organization ? (
               <ActionButton
-                onClick={() =>
-                  void navigate(`/organizations/${user.organization?.id}`)
-                }
-                icon="🏢"
+                onClick={() => void navigate('/organization/edit')}
+                iconSrc={organizationIcon}
               >
                 Моя організація
               </ActionButton>
@@ -568,9 +627,9 @@ export const ProfilePage = () => {
             <button
               type="button"
               onClick={handleLogout}
-              className="ml-auto flex h-7 cursor-pointer items-center gap-1.5 rounded-sm border border-red-500 bg-white px-3 text-xs font-medium text-red-500 transition-colors hover:bg-red-50"
+              className="flex h-[21px] cursor-pointer items-center gap-1.5 border border-[#E14848] bg-white px-1.5 text-xs text-[#E14848] transition-colors hover:bg-red-50"
             >
-              <span aria-hidden="true">⇥</span> Вийти
+              <img src={logoutIcon} alt="" width={13} height={13} /> Вийти
             </button>
           </div>
         )}

@@ -1,11 +1,34 @@
 import { useState } from 'react'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
+import addOrganizationIcon from '@/assets/icons/menu/add-organization.svg'
+import avatarIcon from '@/assets/icons/menu/avatar.svg'
+import closeIcon from '@/assets/icons/menu/close.svg'
+import logoutIcon from '@/assets/icons/menu/logout.svg'
+import organizationIcon from '@/assets/icons/menu/organization.svg'
+import profileIcon from '@/assets/icons/menu/profile.svg'
+import settingsIcon from '@/assets/icons/menu/settings.svg'
 import { Logo } from '@/components/ui/Logo'
 import { useAuth } from '@/features/auth/hooks'
-import {
-  canEditOrganization,
-  getOrgRoleLabel,
-} from '@/features/organizations/utils'
+
+/** Пункт меню з макета: «пігулка» 195×22 з іконкою ліворуч */
+const MenuItem = ({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: string
+  label: string
+  onClick: () => void
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="flex h-[22px] w-[195px] cursor-pointer items-center gap-2 rounded-[11px] border border-[#DCECFF] px-2.5 text-left text-[11px] text-black transition-colors hover:bg-[#DCECFF]"
+  >
+    <img src={icon} alt="" width={16} height={16} />
+    {label}
+  </button>
+)
 
 export const RootLayout = () => {
   const { isAuthenticated, user, logout } = useAuth()
@@ -18,9 +41,14 @@ export const RootLayout = () => {
     void navigate('/login')
   }
 
-  // Організація користувача; редагувати її можуть лише owner/admin не заблокованої організації
+  // Перехід із меню: закриваємо панель і відкриваємо сторінку
+  const goTo = (path: string, state?: unknown) => {
+    setIsMenuOpen(false)
+    void navigate(path, state ? { state } : undefined)
+  }
+
+  // Організація користувача (для пункту «Моя організація»)
   const org = user?.organization
-  const canEditOrg = canEditOrganization(org)
 
   return (
     <div className="relative flex min-h-screen flex-col justify-between bg-[#F7FBFF] overflow-x-hidden">
@@ -65,123 +93,107 @@ export const RootLayout = () => {
       {/* 3. Нижня декоративна смужка */}
       <footer className="h-14 w-full bg-[#DCECFF] border-t-2 border-info" />
 
-      {/* 4. ВИСУВНЕ МЕНЮ ОРГАНІЗАЦІЇ (image_2e19c8.png) */}
+      {/* 4. Бургер-меню за макетом Figma («burger profile») */}
       {isMenuOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-xs">
-          <div className="relative flex h-full w-full max-w-sm flex-col justify-between bg-[#F7FBFF] shadow-2xl p-6 sm:p-8">
-            <div>
-              {/* Шапка меню з помаранчевим хрестиком */}
-              <div className="flex items-center justify-between border-b-2 border-main pb-4 mb-6">
-                <h2 className="text-3xl font-bold text-main">Меню</h2>
-                <button
-                  type="button"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl bg-peach text-2xl font-bold text-black"
-                >
-                  ✕
-                </button>
-              </div>
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsMenuOpen(false)
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="menu-title"
+            className="relative flex h-full w-full max-w-[440px] flex-col bg-[#F7FBFF] shadow-2xl"
+          >
+            {/* Шапка меню: «Меню» і помаранчевий хрестик */}
+            <div className="flex items-center justify-between px-6 pt-6 pb-5">
+              <h2
+                id="menu-title"
+                className="font-head text-[32px] font-normal text-main"
+              >
+                Меню
+              </h2>
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen(false)}
+                aria-label="Закрити меню"
+                className="flex h-[46px] w-[55px] cursor-pointer items-center justify-center rounded-[11px] bg-peach"
+              >
+                <img src={closeIcon} alt="" width={35} height={35} />
+              </button>
+            </div>
+            <div className="h-1 w-full bg-main" />
 
-              {/* Картка організації або профілю користувача */}
-              <div className="rounded-2xl border border-sky-200 bg-white p-5 shadow-xs flex flex-col gap-4">
-                {org ? (
-                  <>
-                    <div>
-                      <div className="text-xs text-gray-400">
-                        Назва організації
-                      </div>
-                      <div className="text-base font-bold text-black truncate">
-                        {org.name}
-                      </div>
-                      <span className="inline-block mt-1 text-[11px] font-semibold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-full">
-                        Роль: {getOrgRoleLabel(org.role)}
-                      </span>
-                    </div>
+            <div className="flex flex-1 flex-col justify-between px-6 py-8">
+              {/* Картка користувача з пунктами меню */}
+              <div className="flex flex-col gap-1 rounded-[15px] border-2 border-[#DCECFF] bg-[#F7FBFF] p-2.5">
+                <div className="mb-1 flex items-center gap-1">
+                  <img src={avatarIcon} alt="" width={40} height={40} />
+                  <span className="max-w-[200px] truncate rounded-[3px] border border-[#DCECFF] px-1.5 text-[10px] text-black">
+                    {user?.nickname ?? user?.name ?? 'Користувач'}
+                  </span>
+                </div>
 
-                    {canEditOrg && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsMenuOpen(false)
-                          void navigate('/organization/edit')
-                        }}
-                        className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100 cursor-pointer"
-                      >
-                        <span className="text-base">⚙️</span>
-                        Редагувати організацію
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <div className="text-base font-bold text-black truncate">
-                        {user?.name ?? 'Користувач'}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {user?.email ?? 'Волонтер'}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMenuOpen(false)
-                        void navigate('/organization/create')
-                      }}
-                      className="flex items-center justify-center gap-2 w-full rounded-full bg-main px-4 py-2 text-xs font-medium text-white hover:bg-main-hover cursor-pointer"
-                    >
-                      + Створити організацію
-                    </button>
-                  </>
+                <MenuItem
+                  icon={profileIcon}
+                  label="Мій профіль"
+                  onClick={() => goTo('/profile')}
+                />
+                {org && (
+                  <MenuItem
+                    icon={organizationIcon}
+                    label="Моя організація"
+                    onClick={() => goTo('/organization/edit')}
+                  />
+                )}
+                <MenuItem
+                  icon={settingsIcon}
+                  label="Редагувати профіль"
+                  onClick={() => goTo('/profile', { edit: true })}
+                />
+                {/* Сторінка створення поки пускає лише тих, у кого організації ще немає
+                    (так само, як кнопка «Створити організацію» в профілі) */}
+                {!org && (
+                  <MenuItem
+                    icon={addOrganizationIcon}
+                    label="Додати організацію"
+                    onClick={() => goTo('/organization/create')}
+                  />
                 )}
 
-                <div className="h-[1px] w-full bg-gray-100 my-1" />
-
-                {/* Посилання на Особистий кабінет / Профіль */}
+                {/* Перемикання в акаунт організації: на бекенді ще немає ендпоінта,
+                    тож кнопка вимкнена (відкрите питання з SCRUM-27 / SCRUM-35) */}
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsMenuOpen(false)
-                    void navigate('/profile')
-                  }}
-                  className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100 cursor-pointer"
+                  disabled
+                  title="Перемикання в акаунт організації стане доступним, щойно бекенд додасть відповідний ендпоінт"
+                  className="mt-0.5 w-fit cursor-not-allowed rounded-[11px] border border-[#DCECFF] px-1.5 text-[9px] text-black/50"
                 >
-                  <span className="text-base">👤</span>
-                  Мій профіль
+                  Переключити профіль
                 </button>
 
-                {/* Адмін-панель доступна лише адміністраторам платформи */}
-                {user?.role === 'admin' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMenuOpen(false)
-                      void navigate('/admin')
-                    }}
-                    className="flex items-center gap-2.5 w-full rounded-full border border-sky-200 bg-[#F0F7FF] px-4 py-2 text-xs font-medium text-black hover:bg-sky-100 cursor-pointer"
-                  >
-                    <span className="text-base">🛡️</span>
-                    Адмін-панель
-                  </button>
-                )}
+                <div className="my-2 h-px w-full bg-[#DCECFF]" />
 
-                {/* Червона кнопка "Вийти" */}
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex items-center gap-2 text-xs font-medium text-red-500 hover:text-red-700 cursor-pointer"
+                  className="ml-3 flex h-[21px] w-fit cursor-pointer items-center gap-1.5 border border-[#E14848] px-1.5 text-[11px] text-[#E14848] transition-colors hover:bg-red-50"
                 >
-                  <span className="border border-red-400 rounded px-1 text-sm font-bold">
-                    ➔
-                  </span>
+                  <img src={logoutIcon} alt="" width={13} height={13} />
                   Вийти
                 </button>
               </div>
-            </div>
 
-            <div className="text-[11px] text-gray-400 text-center">
-              Платформа «ДійТут»
+              {/* Адмін-панель — унизу, лише для адміністраторів платформи */}
+              {user?.role === 'admin' && (
+                <MenuItem
+                  icon={settingsIcon}
+                  label="Адмін панель"
+                  onClick={() => goTo('/admin')}
+                />
+              )}
             </div>
           </div>
         </div>
