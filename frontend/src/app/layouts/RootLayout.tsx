@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Link, Outlet, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import addOrganizationIcon from '@/assets/icons/menu/add-organization.svg'
 import avatarIcon from '@/assets/icons/menu/avatar.svg'
 import closeIcon from '@/assets/icons/menu/close.svg'
@@ -10,30 +11,85 @@ import settingsIcon from '@/assets/icons/menu/settings.svg'
 import { Logo } from '@/components/ui/Logo'
 import { useAuth } from '@/features/auth/hooks'
 
-/** Пункт меню з макета: «пігулка» 195×22 з іконкою ліворуч */
+/** Пункт меню: широка кнопка з іконкою в блакитному квадратику й стрілкою праворуч */
 const MenuItem = ({
   icon,
   label,
   onClick,
+  isActive = false,
+  disabled = false,
+  note,
+  title,
 }: {
   icon: string
   label: string
-  onClick: () => void
+  onClick?: () => void
+  isActive?: boolean
+  disabled?: boolean
+  note?: string
+  title?: string
 }) => (
   <button
     type="button"
     onClick={onClick}
-    className="flex h-[22px] w-[195px] cursor-pointer items-center gap-2 rounded-[11px] border border-[#DCECFF] px-2.5 text-left text-[11px] text-black transition-colors hover:bg-[#DCECFF]"
+    disabled={disabled}
+    title={title}
+    aria-current={isActive ? 'page' : undefined}
+    className={`group flex min-h-14 w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left text-base transition-colors ${
+      isActive
+        ? 'border-main bg-[#DCECFF] text-black'
+        : 'border-transparent text-black hover:border-[#DCECFF] hover:bg-white'
+    } ${disabled ? 'cursor-not-allowed opacity-50 hover:border-transparent hover:bg-transparent' : 'cursor-pointer'}`}
   >
-    <img src={icon} alt="" width={16} height={16} />
-    {label}
+    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#DCECFF]">
+      <img src={icon} alt="" width={22} height={22} />
+    </span>
+    <span className="flex flex-1 flex-col">
+      <span className="font-medium">{label}</span>
+      {note && <span className="text-xs text-ink-muted">{note}</span>}
+    </span>
+    {!disabled && (
+      <span
+        aria-hidden="true"
+        className="text-2xl leading-none text-main transition-transform group-hover:translate-x-0.5"
+      >
+        ›
+      </span>
+    )}
   </button>
+)
+
+/** Підпис групи пунктів меню */
+const MenuSection = ({
+  title,
+  children,
+}: {
+  title: string
+  children: ReactNode
+}) => (
+  <section className="flex flex-col gap-1">
+    <h3 className="px-3 pb-1 text-xs font-semibold tracking-wider text-ink-muted uppercase">
+      {title}
+    </h3>
+    {children}
+  </section>
 )
 
 export const RootLayout = () => {
   const { isAuthenticated, user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+
+  // Esc закриває меню
+  useEffect(() => {
+    if (!isMenuOpen) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsMenuOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isMenuOpen])
 
   const handleLogout = () => {
     setIsMenuOpen(false)
@@ -105,10 +161,10 @@ export const RootLayout = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="menu-title"
-            className="relative flex h-full w-full max-w-[440px] flex-col bg-[#F7FBFF] shadow-2xl"
+            className="relative flex h-dvh w-full max-w-[420px] flex-col bg-[#F7FBFF] shadow-2xl"
           >
             {/* Шапка меню: «Меню» і помаранчевий хрестик */}
-            <div className="flex items-center justify-between px-6 pt-6 pb-5">
+            <div className="flex items-center justify-between px-5 pt-6 pb-5">
               <h2
                 id="menu-title"
                 className="font-head text-[32px] font-normal text-main"
@@ -126,74 +182,97 @@ export const RootLayout = () => {
             </div>
             <div className="h-1 w-full bg-main" />
 
-            <div className="flex flex-1 flex-col justify-between px-6 py-8">
-              {/* Картка користувача з пунктами меню */}
-              <div className="flex flex-col gap-1 rounded-[15px] border-2 border-[#DCECFF] bg-[#F7FBFF] p-2.5">
-                <div className="mb-1 flex items-center gap-1">
-                  <img src={avatarIcon} alt="" width={40} height={40} />
-                  <span className="max-w-[200px] truncate rounded-[3px] border border-[#DCECFF] px-1.5 text-[10px] text-black">
-                    {user?.nickname ?? user?.name ?? 'Користувач'}
+            {/* Вміст прокручується, «Вийти» завжди видно внизу */}
+            <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-5 py-6">
+              {/* Картка користувача */}
+              <div className="flex items-center gap-4 rounded-2xl border-2 border-[#DCECFF] bg-white p-4">
+                <img
+                  src={avatarIcon}
+                  alt=""
+                  width={56}
+                  height={56}
+                  className="shrink-0"
+                />
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="truncate text-lg font-semibold text-black">
+                    {user?.name ?? 'Користувач'}
+                  </span>
+                  {user?.nickname && (
+                    <span className="truncate text-sm text-ink-muted">
+                      @{user.nickname}
+                    </span>
+                  )}
+                  <span className="w-fit rounded-full border border-main bg-[#DCECFF] px-3 py-0.5 text-xs text-main">
+                    {user?.role === 'admin' ? 'Адміністратор' : 'Волонтер'}
                   </span>
                 </div>
+              </div>
 
+              <MenuSection title="Профіль">
                 <MenuItem
                   icon={profileIcon}
                   label="Мій профіль"
+                  isActive={location.pathname === '/profile'}
                   onClick={() => goTo('/profile')}
                 />
-                {org && (
-                  <MenuItem
-                    icon={organizationIcon}
-                    label="Моя організація"
-                    onClick={() => goTo('/organization/edit')}
-                  />
-                )}
                 <MenuItem
                   icon={settingsIcon}
                   label="Редагувати профіль"
                   onClick={() => goTo('/profile', { edit: true })}
                 />
-                {/* Сторінка створення поки пускає лише тих, у кого організації ще немає
-                    (так само, як кнопка «Створити організацію» в профілі) */}
-                {!org && (
+              </MenuSection>
+
+              <MenuSection title="Організація">
+                {org ? (
+                  <MenuItem
+                    icon={organizationIcon}
+                    label="Моя організація"
+                    note={org.name}
+                    isActive={location.pathname === '/organization/edit'}
+                    onClick={() => goTo('/organization/edit')}
+                  />
+                ) : (
+                  // Сторінка створення пускає лише тих, у кого організації ще немає
                   <MenuItem
                     icon={addOrganizationIcon}
                     label="Додати організацію"
+                    isActive={location.pathname === '/organization/create'}
                     onClick={() => goTo('/organization/create')}
                   />
                 )}
-
                 {/* Перемикання в акаунт організації: на бекенді ще немає ендпоінта,
-                    тож кнопка вимкнена (відкрите питання з SCRUM-27 / SCRUM-35) */}
-                <button
-                  type="button"
+                    тож пункт вимкнений (відкрите питання з SCRUM-27 / SCRUM-35) */}
+                <MenuItem
+                  icon={profileIcon}
+                  label="Переключити профіль"
+                  note="Незабаром"
                   disabled
                   title="Перемикання в акаунт організації стане доступним, щойно бекенд додасть відповідний ендпоінт"
-                  className="mt-0.5 w-fit cursor-not-allowed rounded-[11px] border border-[#DCECFF] px-1.5 text-[9px] text-black/50"
-                >
-                  Переключити профіль
-                </button>
-
-                <div className="my-2 h-px w-full bg-[#DCECFF]" />
-
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="ml-3 flex h-[21px] w-fit cursor-pointer items-center gap-1.5 border border-[#E14848] px-1.5 text-[11px] text-[#E14848] transition-colors hover:bg-red-50"
-                >
-                  <img src={logoutIcon} alt="" width={13} height={13} />
-                  Вийти
-                </button>
-              </div>
-
-              {/* Адмін-панель — унизу, лише для адміністраторів платформи */}
-              {user?.role === 'admin' && (
-                <MenuItem
-                  icon={settingsIcon}
-                  label="Адмін панель"
-                  onClick={() => goTo('/admin')}
                 />
+              </MenuSection>
+
+              {/* Адмін-панель — лише для адміністраторів платформи */}
+              {user?.role === 'admin' && (
+                <MenuSection title="Адміністрування">
+                  <MenuItem
+                    icon={settingsIcon}
+                    label="Адмін панель"
+                    isActive={location.pathname.startsWith('/admin')}
+                    onClick={() => goTo('/admin')}
+                  />
+                </MenuSection>
               )}
+            </div>
+
+            <div className="border-t-2 border-[#DCECFF] px-5 py-5">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-[#E14848] bg-white text-base font-medium text-[#E14848] transition-colors hover:bg-red-50"
+              >
+                <img src={logoutIcon} alt="" width={20} height={20} />
+                Вийти
+              </button>
             </div>
           </div>
         </div>
