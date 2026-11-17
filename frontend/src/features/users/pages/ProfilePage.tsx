@@ -9,6 +9,7 @@ import {
   getOrgRoleLabel,
   getOrgStatusLabel,
 } from '@/features/organizations/utils'
+import closeIcon from '@/assets/icons/menu/close.svg'
 import logoutIcon from '@/assets/icons/menu/logout.svg'
 import organizationIcon from '@/assets/icons/menu/organization.svg'
 import settingsIcon from '@/assets/icons/menu/settings.svg'
@@ -133,6 +134,57 @@ const FieldRow = ({
         </span>
       )}
     </div>
+  </div>
+)
+
+/** Поле форми редагування (макет «profile edit page»): блакитне поле 28px висотою. */
+const editFieldClass = (invalid = false) =>
+  `w-full rounded-[5px] border bg-[#DCECFF] px-3 text-xs text-black focus:ring-2 focus:ring-main/40 focus:outline-none ${
+    invalid ? 'border-red-500' : 'border-main'
+  }`
+
+/** Підпис над полем і підказка під ним. */
+const EditField = ({
+  label,
+  htmlFor,
+  hint,
+  hintIsError = false,
+  children,
+}: {
+  label: string
+  htmlFor: string
+  hint?: string | null
+  hintIsError?: boolean
+  children: ReactNode
+}) => (
+  <div className="flex flex-col gap-1">
+    <label htmlFor={htmlFor} className="text-xs font-medium text-black">
+      {label}
+    </label>
+    {children}
+    {hint && (
+      <span
+        className={`text-[10px] ${hintIsError ? 'text-red-500' : 'text-ink-muted'}`}
+      >
+        {hint}
+      </span>
+    )}
+  </div>
+)
+
+/** Аватар-заглушка (фото профілю бекенд поки не зберігає). */
+const ProfileAvatar = () => (
+  <div className="flex size-32 shrink-0 items-center justify-center rounded-full bg-main text-white">
+    <svg
+      width="96"
+      height="96"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="8" r="4.5" />
+      <path d="M3.5 21c0-4.2 3.8-7 8.5-7s8.5 2.8 8.5 7z" />
+    </svg>
   </div>
 )
 
@@ -309,117 +361,74 @@ export const ProfilePage = () => {
 
   const roleLabel = user?.role === 'admin' ? 'Адміністратор' : 'Волонтер'
 
-  return (
-    <div className="flex flex-col">
-      {/* Жовта смуга із заголовком сторінки (макет «volunteer info page») */}
-      <div className="border-y border-info bg-cream px-3 py-1">
-        <h1 className="text-3xl font-normal text-black">Особистий кабінет</h1>
-      </div>
-
-      {/* Макет: увесь вміст притиснутий до лівого краю (відступ ~13px) */}
-      <div className="flex w-full flex-col gap-5 px-3 py-4">
-        {/* Аватар, ім’я, пошта й роль */}
-        <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-          <div className="flex size-32 shrink-0 items-center justify-center rounded-full bg-main text-white">
-            <svg
-              width="96"
-              height="96"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <circle cx="12" cy="8" r="4.5" />
-              <path d="M3.5 21c0-4.2 3.8-7 8.5-7s8.5 2.8 8.5 7z" />
-            </svg>
-          </div>
-          <div className="flex flex-col items-start gap-3">
-            <Chip>{user?.name ?? 'Користувач'}</Chip>
-            <Chip>{user?.email}</Chip>
-            <Chip tone="role">{roleLabel}</Chip>
-          </div>
+  // Режим редагування — окремий екран за макетом «profile edit page»
+  if (isEditing && form) {
+    return (
+      <div className="flex flex-col">
+        <div className="flex w-full max-w-[851px] items-center justify-between gap-4 px-3 py-4 sm:px-6">
+          <h1 className="font-head text-2xl font-normal text-main">
+            Редагувати профіль
+          </h1>
+          <button
+            type="button"
+            onClick={cancelEditing}
+            disabled={isSubmitting}
+            aria-label="Скасувати редагування"
+            title="Скасувати"
+            className="flex h-[46px] w-[55px] shrink-0 cursor-pointer items-center justify-center rounded-[11px] bg-[#F8B26C] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <img src={closeIcon} alt="" width={35} height={35} />
+          </button>
         </div>
+        <div className="h-1 bg-main" />
 
-        <div className="h-0.5 w-full bg-[#DCECFF]" />
-
-        {isSaved && !isEditing && (
-          <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-center text-xs font-medium text-green-700">
-            Дані профілю збережено!
+        <form
+          onSubmit={handleSubmit}
+          className="flex w-full max-w-[851px] flex-col gap-5 px-3 py-5 sm:px-8"
+        >
+          <div className="flex justify-center">
+            <ProfileAvatar />
           </div>
-        )}
-        {citiesError && isEditing && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-xs font-medium text-red-700">
-            {citiesError}
-          </div>
-        )}
 
-        {isProfileLoading ? (
-          <div className="text-sm text-ink-muted">
-            Завантаження даних профілю...
-          </div>
-        ) : profileError ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-xs font-medium text-red-700">
-            {profileError}
-          </div>
-        ) : isEditing && form ? (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {formError && (
-              <div className="rounded-lg bg-red-100 p-2.5 text-center text-xs text-red-700">
-                {formError}
-              </div>
-            )}
+          {formError && (
+            <div className="rounded-lg bg-red-100 p-2.5 text-center text-xs text-red-700">
+              {formError}
+            </div>
+          )}
+          {citiesError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-xs font-medium text-red-700">
+              {citiesError}
+            </div>
+          )}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              {/* Електронна пошта не редагується: її дає обліковий запис Google */}
-              <div className="form-group sm:col-span-2">
-                <label htmlFor="profile-email">Електронна пошта</label>
-                <input
-                  id="profile-email"
-                  type="email"
-                  disabled
-                  value={profile?.email ?? ''}
-                  className="form-input cursor-not-allowed bg-page text-ink-muted"
-                  title="Пошта пов’язана з обліковим записом Google, змінити її тут не можна"
-                />
-                <span className="text-xs text-ink-muted">
-                  Пошта надходить із Google-акаунта, змінити її тут не можна
-                </span>
-              </div>
-
-              {/* Ім'я * */}
-              <div className="form-group">
-                <label htmlFor="profile-first-name">
-                  Ім’я <span className="text-danger">*</span>
-                </label>
+          <div className="grid gap-x-10 gap-y-3 sm:grid-cols-[minmax(0,232px)_1fr_minmax(0,232px)]">
+            {/* Ліва колонка */}
+            <div className="flex flex-col gap-3">
+              <EditField label="Ім’я" htmlFor="profile-first-name">
                 <input
                   id="profile-first-name"
                   type="text"
                   required
                   value={form.first_name}
                   onChange={(e) => updateForm({ first_name: e.target.value })}
-                  className="form-input"
+                  className={`h-7 ${editFieldClass()}`}
                 />
-              </div>
-
-              {/* Прізвище * */}
-              <div className="form-group">
-                <label htmlFor="profile-last-name">
-                  Прізвище <span className="text-danger">*</span>
-                </label>
+              </EditField>
+              <EditField label="Прізвище" htmlFor="profile-last-name">
                 <input
                   id="profile-last-name"
                   type="text"
                   required
                   value={form.last_name}
                   onChange={(e) => updateForm({ last_name: e.target.value })}
-                  className="form-input"
+                  className={`h-7 ${editFieldClass()}`}
                 />
-              </div>
-
-              {/* Нікнейм * */}
-              <div className="form-group">
-                <label htmlFor="profile-nickname">
-                  Нікнейм <span className="text-danger">*</span>
-                </label>
+              </EditField>
+              <EditField
+                label="Нікнейм"
+                htmlFor="profile-nickname"
+                hint="3–30 символів: латиниця, цифри, «_» і «.»"
+              >
                 <input
                   id="profile-nickname"
                   type="text"
@@ -427,36 +436,14 @@ export const ProfilePage = () => {
                   maxLength={30}
                   value={form.nickname}
                   onChange={(e) => updateForm({ nickname: e.target.value })}
-                  className="form-input"
+                  className={`h-7 ${editFieldClass()}`}
                 />
-                <span className="text-xs text-ink-muted">
-                  3–30 символів: латиниця, цифри, «_» і «.»
-                </span>
-              </div>
-
-              {/* Телефон * */}
-              <div className="form-group">
-                <label htmlFor="profile-phone">
-                  Телефон <span className="text-danger">*</span>
-                </label>
-                <input
-                  id="profile-phone"
-                  type="tel"
-                  required
-                  value={form.phone}
-                  onChange={handlePhoneChange}
-                  className={`form-input ${phoneError ? 'border-danger' : ''}`}
-                />
-                {phoneError && (
-                  <span className="text-xs text-danger">{phoneError}</span>
-                )}
-              </div>
-
-              {/* Дата народження * */}
-              <div className="form-group">
-                <label htmlFor="profile-birth-date">
-                  Дата народження <span className="text-danger">*</span>
-                </label>
+              </EditField>
+              <EditField
+                label="Дата народження"
+                htmlFor="profile-birth-date"
+                hint="Платформою можуть користуватися особи від 18 років"
+              >
                 <input
                   id="profile-birth-date"
                   type="date"
@@ -464,35 +451,81 @@ export const ProfilePage = () => {
                   max={MAX_BIRTH_DATE}
                   value={form.birth_date}
                   onChange={(e) => updateForm({ birth_date: e.target.value })}
-                  className="form-input"
+                  className={`h-7 ${editFieldClass()}`}
                 />
-                <span className="text-xs text-ink-muted">
-                  Платформою можуть користуватися особи від 18 років
-                </span>
-              </div>
+              </EditField>
+            </div>
 
-              {/* Стать (значення відповідають GenderEnum бекенду) */}
-              <div className="form-group">
-                <label htmlFor="profile-gender">Стать</label>
+            {/* «Зберегти» посередині (на телефоні — під полями) */}
+            <div className="order-last flex items-center justify-center pt-2 sm:order-none sm:pt-0">
+              <button
+                type="submit"
+                disabled={
+                  isSubmitting ||
+                  Boolean(phoneError) ||
+                  !form.city_id ||
+                  cities.length === 0
+                }
+                className="h-[45px] w-40 cursor-pointer rounded-[11px] bg-main text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isSubmitting ? 'Збереження...' : 'Зберегти'}
+              </button>
+            </div>
+
+            {/* Права колонка */}
+            <div className="flex flex-col gap-3">
+              {/* Значення відповідають GenderEnum бекенду */}
+              <EditField label="Стать" htmlFor="profile-gender">
                 <select
                   id="profile-gender"
                   value={form.gender}
                   onChange={(e) =>
                     updateForm({ gender: e.target.value as Gender })
                   }
-                  className="form-select"
+                  className={`h-7 ${editFieldClass()}`}
                 >
                   <option value="prefer_not_to_say">Волію не вказувати</option>
                   <option value="female">Жіноча</option>
                   <option value="male">Чоловіча</option>
                 </select>
-              </div>
-
-              {/* Місто * */}
-              <div className="form-group sm:col-span-2">
-                <label htmlFor="profile-city">
-                  Місто <span className="text-danger">*</span>
-                </label>
+              </EditField>
+              {/* Порожня біографія зберігається як null */}
+              <EditField label="Біографія" htmlFor="profile-bio">
+                <textarea
+                  id="profile-bio"
+                  rows={1}
+                  maxLength={2000}
+                  placeholder="Біографія"
+                  value={form.bio}
+                  onChange={(e) => updateForm({ bio: e.target.value })}
+                  className={`min-h-7 resize-y py-1.5 ${editFieldClass()}`}
+                />
+              </EditField>
+              <EditField
+                label="Телефон"
+                htmlFor="profile-phone"
+                hint={phoneError}
+                hintIsError
+              >
+                <input
+                  id="profile-phone"
+                  type="tel"
+                  required
+                  placeholder="+380"
+                  value={form.phone}
+                  onChange={handlePhoneChange}
+                  className={`h-7 ${editFieldClass(Boolean(phoneError))}`}
+                />
+              </EditField>
+              <EditField
+                label="Місто"
+                htmlFor="profile-city"
+                hint={
+                  cities.length === 0 && !citiesError
+                    ? 'Список міст ще завантажується'
+                    : null
+                }
+              >
                 <select
                   id="profile-city"
                   value={form.city_id}
@@ -501,7 +534,7 @@ export const ProfilePage = () => {
                       city_id: e.target.value ? Number(e.target.value) : '',
                     })
                   }
-                  className="form-select"
+                  className={`h-7 ${editFieldClass()}`}
                 >
                   {form.city_id === '' && (
                     <option value="" disabled>
@@ -516,53 +549,49 @@ export const ProfilePage = () => {
                     </option>
                   ))}
                 </select>
-                {cities.length === 0 && !citiesError && (
-                  <span className="text-xs text-ink-muted">
-                    Список міст ще завантажується
-                  </span>
-                )}
-              </div>
-
-              {/* Біографія (необов’язкова) */}
-              <div className="form-group sm:col-span-2">
-                <label htmlFor="profile-bio">Біографія</label>
-                <textarea
-                  id="profile-bio"
-                  rows={4}
-                  maxLength={2000}
-                  value={form.bio}
-                  onChange={(e) => updateForm({ bio: e.target.value })}
-                  className="form-textarea"
-                />
-                <span className="text-xs text-ink-muted">
-                  До 2000 символів; порожнє поле прибирає біографію
-                </span>
-              </div>
+              </EditField>
             </div>
+          </div>
+        </form>
+      </div>
+    )
+  }
 
-            <div className="button-group">
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={
-                  isSubmitting ||
-                  Boolean(phoneError) ||
-                  !form.city_id ||
-                  cities.length === 0
-                }
-              >
-                {isSubmitting ? 'Збереження...' : 'Зберегти зміни'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={cancelEditing}
-                disabled={isSubmitting}
-              >
-                Скасувати
-              </button>
-            </div>
-          </form>
+  return (
+    <div className="flex flex-col">
+      {/* Жовта смуга із заголовком сторінки (макет «volunteer info page») */}
+      <div className="border-y border-info bg-cream px-3 py-1">
+        <h1 className="text-3xl font-normal text-black">Особистий кабінет</h1>
+      </div>
+
+      {/* Макет: увесь вміст притиснутий до лівого краю (відступ ~13px) */}
+      <div className="flex w-full flex-col gap-5 px-3 py-4">
+        {/* Аватар, ім’я, пошта й роль */}
+        <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+          <ProfileAvatar />
+          <div className="flex flex-col items-start gap-3">
+            <Chip>{user?.name ?? 'Користувач'}</Chip>
+            <Chip>{user?.email}</Chip>
+            <Chip tone="role">{roleLabel}</Chip>
+          </div>
+        </div>
+
+        <div className="h-0.5 w-full bg-[#DCECFF]" />
+
+        {isSaved && !isEditing && (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-center text-xs font-medium text-green-700">
+            Дані профілю збережено!
+          </div>
+        )}
+
+        {isProfileLoading ? (
+          <div className="text-sm text-ink-muted">
+            Завантаження даних профілю...
+          </div>
+        ) : profileError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-xs font-medium text-red-700">
+            {profileError}
+          </div>
         ) : profile ? (
           <div className="flex flex-col gap-1">
             <FieldRow label="Електронна пошта">
