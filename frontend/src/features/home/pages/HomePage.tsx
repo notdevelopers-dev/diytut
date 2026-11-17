@@ -59,9 +59,12 @@ export const HomePage = () => {
             Знаходьте перевірені збори, допомогу військовим, відбудову та
             локальні ініціативи у вашому місті.
           </p>
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap gap-2">
             <Link to="/organizations" className="btn btn-primary btn-sm">
               Каталог організацій →
+            </Link>
+            <Link to="/projects" className="btn btn-primary btn-sm">
+              Каталог проєктів →
             </Link>
           </div>
         </div>
