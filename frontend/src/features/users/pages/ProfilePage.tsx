@@ -323,6 +323,10 @@ export const ProfilePage = () => {
       setFormError('Нікнейм: від 3 до 30 символів — латиниця, цифри, «_» і «.»')
       return
     }
+    if (!form.birth_date || form.birth_date > MAX_BIRTH_DATE) {
+      setFormError('Платформою можуть користуватися особи від 18 років')
+      return
+    }
     if (!isValidPhone(form.phone)) {
       setPhoneError('Введіть коректний номер телефону (+380XXXXXXXXX)')
       return
@@ -365,7 +369,8 @@ export const ProfilePage = () => {
   if (isEditing && form) {
     return (
       <div className="flex flex-col">
-        <div className="flex w-full max-w-[851px] items-center justify-between gap-4 px-3 py-4 sm:px-6">
+        {/* Заголовок на всю ширину: назва під логотипом, ✕ під кнопкою меню */}
+        <div className="flex w-full items-center justify-between gap-4 px-8 py-4">
           <h1 className="font-head text-2xl font-normal text-main">
             Редагувати профіль
           </h1>
@@ -384,7 +389,8 @@ export const ProfilePage = () => {
 
         <form
           onSubmit={handleSubmit}
-          className="flex w-full max-w-[851px] flex-col gap-5 px-3 py-5 sm:px-8"
+          noValidate
+          className="mx-auto flex w-full max-w-[851px] flex-col gap-5 px-3 py-5 sm:px-8"
         >
           <div className="flex justify-center">
             <ProfileAvatar />
@@ -424,13 +430,10 @@ export const ProfilePage = () => {
                   className={`h-7 ${editFieldClass()}`}
                 />
               </EditField>
-              <EditField
-                label="Нікнейм"
-                htmlFor="profile-nickname"
-                hint="3–30 символів: латиниця, цифри, «_» і «.»"
-              >
+              <EditField label="Нікнейм" htmlFor="profile-nickname">
                 <input
                   id="profile-nickname"
+                  title="3–30 символів: латиниця, цифри, «_» і «.»"
                   type="text"
                   required
                   maxLength={30}
@@ -439,13 +442,10 @@ export const ProfilePage = () => {
                   className={`h-7 ${editFieldClass()}`}
                 />
               </EditField>
-              <EditField
-                label="Дата народження"
-                htmlFor="profile-birth-date"
-                hint="Платформою можуть користуватися особи від 18 років"
-              >
+              <EditField label="Дата народження" htmlFor="profile-birth-date">
                 <input
                   id="profile-birth-date"
+                  title="Платформою можуть користуватися особи від 18 років"
                   type="date"
                   required
                   max={MAX_BIRTH_DATE}
