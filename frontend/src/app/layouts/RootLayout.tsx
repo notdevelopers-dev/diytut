@@ -27,10 +27,22 @@ export const RootLayout = () => {
     <div className="relative flex min-h-screen flex-col justify-between bg-[#F7FBFF] overflow-x-hidden">
       {/* 1. Шапка за макетом із Figma: логотип ДійТут + жовта кнопка ☰ */}
       <header className="w-full bg-[#F7FBFF]">
-        <div className="flex items-center justify-between px-8 pt-6 pb-4">
+        <div className="flex items-center justify-between gap-2 px-3 pt-6 pb-4 sm:px-8">
           <Logo />
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <Link
+              to="/organizations"
+              className="text-xs font-semibold text-main no-underline hover:text-main-hover sm:text-sm"
+            >
+              Організації
+            </Link>
+            <Link
+              to="/projects"
+              className="text-xs font-semibold text-main no-underline hover:text-main-hover sm:text-sm"
+            >
+              Проєкти
+            </Link>
             {/* Жовта кнопка трьох рисочок (☰) */}
             {isAuthenticated ? (
               <button
@@ -48,7 +60,7 @@ export const RootLayout = () => {
             ) : (
               <Link
                 to="/login"
-                className="rounded-lg bg-main px-4 py-2 text-sm font-medium text-white no-underline"
+                className="shrink-0 rounded-lg bg-main px-3 py-2 text-sm font-medium text-white no-underline sm:px-4"
               >
                 Увійти
               </Link>
