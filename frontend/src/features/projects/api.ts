@@ -1,4 +1,6 @@
 import { apiClient } from '@/lib/api-client'
+import { getErrorStatus } from '@/lib/errors'
+import type { JoinRequest } from '@/types/organization'
 import type { CategoryItem, Project, ProjectCategory } from '@/types/project'
 
 export interface FetchProjectsParams {
@@ -35,5 +37,32 @@ export const fetchProjects = async (
 /** Усі сфери для фільтра: GET /api/categories (список змінюється лише з деплоєм) */
 export const fetchCategories = async (): Promise<CategoryItem[]> => {
   const { data } = await apiClient.get<CategoryItem[]>('/categories')
+  return data
+}
+
+/** Остання заявка користувача на проєкт; `null`, якщо заявок ще не було (404) */
+export const fetchMyProjectJoinRequest = async (
+  projectId: number,
+): Promise<JoinRequest | null> => {
+  try {
+    const { data } = await apiClient.get<JoinRequest>(
+      `/projects/${projectId}/my-request-status`,
+    )
+    return data
+  } catch (err: unknown) {
+    if (getErrorStatus(err) === 404) return null
+    throw err
+  }
+}
+
+/** Заявка на проєкт; супровідний лист необов'язковий (до 1000 символів) */
+export const createProjectJoinRequest = async (
+  projectId: number,
+  message: string,
+): Promise<JoinRequest> => {
+  const { data } = await apiClient.post<JoinRequest>(
+    `/projects/${projectId}/join-requests`,
+    { message: message.trim() || null },
+  )
   return data
 }

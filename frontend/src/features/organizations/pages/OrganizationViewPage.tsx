@@ -268,7 +268,7 @@ export const OrganizationViewPage = () => {
 
       {isModalOpen && (
         <JoinRequestModal
-          organizationName={organization.name}
+          subtitle={organization.name}
           isSubmitting={createJoinRequest.isPending}
           error={createJoinRequest.error}
           onSubmit={handleSubmit}

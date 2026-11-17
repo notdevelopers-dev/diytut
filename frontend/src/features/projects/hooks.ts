@@ -1,11 +1,18 @@
 import {
   keepPreviousData,
   useInfiniteQuery,
+  useMutation,
   useQuery,
+  useQueryClient,
 } from '@tanstack/react-query'
 import { fetchOrganizations } from '@/features/organizations/api'
 import type { ProjectCategory } from '@/types/project'
-import { fetchCategories, fetchProjects } from './api'
+import {
+  createProjectJoinRequest,
+  fetchCategories,
+  fetchMyProjectJoinRequest,
+  fetchProjects,
+} from './api'
 
 /** 12 ділиться і на 2, і на 3, і на 4 колонки: ряди сітки лишаються повними */
 export const PROJECTS_PAGE_SIZE = 12
@@ -98,3 +105,32 @@ export const useOrganizationNames = () =>
     select: (organizations) =>
       new Map(organizations.map((org) => [org.id, org.name])),
   })
+
+const myProjectJoinRequestKey = (projectId: number) =>
+  ['projects', 'join-request', projectId] as const
+
+/** Стан кнопки «Приєднатись» на картці: остання заявка користувача на проєкт */
+export const useMyProjectJoinRequest = (projectId: number, enabled: boolean) =>
+  useQuery({
+    queryKey: myProjectJoinRequestKey(projectId),
+    queryFn: () => fetchMyProjectJoinRequest(projectId),
+    enabled,
+  })
+
+/** Подати заявку: після успіху кнопка одразу переходить у «Запит очікує» */
+export const useCreateProjectJoinRequest = (projectId: number) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (message: string) =>
+      createProjectJoinRequest(projectId, message),
+    onSuccess: (joinRequest) => {
+      queryClient.setQueryData(myProjectJoinRequestKey(projectId), joinRequest)
+    },
+    // Стан кнопки міг застаріти (заявку подано з іншої вкладки тощо): перечитуємо
+    onError: () => {
+      void queryClient.invalidateQueries({
+        queryKey: myProjectJoinRequestKey(projectId),
+      })
+    },
+  })
+}
