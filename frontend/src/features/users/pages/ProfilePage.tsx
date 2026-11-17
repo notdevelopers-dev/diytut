@@ -765,14 +765,8 @@ export const ProfilePage = () => {
             >
               Редагувати профіль
             </ActionButton>
-            {user?.organization ? (
-              <ActionButton
-                onClick={() => void navigate('/organization/edit')}
-                iconSrc={organizationIcon}
-              >
-                Моя організація
-              </ActionButton>
-            ) : (
+            {/* Сторінка організації — у режимі організації («Переключити на організацію») */}
+            {!user?.organization && (
               <ActionButton
                 onClick={() => void navigate('/organization/create')}
                 iconSrc={addOrganizationIcon}
@@ -816,13 +810,6 @@ export const ProfilePage = () => {
               </Chip>
               {getOrgStatusLabel(user.organization.status) && (
                 <Chip>{getOrgStatusLabel(user.organization.status)}</Chip>
-              )}
-              {canEditOrganization(user.organization) && (
-                <ActionButton
-                  onClick={() => void navigate('/organization/edit')}
-                >
-                  Редагувати організацію
-                </ActionButton>
               )}
             </div>
             {isOrgLoading ? (

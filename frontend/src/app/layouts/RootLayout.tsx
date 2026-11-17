@@ -123,7 +123,7 @@ export const RootLayout = () => {
     void navigate(path, state ? { state } : undefined)
   }
 
-  // Організація користувача (для пункту «Моя організація»)
+  // Організація користувача (для режиму організації та перемикання)
   const org = user?.organization
 
   return (
@@ -231,7 +231,7 @@ export const RootLayout = () => {
                   </div>
                 </div>
 
-                <MenuSection title="Організація">
+                <MenuSection title="Профіль">
                   <MenuItem
                     icon={organizationIcon}
                     label="Профіль організації"
@@ -315,15 +315,8 @@ export const RootLayout = () => {
                 </MenuSection>
 
                 <MenuSection title="Організація">
-                  {org ? (
-                    <MenuItem
-                      icon={organizationIcon}
-                      label="Моя організація"
-                      note={org.name}
-                      isActive={location.pathname === '/organization/edit'}
-                      onClick={() => goTo('/organization/edit')}
-                    />
-                  ) : (
+                  {/* Сторінка організації — у режимі організації, тут лише створення */}
+                  {!org && (
                     // Сторінка створення пускає лише тих, у кого організації ще немає
                     <MenuItem
                       icon={addOrganizationIcon}
