@@ -73,7 +73,7 @@ const Chip = ({
   tone?: 'plain' | 'role'
 }) => (
   <span
-    className={`inline-flex h-6 items-center rounded-full border px-4 text-xs ${
+    className={`inline-flex h-8 items-center rounded-full border px-4 text-sm ${
       tone === 'role'
         ? 'border-main bg-[#DCECFF] text-main'
         : 'border-[#DCECFF] bg-white text-black'
@@ -83,7 +83,7 @@ const Chip = ({
   </span>
 )
 
-/** Значення поля у режимі перегляду: коротка «пігулка» фіксованої ширини, як у макеті. */
+/** Значення поля у режимі перегляду: «пігулка» фіксованої ширини, як у макеті (трохи більша). */
 const ValuePill = ({
   children,
   multiline = false,
@@ -92,8 +92,10 @@ const ValuePill = ({
   multiline?: boolean
 }) => (
   <div
-    className={`w-full max-w-[317px] rounded-[5px] border border-[#DCECFF] bg-white px-3 text-xs text-gray-500 ${
-      multiline ? 'min-h-6 whitespace-pre-wrap py-1' : 'flex h-6 items-center'
+    className={`w-full max-w-[440px] rounded-[7px] border border-[#DCECFF] bg-white px-4 text-sm text-gray-700 ${
+      multiline
+        ? 'min-h-10 whitespace-pre-wrap py-2'
+        : 'flex min-h-10 items-center py-1.5'
     }`}
   >
     {children}
@@ -116,10 +118,10 @@ const FieldRow = ({
   hintIsError?: boolean
   children: ReactNode
 }) => (
-  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-4">
+  <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-6">
     <label
       htmlFor={htmlFor}
-      className="flex h-6 shrink-0 items-center text-sm font-bold whitespace-nowrap text-black"
+      className="flex shrink-0 items-center text-base font-bold whitespace-nowrap text-black sm:h-10 sm:w-48"
     >
       {label}
       {required && <span className="ml-1 text-red-500">*</span>}
@@ -128,7 +130,7 @@ const FieldRow = ({
       {children}
       {hint && (
         <span
-          className={`text-[10px] ${hintIsError ? 'text-red-500' : 'text-ink-muted'}`}
+          className={`text-xs ${hintIsError ? 'text-red-500' : 'text-ink-muted'}`}
         >
           {hint}
         </span>
@@ -208,9 +210,9 @@ const ActionButton = ({
     type={type}
     onClick={onClick}
     disabled={disabled}
-    className="flex h-[22px] min-w-[195px] cursor-pointer items-center gap-2 rounded-[5px] bg-[#DCECFF] px-2.5 text-xs text-black transition-colors hover:bg-[#cde2fe] disabled:cursor-not-allowed disabled:opacity-50"
+    className="flex h-11 min-w-[220px] cursor-pointer items-center gap-3 rounded-[10px] bg-[#DCECFF] px-4 text-sm font-medium text-black transition-colors hover:bg-[#cde2fe] disabled:cursor-not-allowed disabled:opacity-50"
   >
-    {iconSrc && <img src={iconSrc} alt="" width={16} height={16} />}
+    {iconSrc && <img src={iconSrc} alt="" width={20} height={20} />}
     {icon && (
       <span aria-hidden="true" className="text-main">
         {icon}
@@ -579,7 +581,7 @@ export const ProfilePage = () => {
         <div className="h-0.5 w-full bg-[#DCECFF]" />
 
         {isSaved && !isEditing && (
-          <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-center text-xs font-medium text-green-700">
+          <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-center text-sm font-medium text-green-700">
             Дані профілю збережено!
           </div>
         )}
@@ -589,11 +591,11 @@ export const ProfilePage = () => {
             Завантаження даних профілю...
           </div>
         ) : profileError ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-xs font-medium text-red-700">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm font-medium text-red-700">
             {profileError}
           </div>
         ) : profile ? (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-3">
             <FieldRow label="Електронна пошта">
               <ValuePill>{profile.email}</ValuePill>
             </FieldRow>
@@ -630,7 +632,7 @@ export const ProfilePage = () => {
 
         {/* Кнопки дій: редагувати, організація, вийти */}
         {!isEditing && (
-          <div className="mt-4 flex flex-wrap items-center gap-x-9 gap-y-3">
+          <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3">
             <ActionButton
               onClick={startEditing}
               disabled={isProfileLoading || !profile}
@@ -656,9 +658,9 @@ export const ProfilePage = () => {
             <button
               type="button"
               onClick={handleLogout}
-              className="flex h-[21px] cursor-pointer items-center gap-1.5 border border-[#E14848] bg-white px-1.5 text-xs text-[#E14848] transition-colors hover:bg-red-50"
+              className="flex h-11 cursor-pointer items-center gap-2 rounded-[10px] border-2 border-[#E14848] bg-white px-5 text-sm font-medium text-[#E14848] transition-colors hover:bg-red-50"
             >
-              <img src={logoutIcon} alt="" width={13} height={13} /> Вийти
+              <img src={logoutIcon} alt="" width={18} height={18} /> Вийти
             </button>
           </div>
         )}
@@ -667,7 +669,7 @@ export const ProfilePage = () => {
         {user?.organization && !isEditing && (
           <div className="flex flex-col gap-3 rounded-lg border border-[#DCECFF] bg-[#F7FBFF] p-4">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="text-sm font-bold">
+              <span className="text-lg font-bold">
                 {orgData?.name ?? user.organization.name}
               </span>
               <Chip tone="role">
@@ -685,11 +687,11 @@ export const ProfilePage = () => {
               )}
             </div>
             {isOrgLoading ? (
-              <div className="text-xs text-ink-muted">
+              <div className="text-sm text-ink-muted">
                 Завантаження даних організації...
               </div>
             ) : orgError ? (
-              <div className="text-xs text-red-700">{orgError}</div>
+              <div className="text-sm text-red-700">{orgError}</div>
             ) : (
               <>
                 <FieldRow label="Електронна пошта">
