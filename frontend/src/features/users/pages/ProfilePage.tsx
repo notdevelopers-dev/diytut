@@ -93,10 +93,10 @@ const ValuePill = ({
   multiline?: boolean
 }) => (
   <div
-    className={`w-full max-w-[440px] rounded-[7px] border border-[#DCECFF] bg-white px-4 text-sm text-gray-700 ${
+    className={`w-full max-w-[440px] border border-[#DCECFF] bg-white px-5 text-sm text-gray-700 ${
       multiline
-        ? 'min-h-10 whitespace-pre-wrap py-2'
-        : 'flex min-h-10 items-center py-1.5'
+        ? 'min-h-10 rounded-[20px] whitespace-pre-wrap py-2.5'
+        : 'flex min-h-10 items-center rounded-full py-1.5'
     }`}
   >
     {children}
