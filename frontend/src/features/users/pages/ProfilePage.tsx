@@ -383,24 +383,26 @@ export const ProfilePage = () => {
   // Режим редагування — окремий екран за макетом «profile edit page»
   if (isEditing && form) {
     return (
-      <div className="flex flex-col">
-        {/* Заголовок на всю ширину: назва під логотипом, ✕ під кнопкою меню */}
-        <div className="flex w-full items-center justify-between gap-4 px-8 py-4">
-          <h1 className="font-head text-2xl font-normal text-main sm:text-3xl">
-            Редагувати профіль
-          </h1>
-          <button
-            type="button"
-            onClick={cancelEditing}
-            disabled={isSubmitting}
-            aria-label="Скасувати редагування"
-            title="Скасувати"
-            className="flex h-[46px] w-[55px] shrink-0 cursor-pointer items-center justify-center rounded-[11px] bg-[#F8B26C] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <img src={closeIcon} alt="" width={35} height={35} />
-          </button>
+      // Як «Редагувати організацію»: окремий екран поверх шапки сайту (без логотипа й меню)
+      <div className="fixed inset-0 z-40 flex flex-col justify-between overflow-y-auto bg-[#F7FBFF]">
+        <div className="w-full">
+          <div className="flex w-full items-center justify-between gap-4 px-8 pt-6 pb-4">
+            <h1 className="font-head text-2xl font-normal text-main sm:text-3xl">
+              Редагувати профіль
+            </h1>
+            <button
+              type="button"
+              onClick={cancelEditing}
+              disabled={isSubmitting}
+              aria-label="Скасувати редагування"
+              title="Скасувати"
+              className="flex h-[46px] w-[55px] shrink-0 cursor-pointer items-center justify-center rounded-[11px] bg-[#F8B26C] transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <img src={closeIcon} alt="" width={35} height={35} />
+            </button>
+          </div>
+          <div className="h-1 bg-main" />
         </div>
-        <div className="h-1 bg-main" />
 
         <form
           onSubmit={handleSubmit}
@@ -568,6 +570,8 @@ export const ProfilePage = () => {
             </div>
           </div>
         </form>
+
+        <div className="h-14 w-full shrink-0 border-t-2 border-info bg-[#DCECFF]" />
       </div>
     )
   }
