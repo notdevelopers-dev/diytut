@@ -54,6 +54,8 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run alembic upgrade head
       - run: uv run alembic check
+      # Відкат до нуля й повторне застосування: ловить забуті DROP (наприклад, типів enum)
+      - run: uv run alembic downgrade base && uv run alembic upgrade head
       - run: uv run pytest
 
   frontend:
