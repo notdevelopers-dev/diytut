@@ -665,7 +665,7 @@ export const ProfilePage = () => {
               onClick={() => switchMode('volunteer')}
               iconSrc={profileIcon}
             >
-              Переключити на волонтера
+              Змінити профіль
             </ActionButton>
             <button
               type="button"
@@ -781,7 +781,7 @@ export const ProfilePage = () => {
                 onClick={() => switchMode('organization')}
                 iconSrc={profileIcon}
               >
-                Переключити на організацію
+                Змінити профіль
               </ActionButton>
             )}
             <button

@@ -4,6 +4,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import addOrganizationIcon from '@/assets/icons/menu/add-organization.svg'
 import avatarIcon from '@/assets/icons/menu/avatar.svg'
 import closeIcon from '@/assets/icons/menu/close.svg'
+import headerAvatarIcon from '@/assets/icons/menu/header-avatar.svg'
 import logoutIcon from '@/assets/icons/menu/logout.svg'
 import organizationIcon from '@/assets/icons/menu/organization.svg'
 import profileIcon from '@/assets/icons/menu/profile.svg'
@@ -133,6 +134,17 @@ export const RootLayout = () => {
           <Logo />
 
           <div className="flex items-center gap-4">
+            {/* Іконка профілю з макета: відкриває профіль (у режимі організації — кабінет організації) */}
+            {isAuthenticated && (
+              <Link
+                to="/profile"
+                aria-label={isOrgMode ? 'Кабінет організації' : 'Мій профіль'}
+                title={isOrgMode ? 'Кабінет організації' : 'Мій профіль'}
+                className="flex size-[54px] items-center justify-center rounded-full transition-transform hover:scale-105 active:scale-95"
+              >
+                <img src={headerAvatarIcon} alt="" width={54} height={54} />
+              </Link>
+            )}
             {/* Жовта кнопка трьох рисочок (☰) */}
             {isAuthenticated ? (
               <button
@@ -250,8 +262,8 @@ export const RootLayout = () => {
                 <MenuSection title="Акаунт">
                   <MenuItem
                     icon={profileIcon}
-                    label="Переключити на волонтера"
-                    note={user?.name}
+                    label="Змінити профіль"
+                    note={`На волонтера: ${user?.name ?? 'мій профіль'}`}
                     onClick={() => switchMode('volunteer')}
                   />
                 </MenuSection>
@@ -329,8 +341,12 @@ export const RootLayout = () => {
                     з тією самою сесією, якщо користувач є учасником організації */}
                   <MenuItem
                     icon={organizationIcon}
-                    label="Переключити на організацію"
-                    note={org ? org.name : 'Спершу додайте організацію'}
+                    label="Змінити профіль"
+                    note={
+                      org
+                        ? `На організацію: ${org.name}`
+                        : 'Спершу додайте організацію'
+                    }
                     disabled={!org}
                     onClick={() => switchMode('organization')}
                   />
