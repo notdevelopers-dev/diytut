@@ -137,9 +137,9 @@ const FieldRow = ({
   </div>
 )
 
-/** Поле форми редагування (макет «profile edit page»): блакитне поле 28px висотою. */
+/** Поле форми редагування (макет «profile edit page», трохи збільшене): блакитне поле 40px висотою. */
 const editFieldClass = (invalid = false) =>
-  `w-full rounded-[5px] border bg-[#DCECFF] px-3 text-xs text-black focus:ring-2 focus:ring-main/40 focus:outline-none ${
+  `w-full rounded-[7px] border bg-[#DCECFF] px-4 text-sm text-black focus:ring-2 focus:ring-main/40 focus:outline-none ${
     invalid ? 'border-red-500' : 'border-main'
   }`
 
@@ -157,14 +157,14 @@ const EditField = ({
   hintIsError?: boolean
   children: ReactNode
 }) => (
-  <div className="flex flex-col gap-1">
-    <label htmlFor={htmlFor} className="text-xs font-medium text-black">
+  <div className="flex flex-col gap-1.5">
+    <label htmlFor={htmlFor} className="text-sm font-medium text-black">
       {label}
     </label>
     {children}
     {hint && (
       <span
-        className={`text-[10px] ${hintIsError ? 'text-red-500' : 'text-ink-muted'}`}
+        className={`text-xs ${hintIsError ? 'text-red-500' : 'text-ink-muted'}`}
       >
         {hint}
       </span>
@@ -371,7 +371,7 @@ export const ProfilePage = () => {
       <div className="flex flex-col">
         {/* Заголовок на всю ширину: назва під логотипом, ✕ під кнопкою меню */}
         <div className="flex w-full items-center justify-between gap-4 px-8 py-4">
-          <h1 className="font-head text-2xl font-normal text-main">
+          <h1 className="font-head text-2xl font-normal text-main sm:text-3xl">
             Редагувати профіль
           </h1>
           <button
@@ -390,26 +390,26 @@ export const ProfilePage = () => {
         <form
           onSubmit={handleSubmit}
           noValidate
-          className="mx-auto flex w-full max-w-[851px] flex-col gap-5 px-3 py-5 sm:px-8"
+          className="mx-auto flex w-full max-w-[1040px] flex-col gap-8 px-4 py-8 sm:px-8"
         >
           <div className="flex justify-center">
             <ProfileAvatar />
           </div>
 
           {formError && (
-            <div className="rounded-lg bg-red-100 p-2.5 text-center text-xs text-red-700">
+            <div className="rounded-lg bg-red-100 p-3 text-center text-sm text-red-700">
               {formError}
             </div>
           )}
           {citiesError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-xs font-medium text-red-700">
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm font-medium text-red-700">
               {citiesError}
             </div>
           )}
 
-          <div className="grid gap-x-10 gap-y-3 sm:grid-cols-[minmax(0,232px)_1fr_minmax(0,232px)]">
+          <div className="mx-auto grid w-full max-w-[420px] gap-x-12 gap-y-5 lg:max-w-none lg:grid-cols-[minmax(0,320px)_1fr_minmax(0,320px)]">
             {/* Ліва колонка */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-5">
               <EditField label="Ім’я" htmlFor="profile-first-name">
                 <input
                   id="profile-first-name"
@@ -417,7 +417,7 @@ export const ProfilePage = () => {
                   required
                   value={form.first_name}
                   onChange={(e) => updateForm({ first_name: e.target.value })}
-                  className={`h-7 ${editFieldClass()}`}
+                  className={`h-10 ${editFieldClass()}`}
                 />
               </EditField>
               <EditField label="Прізвище" htmlFor="profile-last-name">
@@ -427,7 +427,7 @@ export const ProfilePage = () => {
                   required
                   value={form.last_name}
                   onChange={(e) => updateForm({ last_name: e.target.value })}
-                  className={`h-7 ${editFieldClass()}`}
+                  className={`h-10 ${editFieldClass()}`}
                 />
               </EditField>
               <EditField label="Нікнейм" htmlFor="profile-nickname">
@@ -439,7 +439,7 @@ export const ProfilePage = () => {
                   maxLength={30}
                   value={form.nickname}
                   onChange={(e) => updateForm({ nickname: e.target.value })}
-                  className={`h-7 ${editFieldClass()}`}
+                  className={`h-10 ${editFieldClass()}`}
                 />
               </EditField>
               <EditField label="Дата народження" htmlFor="profile-birth-date">
@@ -451,13 +451,13 @@ export const ProfilePage = () => {
                   max={MAX_BIRTH_DATE}
                   value={form.birth_date}
                   onChange={(e) => updateForm({ birth_date: e.target.value })}
-                  className={`h-7 ${editFieldClass()}`}
+                  className={`h-10 ${editFieldClass()}`}
                 />
               </EditField>
             </div>
 
             {/* «Зберегти» посередині (на телефоні — під полями) */}
-            <div className="order-last flex items-center justify-center pt-2 sm:order-none sm:pt-0">
+            <div className="order-last flex items-center justify-center pt-2 lg:order-none lg:pt-0">
               <button
                 type="submit"
                 disabled={
@@ -466,14 +466,14 @@ export const ProfilePage = () => {
                   !form.city_id ||
                   cities.length === 0
                 }
-                className="h-[45px] w-40 cursor-pointer rounded-[11px] bg-main text-sm font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-[52px] w-[200px] cursor-pointer rounded-[14px] bg-main text-base font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSubmitting ? 'Збереження...' : 'Зберегти'}
               </button>
             </div>
 
             {/* Права колонка */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-5">
               {/* Значення відповідають GenderEnum бекенду */}
               <EditField label="Стать" htmlFor="profile-gender">
                 <select
@@ -482,7 +482,7 @@ export const ProfilePage = () => {
                   onChange={(e) =>
                     updateForm({ gender: e.target.value as Gender })
                   }
-                  className={`h-7 ${editFieldClass()}`}
+                  className={`h-10 ${editFieldClass()}`}
                 >
                   <option value="prefer_not_to_say">Волію не вказувати</option>
                   <option value="female">Жіноча</option>
@@ -498,7 +498,7 @@ export const ProfilePage = () => {
                   placeholder="Біографія"
                   value={form.bio}
                   onChange={(e) => updateForm({ bio: e.target.value })}
-                  className={`min-h-7 resize-y py-1.5 ${editFieldClass()}`}
+                  className={`min-h-10 resize-y py-2 ${editFieldClass()}`}
                 />
               </EditField>
               <EditField
@@ -514,7 +514,7 @@ export const ProfilePage = () => {
                   placeholder="+380"
                   value={form.phone}
                   onChange={handlePhoneChange}
-                  className={`h-7 ${editFieldClass(Boolean(phoneError))}`}
+                  className={`h-10 ${editFieldClass(Boolean(phoneError))}`}
                 />
               </EditField>
               <EditField
@@ -534,7 +534,7 @@ export const ProfilePage = () => {
                       city_id: e.target.value ? Number(e.target.value) : '',
                     })
                   }
-                  className={`h-7 ${editFieldClass()}`}
+                  className={`h-10 ${editFieldClass()}`}
                 >
                   {form.city_id === '' && (
                     <option value="" disabled>
