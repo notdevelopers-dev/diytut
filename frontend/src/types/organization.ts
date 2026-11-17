@@ -1,4 +1,5 @@
-import type { OrgStatus } from './common'
+import type { OrgRole, OrgStatus } from './common'
+import type { Project } from './project'
 
 /** Елемент GET /api/organizations (app.schemas.organizations.OrganizationListItem) */
 export interface OrganizationListItem {
@@ -10,4 +11,33 @@ export interface OrganizationListItem {
   description: string | null
   status: OrgStatus
   created_at: string
+}
+
+/** GET /api/organizations/:id (app.schemas.organizations.OrganizationDetailRead) */
+export interface OrganizationDetail extends OrganizationListItem {
+  edrpou: string | null
+  /** Опубліковані проєкти організації */
+  projects: Project[]
+}
+
+/** Статус заявки на вступ (app.models.JoinRequestStatusEnum) */
+export type JoinRequestStatus = 'pending' | 'accepted' | 'rejected'
+
+/** Заявка на вступ до організації (app.schemas.join_requests.JoinRequestRead) */
+export interface JoinRequest {
+  id: number
+  user_id: number
+  organization_id: number
+  message: string | null
+  status: JoinRequestStatus
+  reviewed_at: string | null
+  created_at: string
+}
+
+/** Елемент GET /api/users/me/organizations (OrganizationMembership) */
+export interface OrganizationMembership {
+  id: number
+  name: string
+  status: OrgStatus
+  role: OrgRole
 }

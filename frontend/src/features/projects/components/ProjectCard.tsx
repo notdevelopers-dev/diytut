@@ -42,6 +42,8 @@ interface ProjectCardProps {
   project: Project
   organizationName?: string
   cityName?: string
+  /** На сторінці самої організації її назву в картці не показуємо (як у макеті) */
+  showOrganization?: boolean
   /** Назви сфер з GET /api/categories; без них сфери не показуються */
   categoryNames?: Map<ProjectCategory, string>
   /**
@@ -57,6 +59,7 @@ export const ProjectCard = ({
   project,
   organizationName,
   cityName,
+  showOrganization = true,
   categoryNames,
   onTagClick,
   onCategoryClick,
@@ -81,13 +84,15 @@ export const ProjectCard = ({
         <img src={cameraIcon} alt="" width={25} height={25} />
       </div>
 
-      <Link
-        to={`/organizations/${project.organization_id}`}
-        title="Сторінка організації"
-        className="block truncate rounded-[5px] bg-[#F7FBFF] px-2 py-0.5 text-center text-[11px] text-black no-underline transition-colors hover:bg-white hover:underline"
-      >
-        {organizationName ?? 'Організація'}
-      </Link>
+      {showOrganization && (
+        <Link
+          to={`/organizations/${project.organization_id}`}
+          title="Сторінка організації"
+          className="block truncate rounded-[5px] bg-[#F7FBFF] px-2 py-0.5 text-center text-[11px] text-black no-underline transition-colors hover:bg-white hover:underline"
+        >
+          {organizationName ?? 'Організація'}
+        </Link>
+      )}
 
       <h2 className="rounded-[5px] bg-[#F7FBFF] px-2 py-0.5 text-center text-sm font-normal break-words text-black">
         {project.title}
