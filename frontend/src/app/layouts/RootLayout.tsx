@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
+import { SiteFooter } from '@/app/layouts/SiteFooter'
 import { Logo } from '@/components/ui/Logo'
 import { useAuth } from '@/features/auth/hooks'
 import {
@@ -62,8 +63,8 @@ export const RootLayout = () => {
         <Outlet />
       </main>
 
-      {/* 3. Нижня декоративна смужка */}
-      <footer className="h-14 w-full bg-[#DCECFF] border-t-2 border-info" />
+      {/* 3. Багатоколонковий футер; притиснутий донизу завдяки min-h-screen + flex-1 у main */}
+      <SiteFooter />
 
       {/* 4. ВИСУВНЕ МЕНЮ ОРГАНІЗАЦІЇ (image_2e19c8.png) */}
       {isMenuOpen && (

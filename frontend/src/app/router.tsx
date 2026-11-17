@@ -12,7 +12,9 @@ import {
   CreateOrganizationPage,
   EditOrganizationPage,
 } from '@/features/organizations'
+import { StaticPage } from '@/features/static-pages'
 import { ProfilePage } from '@/features/users'
+import { STATIC_PAGES } from '@/content/staticPages'
 
 /** Усі маршрути застосунку в одному місці. */
 export const AppRoutes = () => (
@@ -51,6 +53,14 @@ export const AppRoutes = () => (
           </AdminRoute>
         }
       />
+      {/* Статичні інформаційні сторінки з футера (публічні) */}
+      {STATIC_PAGES.map((page) => (
+        <Route
+          key={page.path}
+          path={page.path}
+          element={<StaticPage path={page.path} />}
+        />
+      ))}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Route>
   </Routes>
