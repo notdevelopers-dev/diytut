@@ -13,11 +13,17 @@ import addOrganizationIcon from '@/assets/icons/menu/add-organization.svg'
 import closeIcon from '@/assets/icons/menu/close.svg'
 import logoutIcon from '@/assets/icons/menu/logout.svg'
 import organizationIcon from '@/assets/icons/menu/organization.svg'
+import profileIcon from '@/assets/icons/menu/profile.svg'
 import settingsIcon from '@/assets/icons/menu/settings.svg'
 import { getApiErrorMessage, getErrorStatus } from '@/lib/errors'
 import { isValidPhone, normalizePhone } from '@/lib/phone'
 import type { Gender, VolunteerProfile } from '../api'
 import { useMyProfile, useUpdateMyProfile } from '../hooks'
+import {
+  setProfileMode,
+  useProfileMode,
+  type ProfileMode,
+} from '../profileMode'
 
 /** Дані форми редагування анкети (поля PATCH /api/users/me) */
 interface ProfileForm {
@@ -253,6 +259,13 @@ export const ProfilePage = () => {
     ? 'Не вдалося завантажити дані організації. Оновіть сторінку.'
     : null
 
+  // Режим профілю (волонтер / організація) — перемикається в меню чи кнопкою тут
+  const isOrgMode = useProfileMode() === 'organization'
+  const switchMode = (mode: ProfileMode) => {
+    setProfileMode(mode)
+    window.scrollTo({ top: 0 })
+  }
+
   // Режим редагування анкети
   const [isEditing, setIsEditing] = useState(false)
   const [form, setForm] = useState<ProfileForm | null>(null)
@@ -261,6 +274,7 @@ export const ProfilePage = () => {
   const [isSaved, setIsSaved] = useState(false)
 
   const handleLogout = () => {
+    setProfileMode('volunteer')
     logout()
     void navigate('/login')
   }
@@ -560,6 +574,112 @@ export const ProfilePage = () => {
     )
   }
 
+  // Режим організації: та сама розмітка, але з даними організації з GET /organizations/me.
+  // Списки проєктів і учасників — окрема задача (SCRUM-131)
+  if (isOrgMode && user?.organization) {
+    const org = user.organization
+    const city = cities.find((c) => c.id === orgData?.city_id)
+    return (
+      <div className="flex flex-col">
+        <div className="border-y border-info bg-cream px-3 py-1">
+          <h1 className="text-3xl font-normal text-black">
+            Кабінет організації
+          </h1>
+        </div>
+
+        <div className="flex w-full flex-col gap-5 px-3 py-4">
+          <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+            <div className="flex size-32 shrink-0 items-center justify-center rounded-full bg-main">
+              <img
+                src={organizationIcon}
+                alt=""
+                width={72}
+                height={72}
+                className="brightness-0 invert"
+              />
+            </div>
+            <div className="flex flex-col items-start gap-3">
+              <Chip>{orgData?.name ?? org.name}</Chip>
+              {orgData?.email && <Chip>{orgData.email}</Chip>}
+              <Chip tone="role">Організація</Chip>
+            </div>
+          </div>
+
+          <div className="h-0.5 w-full bg-[#DCECFF]" />
+
+          {isOrgLoading ? (
+            <div className="text-sm text-ink-muted">
+              Завантаження даних організації...
+            </div>
+          ) : orgError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm font-medium text-red-700">
+              {orgError}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <FieldRow label="Назва">
+                <ValuePill>{orgData?.name ?? org.name}</ValuePill>
+              </FieldRow>
+              <FieldRow label="Електронна пошта">
+                <ValuePill>{orgData?.email ?? '—'}</ValuePill>
+              </FieldRow>
+              <FieldRow label="Телефон">
+                <ValuePill>{orgData?.phone ?? '—'}</ValuePill>
+              </FieldRow>
+              <FieldRow label="Місто">
+                <ValuePill>
+                  {city
+                    ? `${city.name}${city.region ? ` (${city.region})` : ''}`
+                    : 'Не вказано'}
+                </ValuePill>
+              </FieldRow>
+              <FieldRow label="Код ЄДРПОУ">
+                <ValuePill>{orgData?.edrpou || 'Не вказано'}</ValuePill>
+              </FieldRow>
+              <FieldRow label="Статус">
+                <ValuePill>
+                  {getOrgStatusLabel(org.status) ?? 'Невідомий'}
+                </ValuePill>
+              </FieldRow>
+              <FieldRow label="Ваша роль">
+                <ValuePill>{getOrgRoleLabel(org.role)}</ValuePill>
+              </FieldRow>
+              <FieldRow label="Опис">
+                <ValuePill multiline>
+                  {orgData?.description || 'Опис відсутній'}
+                </ValuePill>
+              </FieldRow>
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3">
+            {canEditOrganization(org) && (
+              <ActionButton
+                onClick={() => void navigate('/organization/edit')}
+                iconSrc={settingsIcon}
+              >
+                Редагувати організацію
+              </ActionButton>
+            )}
+            <ActionButton
+              onClick={() => switchMode('volunteer')}
+              iconSrc={profileIcon}
+            >
+              Переключити на волонтера
+            </ActionButton>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex h-11 cursor-pointer items-center gap-2 rounded-full border-2 border-[#E14848] bg-white px-5 text-sm font-medium text-[#E14848] transition-colors hover:bg-red-50"
+            >
+              <img src={logoutIcon} alt="" width={18} height={18} /> Вийти
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col">
       {/* Жовта смуга із заголовком сторінки (макет «volunteer info page») */}
@@ -654,6 +774,14 @@ export const ProfilePage = () => {
                 iconSrc={addOrganizationIcon}
               >
                 Створити організацію
+              </ActionButton>
+            )}
+            {user?.organization && (
+              <ActionButton
+                onClick={() => switchMode('organization')}
+                iconSrc={profileIcon}
+              >
+                Переключити на організацію
               </ActionButton>
             )}
             <button

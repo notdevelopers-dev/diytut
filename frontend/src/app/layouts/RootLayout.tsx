@@ -10,6 +10,16 @@ import profileIcon from '@/assets/icons/menu/profile.svg'
 import settingsIcon from '@/assets/icons/menu/settings.svg'
 import { Logo } from '@/components/ui/Logo'
 import { useAuth } from '@/features/auth/hooks'
+import {
+  canEditOrganization,
+  getOrgRoleLabel,
+  getOrgStatusLabel,
+} from '@/features/organizations/utils'
+import {
+  setProfileMode,
+  useProfileMode,
+  type ProfileMode,
+} from '@/features/users/profileMode'
 
 /** Пункт меню: широка кнопка з іконкою в блакитному квадратику й стрілкою праворуч */
 const MenuItem = ({
@@ -93,8 +103,17 @@ export const RootLayout = () => {
 
   const handleLogout = () => {
     setIsMenuOpen(false)
+    // Наступний вхід завжди починається з профілю волонтера
+    setProfileMode('volunteer')
     logout()
     void navigate('/login')
+  }
+
+  // Режим профілю (волонтер / організація) — лише інтерфейс
+  const isOrgMode = useProfileMode() === 'organization'
+  const switchMode = (mode: ProfileMode) => {
+    setProfileMode(mode)
+    goTo('/profile')
   }
 
   // Перехід із меню: закриваємо панель і відкриваємо сторінку
@@ -183,86 +202,153 @@ export const RootLayout = () => {
             <div className="h-1 w-full bg-main" />
 
             {/* Вміст прокручується, «Вийти» завжди видно внизу */}
-            <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-5 py-6">
-              {/* Картка користувача */}
-              <div className="flex items-center gap-4 rounded-2xl border-2 border-[#DCECFF] bg-white p-4">
-                <img
-                  src={avatarIcon}
-                  alt=""
-                  width={56}
-                  height={56}
-                  className="shrink-0"
-                />
-                <div className="flex min-w-0 flex-col gap-1">
-                  <span className="truncate text-lg font-semibold text-black">
-                    {user?.name ?? 'Користувач'}
+            {isOrgMode && org ? (
+              <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-5 py-6">
+                {/* Картка організації */}
+                <div className="flex items-center gap-4 rounded-2xl border-2 border-[#DCECFF] bg-white p-4">
+                  <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-main">
+                    <img
+                      src={organizationIcon}
+                      alt=""
+                      width={30}
+                      height={30}
+                      className="brightness-0 invert"
+                    />
                   </span>
-                  {user?.nickname && (
-                    <span className="truncate text-sm text-ink-muted">
-                      @{user.nickname}
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <span className="truncate text-lg font-semibold text-black">
+                      {org.name}
                     </span>
-                  )}
-                  <span className="w-fit rounded-full border border-main bg-[#DCECFF] px-3 py-0.5 text-xs text-main">
-                    {user?.role === 'admin' ? 'Адміністратор' : 'Волонтер'}
-                  </span>
+                    <span className="truncate text-sm text-ink-muted">
+                      {getOrgRoleLabel(org.role)}
+                      {getOrgStatusLabel(org.status) &&
+                        ` · ${getOrgStatusLabel(org.status)}`}
+                    </span>
+                    <span className="w-fit rounded-full border border-main bg-[#DCECFF] px-3 py-0.5 text-xs text-main">
+                      Організація
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              <MenuSection title="Профіль">
-                <MenuItem
-                  icon={profileIcon}
-                  label="Мій профіль"
-                  isActive={location.pathname === '/profile'}
-                  onClick={() => goTo('/profile')}
-                />
-                <MenuItem
-                  icon={settingsIcon}
-                  label="Редагувати профіль"
-                  onClick={() => goTo('/profile', { edit: true })}
-                />
-              </MenuSection>
-
-              <MenuSection title="Організація">
-                {org ? (
+                <MenuSection title="Організація">
                   <MenuItem
                     icon={organizationIcon}
-                    label="Моя організація"
-                    note={org.name}
-                    isActive={location.pathname === '/organization/edit'}
-                    onClick={() => goTo('/organization/edit')}
+                    label="Профіль організації"
+                    isActive={location.pathname === '/profile'}
+                    onClick={() => goTo('/profile')}
                   />
-                ) : (
-                  // Сторінка створення пускає лише тих, у кого організації ще немає
-                  <MenuItem
-                    icon={addOrganizationIcon}
-                    label="Додати організацію"
-                    isActive={location.pathname === '/organization/create'}
-                    onClick={() => goTo('/organization/create')}
-                  />
-                )}
-                {/* Перемикання в акаунт організації: на бекенді ще немає ендпоінта,
-                    тож пункт вимкнений (відкрите питання з SCRUM-27 / SCRUM-35) */}
-                <MenuItem
-                  icon={profileIcon}
-                  label="Переключити профіль"
-                  note="Незабаром"
-                  disabled
-                  title="Перемикання в акаунт організації стане доступним, щойно бекенд додасть відповідний ендпоінт"
-                />
-              </MenuSection>
+                  {canEditOrganization(org) && (
+                    <MenuItem
+                      icon={settingsIcon}
+                      label="Редагувати організацію"
+                      isActive={location.pathname === '/organization/edit'}
+                      onClick={() => goTo('/organization/edit')}
+                    />
+                  )}
+                </MenuSection>
 
-              {/* Адмін-панель — лише для адміністраторів платформи */}
-              {user?.role === 'admin' && (
-                <MenuSection title="Адміністрування">
+                <MenuSection title="Акаунт">
                   <MenuItem
-                    icon={settingsIcon}
-                    label="Адмін панель"
-                    isActive={location.pathname.startsWith('/admin')}
-                    onClick={() => goTo('/admin')}
+                    icon={profileIcon}
+                    label="Переключити на волонтера"
+                    note={user?.name}
+                    onClick={() => switchMode('volunteer')}
                   />
                 </MenuSection>
-              )}
-            </div>
+
+                {user?.role === 'admin' && (
+                  <MenuSection title="Адміністрування">
+                    <MenuItem
+                      icon={settingsIcon}
+                      label="Адмін панель"
+                      isActive={location.pathname.startsWith('/admin')}
+                      onClick={() => goTo('/admin')}
+                    />
+                  </MenuSection>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-5 py-6">
+                {/* Картка користувача */}
+                <div className="flex items-center gap-4 rounded-2xl border-2 border-[#DCECFF] bg-white p-4">
+                  <img
+                    src={avatarIcon}
+                    alt=""
+                    width={56}
+                    height={56}
+                    className="shrink-0"
+                  />
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <span className="truncate text-lg font-semibold text-black">
+                      {user?.name ?? 'Користувач'}
+                    </span>
+                    {user?.nickname && (
+                      <span className="truncate text-sm text-ink-muted">
+                        @{user.nickname}
+                      </span>
+                    )}
+                    <span className="w-fit rounded-full border border-main bg-[#DCECFF] px-3 py-0.5 text-xs text-main">
+                      {user?.role === 'admin' ? 'Адміністратор' : 'Волонтер'}
+                    </span>
+                  </div>
+                </div>
+
+                <MenuSection title="Профіль">
+                  <MenuItem
+                    icon={profileIcon}
+                    label="Мій профіль"
+                    isActive={location.pathname === '/profile'}
+                    onClick={() => goTo('/profile')}
+                  />
+                  <MenuItem
+                    icon={settingsIcon}
+                    label="Редагувати профіль"
+                    onClick={() => goTo('/profile', { edit: true })}
+                  />
+                </MenuSection>
+
+                <MenuSection title="Організація">
+                  {org ? (
+                    <MenuItem
+                      icon={organizationIcon}
+                      label="Моя організація"
+                      note={org.name}
+                      isActive={location.pathname === '/organization/edit'}
+                      onClick={() => goTo('/organization/edit')}
+                    />
+                  ) : (
+                    // Сторінка створення пускає лише тих, у кого організації ще немає
+                    <MenuItem
+                      icon={addOrganizationIcon}
+                      label="Додати організацію"
+                      isActive={location.pathname === '/organization/create'}
+                      onClick={() => goTo('/organization/create')}
+                    />
+                  )}
+                  {/* Перемикання в акаунт організації — лише інтерфейс: бекенд працює
+                    з тією самою сесією, якщо користувач є учасником організації */}
+                  <MenuItem
+                    icon={organizationIcon}
+                    label="Переключити на організацію"
+                    note={org ? org.name : 'Спершу додайте організацію'}
+                    disabled={!org}
+                    onClick={() => switchMode('organization')}
+                  />
+                </MenuSection>
+
+                {/* Адмін-панель — лише для адміністраторів платформи */}
+                {user?.role === 'admin' && (
+                  <MenuSection title="Адміністрування">
+                    <MenuItem
+                      icon={settingsIcon}
+                      label="Адмін панель"
+                      isActive={location.pathname.startsWith('/admin')}
+                      onClick={() => goTo('/admin')}
+                    />
+                  </MenuSection>
+                )}
+              </div>
+            )}
 
             <div className="border-t-2 border-[#DCECFF] px-5 py-5">
               <button
