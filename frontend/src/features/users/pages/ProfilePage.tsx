@@ -10,6 +10,7 @@ import {
   getOrgStatusLabel,
 } from '@/features/organizations/utils'
 import addOrganizationIcon from '@/assets/icons/menu/add-organization.svg'
+import avatarIcon from '@/assets/icons/menu/avatar.svg'
 import closeIcon from '@/assets/icons/menu/close.svg'
 import logoutIcon from '@/assets/icons/menu/logout.svg'
 import organizationIcon from '@/assets/icons/menu/organization.svg'
@@ -20,6 +21,7 @@ import { isValidPhone, normalizePhone } from '@/lib/phone'
 import type { Gender, VolunteerProfile } from '../api'
 import { useMyProfile, useUpdateMyProfile } from '../hooks'
 import {
+  changeAccount,
   setProfileMode,
   useProfileMode,
   type ProfileMode,
@@ -182,19 +184,15 @@ const EditField = ({
 )
 
 /** Аватар-заглушка (фото профілю бекенд поки не зберігає). */
+// Іконка з макета (carbon:user-avatar-filled), блакитна, як у Figma
 const ProfileAvatar = () => (
-  <div className="flex size-32 shrink-0 items-center justify-center rounded-full bg-main text-white">
-    <svg
-      width="96"
-      height="96"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="8" r="4.5" />
-      <path d="M3.5 21c0-4.2 3.8-7 8.5-7s8.5 2.8 8.5 7z" />
-    </svg>
-  </div>
+  <img
+    src={avatarIcon}
+    alt=""
+    width={128}
+    height={128}
+    className="size-32 shrink-0"
+  />
 )
 
 /** Блакитна кнопка дії з макета. */
@@ -667,6 +665,12 @@ export const ProfilePage = () => {
             >
               Переключити на волонтера
             </ActionButton>
+            <ActionButton
+              onClick={() => void changeAccount()}
+              iconSrc={profileIcon}
+            >
+              Змінити профіль
+            </ActionButton>
             <button
               type="button"
               onClick={handleLogout}
@@ -784,6 +788,12 @@ export const ProfilePage = () => {
                 Переключити на організацію
               </ActionButton>
             )}
+            <ActionButton
+              onClick={() => void changeAccount()}
+              iconSrc={profileIcon}
+            >
+              Змінити профіль
+            </ActionButton>
             <button
               type="button"
               onClick={handleLogout}

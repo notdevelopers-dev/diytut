@@ -16,6 +16,7 @@ import {
   getOrgStatusLabel,
 } from '@/features/organizations/utils'
 import {
+  changeAccount,
   setProfileMode,
   useProfileMode,
   type ProfileMode,
@@ -254,6 +255,12 @@ export const RootLayout = () => {
                     note={user?.name}
                     onClick={() => switchMode('volunteer')}
                   />
+                  <MenuItem
+                    icon={profileIcon}
+                    label="Змінити профіль"
+                    note="Увійти іншим Google-акаунтом"
+                    onClick={() => void changeAccount()}
+                  />
                 </MenuSection>
 
                 {user?.role === 'admin' && (
@@ -333,6 +340,16 @@ export const RootLayout = () => {
                     note={org ? org.name : 'Спершу додайте організацію'}
                     disabled={!org}
                     onClick={() => switchMode('organization')}
+                  />
+                </MenuSection>
+
+                <MenuSection title="Акаунт">
+                  {/* Вийти й одразу відкрити вхід через Google */}
+                  <MenuItem
+                    icon={profileIcon}
+                    label="Змінити профіль"
+                    note="Увійти іншим Google-акаунтом"
+                    onClick={() => void changeAccount()}
                   />
                 </MenuSection>
 

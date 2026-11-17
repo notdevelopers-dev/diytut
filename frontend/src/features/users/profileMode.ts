@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { logoutRequest } from '@/features/auth/api'
 import { useAuth } from '@/features/auth/hooks'
 
 /**
@@ -41,6 +42,20 @@ const subscribe = (listener: () => void) => {
 }
 
 const getSnapshot = () => currentMode
+
+/**
+ * «Змінити профіль»: вийти й одразу відкрити вхід через Google, щоб увійти іншим акаунтом.
+ * Чекаємо на вихід, щоб нова сесія не перетнулася зі старою.
+ */
+export const changeAccount = async () => {
+  try {
+    await logoutRequest()
+  } catch {
+    // Навіть якщо вихід не вдався, вхід через Google поставить нову сесію
+  }
+  setProfileMode('volunteer')
+  window.location.href = '/api/auth/google/login'
+}
 
 /** Поточний режим; без організації — завжди «волонтер». */
 export const useProfileMode = (): ProfileMode => {
