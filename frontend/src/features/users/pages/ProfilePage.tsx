@@ -9,6 +9,7 @@ import {
   getOrgRoleLabel,
   getOrgStatusLabel,
 } from '@/features/organizations/utils'
+import addOrganizationIcon from '@/assets/icons/menu/add-organization.svg'
 import closeIcon from '@/assets/icons/menu/close.svg'
 import logoutIcon from '@/assets/icons/menu/logout.svg'
 import organizationIcon from '@/assets/icons/menu/organization.svg'
@@ -210,7 +211,7 @@ const ActionButton = ({
     type={type}
     onClick={onClick}
     disabled={disabled}
-    className="flex h-11 min-w-[220px] cursor-pointer items-center gap-3 rounded-[10px] bg-[#DCECFF] px-4 text-sm font-medium text-black transition-colors hover:bg-[#cde2fe] disabled:cursor-not-allowed disabled:opacity-50"
+    className="flex h-11 min-w-[220px] cursor-pointer items-center gap-3 rounded-full border border-main/40 bg-[#DCECFF] px-5 text-sm font-medium text-black transition-colors hover:bg-[#cde2fe] disabled:cursor-not-allowed disabled:opacity-50"
   >
     {iconSrc && <img src={iconSrc} alt="" width={20} height={20} />}
     {icon && (
@@ -468,7 +469,7 @@ export const ProfilePage = () => {
                   !form.city_id ||
                   cities.length === 0
                 }
-                className="h-[52px] w-[200px] cursor-pointer rounded-[14px] bg-main text-base font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-[52px] w-[200px] cursor-pointer rounded-full bg-main text-base font-medium text-black shadow-[0px_3px_4px_0px_rgba(26,44,74,0.25)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSubmitting ? 'Збереження...' : 'Зберегти'}
               </button>
@@ -650,7 +651,7 @@ export const ProfilePage = () => {
             ) : (
               <ActionButton
                 onClick={() => void navigate('/organization/create')}
-                icon="＋"
+                iconSrc={addOrganizationIcon}
               >
                 Створити організацію
               </ActionButton>
@@ -658,7 +659,7 @@ export const ProfilePage = () => {
             <button
               type="button"
               onClick={handleLogout}
-              className="flex h-11 cursor-pointer items-center gap-2 rounded-[10px] border-2 border-[#E14848] bg-white px-5 text-sm font-medium text-[#E14848] transition-colors hover:bg-red-50"
+              className="flex h-11 cursor-pointer items-center gap-2 rounded-full border-2 border-[#E14848] bg-white px-5 text-sm font-medium text-[#E14848] transition-colors hover:bg-red-50"
             >
               <img src={logoutIcon} alt="" width={18} height={18} /> Вийти
             </button>

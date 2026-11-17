@@ -268,7 +268,7 @@ export const RootLayout = () => {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-[#E14848] bg-white text-base font-medium text-[#E14848] transition-colors hover:bg-red-50"
+                className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-full border-2 border-[#E14848] bg-white text-base font-medium text-[#E14848] transition-colors hover:bg-red-50"
               >
                 <img src={logoutIcon} alt="" width={20} height={20} />
                 Вийти
