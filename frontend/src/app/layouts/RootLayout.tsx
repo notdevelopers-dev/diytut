@@ -115,15 +115,15 @@ const SITE_SECTIONS: Section[] = [
 const ORGANIZATION_SECTIONS: Section[] = [
   {
     to: null,
-    label: 'Учасники організації',
-    shortLabel: 'Учасники',
-    tone: 'border-info',
-  },
-  {
-    to: null,
     label: 'Проєкти організації',
     shortLabel: 'Наші проєкти',
     tone: 'border-main',
+  },
+  {
+    to: null,
+    label: 'Учасники організації',
+    shortLabel: 'Учасники',
+    tone: 'border-info',
   },
 ]
 
@@ -232,13 +232,12 @@ export const RootLayout = () => {
             )}
           </div>
         </div>
-        <div className="h-1 w-full bg-main" />
 
         {/* Розділи сайту — невеликий список по центру під шапкою (Figma).
             У режимі організації до каталогів додаються її власні розділи */}
         <nav
           aria-label="Розділи"
-          className="mx-auto grid w-full max-w-[480px] grid-cols-2 gap-2 px-3 pt-4 pb-1 sm:gap-3 lg:flex lg:max-w-none lg:justify-center lg:gap-4"
+          className="mx-auto grid w-full max-w-[480px] grid-cols-2 gap-2 px-3 pt-1 pb-4 sm:gap-3 lg:flex lg:max-w-none lg:justify-center lg:gap-4"
         >
           {(isOrgMode && org
             ? [...SITE_SECTIONS, ...ORGANIZATION_SECTIONS]
@@ -276,6 +275,8 @@ export const RootLayout = () => {
             )
           })}
         </nav>
+        {/* Блакитна лінія під розділами: відділяє шапку від вмісту сторінки */}
+        <div className="h-1 w-full bg-main shadow-[0_3px_8px_rgba(121,183,255,0.35)]" />
       </header>
 
       {/* 2. Основний вміст сайту */}
