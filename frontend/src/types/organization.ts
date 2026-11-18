@@ -34,6 +34,17 @@ export interface JoinRequest {
   created_at: string
 }
 
+/** Елемент GET /api/organizations/me/join-requests (OrganizationJoinRequestRead) */
+export interface OrganizationJoinRequest extends JoinRequest {
+  user: {
+    id: number
+    first_name: string | null
+    last_name: string
+    nickname: string | null
+    city_id: number | null
+  }
+}
+
 /** Елемент GET /api/users/me/organizations (OrganizationMembership) */
 export interface OrganizationMembership {
   id: number

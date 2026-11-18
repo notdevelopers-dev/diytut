@@ -111,16 +111,16 @@ const SITE_SECTIONS: Section[] = [
   },
 ]
 
-// Режим організації: сторінки з'являться в FE-201 (кабінет організації), поки заглушки
+// Режим організації: вкладки кабінету організації (FE-201)
 const ORGANIZATION_SECTIONS: Section[] = [
   {
-    to: null,
+    to: '/organization/dashboard?tab=members',
     label: 'Учасники організації',
     shortLabel: 'Учасники',
     tone: 'border-info',
   },
   {
-    to: null,
+    to: '/organization/dashboard',
     label: 'Проєкти організації',
     shortLabel: 'Наші проєкти',
     tone: 'border-main',
@@ -260,7 +260,12 @@ export const RootLayout = () => {
                 </span>
               )
             }
-            const isActive = location.pathname.startsWith(item.to)
+            // Шлях разом із ?tab=…: «Учасники» і «Проєкти» — вкладки однієї сторінки
+            const [itemPath, itemQuery = ''] = item.to.split('?')
+            const currentTab = new URLSearchParams(location.search).get('tab')
+            const itemTab = new URLSearchParams(itemQuery).get('tab')
+            const isActive =
+              location.pathname.startsWith(itemPath) && currentTab === itemTab
             return (
               <Link
                 key={item.to}
