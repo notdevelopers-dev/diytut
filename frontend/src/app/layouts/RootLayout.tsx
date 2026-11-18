@@ -94,8 +94,6 @@ interface Section {
   label: string
   shortLabel: string
   tone: string
-  /** Непарна кнопка: на телефоні й планшеті займає весь ряд під каталогами */
-  wide?: boolean
 }
 
 const SITE_SECTIONS: Section[] = [
@@ -113,15 +111,19 @@ const SITE_SECTIONS: Section[] = [
   },
 ]
 
-// Режим організації: одна кнопка в панель організації (FE-201); проєкти, учасники
-// й заявки — вкладки самої панелі. Поки панелі немає, кнопка — заглушка
+// Режим організації: сторінки з'являться в FE-201 (кабінет організації), поки заглушки
 const ORGANIZATION_SECTIONS: Section[] = [
   {
     to: null,
-    label: 'Панель організації',
-    shortLabel: 'Панель організації',
+    label: 'Учасники організації',
+    shortLabel: 'Учасники',
+    tone: 'border-info',
+  },
+  {
+    to: null,
+    label: 'Проєкти організації',
+    shortLabel: 'Наші проєкти',
     tone: 'border-main',
-    wide: true,
   },
 ]
 
@@ -242,10 +244,9 @@ export const RootLayout = () => {
             ? [...SITE_SECTIONS, ...ORGANIZATION_SECTIONS]
             : SITE_SECTIONS
           ).map((item) => {
-            const pillClass = `flex h-8 min-w-0 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:text-base lg:w-[220px] ${
-              item.wide ? 'col-span-2' : ''
-            }`
-            // Сторінки панелі організації ще немає (FE-201, SCRUM-131)
+            const pillClass =
+              'flex h-8 min-w-0 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:text-base lg:w-[220px]'
+            // Сторінок учасників і проєктів організації ще немає (FE-201, SCRUM-131)
             if (!item.to) {
               return (
                 <span
