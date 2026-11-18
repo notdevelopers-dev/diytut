@@ -88,7 +88,7 @@ const MenuSection = ({
   </section>
 )
 
-/** Розділи під шапкою: шлях, назва (коротка — для телефона) і колір з Figma */
+/** Розділи під шапкою: шлях, назва (коротка — для телефона) і колір з Figma (заливка чи рамка) */
 interface Section {
   to: string | null
   label: string
@@ -117,13 +117,13 @@ const ORGANIZATION_SECTIONS: Section[] = [
     to: null,
     label: 'Учасники організації',
     shortLabel: 'Учасники',
-    tone: 'bg-info',
+    tone: 'border-info',
   },
   {
     to: null,
     label: 'Проєкти організації',
-    shortLabel: 'Проєкти',
-    tone: 'bg-main',
+    shortLabel: 'Наші проєкти',
+    tone: 'border-main',
   },
 ]
 
@@ -235,45 +235,46 @@ export const RootLayout = () => {
         <div className="h-1 w-full bg-main" />
 
         {/* Розділи сайту — невеликий список по центру під шапкою (Figma).
-            У режимі організації — її власні розділи замість каталогів (каталоги
-            лишаються доступними з головної) */}
+            У режимі організації до каталогів додаються її власні розділи */}
         <nav
           aria-label="Розділи"
-          className="flex justify-center gap-3 px-3 pt-4 pb-1 sm:gap-6"
+          className="mx-auto grid w-full max-w-[480px] grid-cols-2 gap-2 px-3 pt-4 pb-1 sm:gap-3 lg:flex lg:max-w-none lg:justify-center lg:gap-4"
         >
-          {(isOrgMode && org ? ORGANIZATION_SECTIONS : SITE_SECTIONS).map(
-            (item) => {
-              const pillClass = `flex h-8 max-w-[240px] min-w-0 flex-1 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:min-w-[220px] sm:flex-none sm:px-5 sm:text-base ${item.tone}`
-              // Сторінок учасників і проєктів організації ще немає (FE-201, SCRUM-131)
-              if (!item.to) {
-                return (
-                  <span
-                    key={item.label}
-                    aria-disabled="true"
-                    title="Незабаром"
-                    className={`${pillClass} cursor-not-allowed opacity-60`}
-                  >
-                    <span className="sm:hidden">{item.shortLabel}</span>
-                    <span className="hidden sm:inline">{item.label}</span>
-                  </span>
-                )
-              }
-              const isActive = location.pathname.startsWith(item.to)
+          {(isOrgMode && org
+            ? [...SITE_SECTIONS, ...ORGANIZATION_SECTIONS]
+            : SITE_SECTIONS
+          ).map((item) => {
+            const pillClass =
+              'flex h-8 min-w-0 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:text-base lg:w-[220px]'
+            // Сторінок учасників і проєктів організації ще немає (FE-201, SCRUM-131)
+            if (!item.to) {
               return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={`${pillClass} transition hover:brightness-95 ${
-                    isActive ? 'font-semibold ring-2 ring-black/15' : ''
-                  }`}
+                <span
+                  key={item.label}
+                  aria-disabled="true"
+                  title="Сторінка з’явиться незабаром"
+                  className={`${pillClass} cursor-default border-2 bg-white ${item.tone}`}
                 >
                   <span className="sm:hidden">{item.shortLabel}</span>
                   <span className="hidden sm:inline">{item.label}</span>
-                </Link>
+                </span>
               )
-            },
-          )}
+            }
+            const isActive = location.pathname.startsWith(item.to)
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                aria-current={isActive ? 'page' : undefined}
+                className={`${pillClass} transition hover:brightness-95 ${item.tone} ${
+                  isActive ? 'font-semibold ring-2 ring-black/15' : ''
+                }`}
+              >
+                <span className="sm:hidden">{item.shortLabel}</span>
+                <span className="hidden sm:inline">{item.label}</span>
+              </Link>
+            )
+          })}
         </nav>
       </header>
 
