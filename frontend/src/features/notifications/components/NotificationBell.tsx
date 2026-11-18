@@ -1,123 +1,101 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import type { CSSProperties } from 'react'
 import bellIcon from '@/assets/icons/notifications/bell.svg'
 import { useAuth } from '@/features/auth/hooks'
-import { useMarkAllRead, useNotifications } from '../hooks'
-import { NotificationItem } from './NotificationItem'
+import { useNotifications } from '../hooks'
+import { NotificationsDropdown } from './NotificationsDropdown'
 
-/** Скільки останніх сповіщень показувати у випадному списку */
-const DROPDOWN_LIMIT = 6
+/** Ширина списку й відступ від країв екрана */
+const DROPDOWN_WIDTH = 400
+const EDGE = 12
 
 /**
- * Дзвіночок у шапці з лічильником непрочитаних і випадним списком (SCRUM-136).
- * Вигляд дзвіночка — з Figma («Сповіщення — 2 непрочитані»).
+ * Список прив’язуємо до дзвіночка, але не даємо йому вилізти за край екрана
+ * (на телефоні дзвіночок не біля правого краю: праворуч аватар і меню).
+ */
+const getDropdownStyle = (button: HTMLElement): CSSProperties => {
+  const rect = button.getBoundingClientRect()
+  const width = Math.min(DROPDOWN_WIDTH, window.innerWidth - EDGE * 2)
+  const left = Math.min(
+    Math.max(EDGE, rect.right - width),
+    window.innerWidth - EDGE - width,
+  )
+  return { top: rect.bottom + 8, left, width }
+}
+
+/**
+ * Дзвіночок у шапці з лічильником непрочитаних (SCRUM-136).
+ * Вигляд — з Figma («Сповіщення — 2 непрочитані»).
  */
 export const NotificationBell = () => {
   const { isAuthenticated } = useAuth()
-  const { items, unreadCount, isLoading, isError, mode } = useNotifications()
-  const { mutate: markAllRead, isPending } = useMarkAllRead()
-  const [isOpen, setIsOpen] = useState(false)
+  const { unreadCount } = useNotifications()
+  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const isOpen = dropdownStyle !== null
 
-  // Закриваємо кліком поза компонентом або Esc
+  // Закриваємо кліком поза компонентом, Esc або зміною розміру вікна
   useEffect(() => {
     if (!isOpen) return
+    const close = () => setDropdownStyle(null)
     const onPointerDown = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setIsOpen(false)
+      if (!rootRef.current?.contains(e.target as Node)) close()
     }
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false)
+      if (e.key === 'Escape') close()
     }
     document.addEventListener('pointerdown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
+    window.addEventListener('resize', close)
+    // Список закріплений на екрані, тож прокручування сторінки теж його закриває
+    window.addEventListener('scroll', close, { passive: true })
     return () => {
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', close)
     }
   }, [isOpen])
 
   // Лише для тих, хто увійшов (критерій приймання)
   if (!isAuthenticated) return null
 
-  const badge = unreadCount > 9 ? '9+' : String(unreadCount)
-  const title =
-    mode === 'organization' ? 'Сповіщення організації' : 'Сповіщення'
+  const toggle = () =>
+    setDropdownStyle((current) =>
+      current || !buttonRef.current
+        ? null
+        : getDropdownStyle(buttonRef.current),
+    )
 
   return (
     <div ref={rootRef} className="relative">
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={toggle}
         aria-label={
           unreadCount > 0
             ? `Сповіщення: ${unreadCount} непрочитаних`
             : 'Сповіщення'
         }
         aria-expanded={isOpen}
-        className="relative flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-[5px] sm:size-10 border border-main bg-[#DCECFF] transition-transform hover:scale-105 active:scale-95"
+        className="relative flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-[5px] border border-main bg-[#DCECFF] transition-transform hover:scale-105 active:scale-95 sm:size-10"
       >
         <img src={bellIcon} alt="" width={22} height={22} />
         {/* Лічильник ховаємо, коли непрочитаних немає (критерій приймання) */}
         {unreadCount > 0 && (
           <span className="absolute -top-2 -right-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#E14848] px-1 text-[11px] leading-none font-medium text-white">
-            {badge}
+            {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
-      {isOpen && (
-        <div
-          role="dialog"
-          aria-label={title}
-          className="fixed top-20 right-3 left-3 z-40 flex max-h-[min(560px,calc(100dvh-6rem))] flex-col overflow-hidden rounded-2xl border-2 border-[#DCECFF] bg-white shadow-xl sm:absolute sm:top-12 sm:right-0 sm:left-auto sm:w-[400px]"
-        >
-          <div className="flex items-center justify-between gap-3 border-b-2 border-[#DCECFF] px-4 py-3">
-            <span className="text-base font-bold text-black">{title}</span>
-            <button
-              type="button"
-              onClick={() => markAllRead(items)}
-              disabled={unreadCount === 0 || isPending}
-              className="cursor-pointer text-xs font-medium text-main hover:text-main-hover disabled:cursor-default disabled:text-[#8B99AA]"
-            >
-              ✓ Позначити все прочитаним
-            </button>
-          </div>
-
-          <div className="flex-1 divide-y divide-[#EEF4FB] overflow-y-auto">
-            {isLoading ? (
-              <p className="px-4 py-6 text-center text-sm text-[#8B99AA]">
-                Завантаження...
-              </p>
-            ) : isError ? (
-              <p className="px-4 py-6 text-center text-sm text-red-700">
-                Не вдалося завантажити сповіщення
-              </p>
-            ) : items.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-[#8B99AA]">
-                Сповіщень поки немає
-              </p>
-            ) : (
-              items
-                .slice(0, DROPDOWN_LIMIT)
-                .map((n) => (
-                  <NotificationItem
-                    key={n.id}
-                    notification={n}
-                    compact
-                    onOpen={() => setIsOpen(false)}
-                  />
-                ))
-            )}
-          </div>
-
-          <Link
-            to="/notifications"
-            onClick={() => setIsOpen(false)}
-            className="border-t-2 border-[#DCECFF] px-4 py-3 text-center text-sm font-medium text-main no-underline hover:bg-[#F3F8FF]"
-          >
-            Усі сповіщення
-          </Link>
-        </div>
+      {dropdownStyle && (
+        <NotificationsDropdown
+          style={dropdownStyle}
+          onClose={() => setDropdownStyle(null)}
+        />
       )}
     </div>
   )

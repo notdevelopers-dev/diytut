@@ -70,6 +70,12 @@ export const NotificationItem = ({
         >
           {notification.message}
         </span>
+        {/* Видно одразу, що сповіщення веде на сторінку; решта лише позначаються прочитаними */}
+        {link && (
+          <span className="mt-0.5 text-xs font-semibold text-main">
+            Відкрити ›
+          </span>
+        )}
       </div>
       <div className="flex shrink-0 flex-col items-end text-xs text-[#8B99AA]">
         <span>{date}</span>
