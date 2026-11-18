@@ -89,7 +89,10 @@ const MenuSection = ({
 )
 
 export const RootLayout = () => {
-  const { isAuthenticated, user, logout } = useAuth()
+  const { isAuthenticated, isProfileComplete, user, logout } = useAuth()
+  // Увійшов через Google, але анкету ще не заповнив: профіль, меню й сповіщення
+  // йому ще недоступні, тож у шапці лише кнопка завершення реєстрації
+  const isRegistered = isAuthenticated && isProfileComplete
   const navigate = useNavigate()
   const location = useLocation()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -142,7 +145,7 @@ export const RootLayout = () => {
           <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             {/* Дзвіночок сповіщень — лише для тих, хто увійшов */}
             <NotificationBell />
-            {isAuthenticated ? (
+            {isRegistered ? (
               <>
                 {/* Іконка профілю з макета: відкриває профіль чи кабінет організації */}
                 <Link
@@ -173,6 +176,13 @@ export const RootLayout = () => {
                   </div>
                 </button>
               </>
+            ) : isAuthenticated ? (
+              <Link
+                to="/register/complete"
+                className="shrink-0 rounded-lg bg-main px-3 py-2 text-sm font-medium text-white no-underline sm:px-4"
+              >
+                Завершити реєстрацію
+              </Link>
             ) : (
               <Link
                 to="/login"
