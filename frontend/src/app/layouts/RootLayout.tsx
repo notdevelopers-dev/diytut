@@ -94,8 +94,6 @@ interface Section {
   label: string
   shortLabel: string
   tone: string
-  /** Непарна кнопка: на телефоні й планшеті займає весь ряд під каталогами */
-  wide?: boolean
 }
 
 const SITE_SECTIONS: Section[] = [
@@ -113,15 +111,19 @@ const SITE_SECTIONS: Section[] = [
   },
 ]
 
-// Режим організації: одна кнопка в панель організації (FE-201); проєкти, учасники
-// й заявки — вкладки самої панелі
+// Режим організації: вкладки панелі організації (FE-201)
 const ORGANIZATION_SECTIONS: Section[] = [
   {
     to: '/organization/dashboard',
-    label: 'Панель організації',
-    shortLabel: 'Панель організації',
+    label: 'Проєкти організації',
+    shortLabel: 'Наші проєкти',
     tone: 'border-main',
-    wide: true,
+  },
+  {
+    to: '/organization/dashboard?tab=members',
+    label: 'Учасники організації',
+    shortLabel: 'Учасники',
+    tone: 'border-info',
   },
 ]
 
@@ -230,21 +232,19 @@ export const RootLayout = () => {
             )}
           </div>
         </div>
-        <div className="h-1 w-full bg-main" />
 
         {/* Розділи сайту — невеликий список по центру під шапкою (Figma).
             У режимі організації до каталогів додаються її власні розділи */}
         <nav
           aria-label="Розділи"
-          className="mx-auto grid w-full max-w-[480px] grid-cols-2 gap-2 px-3 pt-4 pb-1 sm:gap-3 lg:flex lg:max-w-none lg:justify-center lg:gap-4"
+          className="mx-auto grid w-full max-w-[480px] grid-cols-2 gap-2 px-3 pt-1 pb-4 sm:gap-3 lg:flex lg:max-w-none lg:justify-center lg:gap-4"
         >
           {(isOrgMode && org
             ? [...SITE_SECTIONS, ...ORGANIZATION_SECTIONS]
             : SITE_SECTIONS
           ).map((item) => {
-            const pillClass = `flex h-8 min-w-0 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:text-base lg:w-[220px] ${
-              item.wide ? 'col-span-2' : ''
-            }`
+            const pillClass =
+              'flex h-8 min-w-0 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:text-base lg:w-[220px]'
             // Кнопка без сторінки — заглушка
             if (!item.to) {
               return (
@@ -263,10 +263,10 @@ export const RootLayout = () => {
             const [itemPath, itemQuery = ''] = item.to.split('?')
             const currentTab = new URLSearchParams(location.search).get('tab')
             const itemTab = new URLSearchParams(itemQuery).get('tab')
-            // Без ?tab у посиланні кнопка активна на будь-якій вкладці сторінки
+            // Без ?tab — перша вкладка («Проєкти»): кнопки панелі не світяться разом
             const isActive =
               location.pathname.startsWith(itemPath) &&
-              (itemTab === null || currentTab === itemTab)
+              (currentTab ?? 'projects') === (itemTab ?? 'projects')
             return (
               <Link
                 key={item.to}
@@ -282,6 +282,8 @@ export const RootLayout = () => {
             )
           })}
         </nav>
+        {/* Блакитна лінія під розділами: відділяє шапку від вмісту сторінки */}
+        <div className="h-1 w-full bg-main shadow-[0_3px_8px_rgba(121,183,255,0.35)]" />
       </header>
 
       {/* 2. Основний вміст сайту */}
