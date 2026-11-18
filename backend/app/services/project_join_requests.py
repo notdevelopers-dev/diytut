@@ -11,7 +11,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, func, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import distinct_on, insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -142,21 +142,32 @@ def reapply_delay(rejections: int) -> timedelta:
     return delay
 
 
-async def _check_reapply_delay(db_session: AsyncSession, user_id: int, project_id: int) -> None:
-    rejections, last_rejected_at = (
-        await db_session.execute(
-            _project_requests()
-            .with_only_columns(func.count(), func.max(JoinRequest.reviewed_at))
-            .where(
-                JoinRequest.user_id == user_id,
-                JoinRequest.project_id == project_id,
-                JoinRequest.status == JoinRequestStatusEnum.rejected,
-            )
+async def _reapply_times(
+    db_session: AsyncSession, user_id: int, project_ids: Iterable[int]
+) -> dict[int, datetime]:
+    """Коли закінчиться пауза після відмов: для кожного проєкту, де вони були."""
+    rows = await db_session.execute(
+        _project_requests()
+        .with_only_columns(JoinRequest.project_id, func.count(), func.max(JoinRequest.reviewed_at))
+        .where(
+            JoinRequest.user_id == user_id,
+            JoinRequest.project_id.in_(set(project_ids)),
+            JoinRequest.status == JoinRequestStatusEnum.rejected,
+            JoinRequest.reviewed_at.is_not(None),
         )
-    ).one()
-    if not rejections or last_rejected_at is None:
+        .group_by(JoinRequest.project_id)
+    )
+    return {
+        project_id: last_rejected_at + reapply_delay(rejections)
+        for project_id, rejections, last_rejected_at in rows
+    }
+
+
+async def _check_reapply_delay(db_session: AsyncSession, user_id: int, project_id: int) -> None:
+    reapply_at = (await _reapply_times(db_session, user_id, [project_id])).get(project_id)
+    if reapply_at is None:
         return
-    remaining = last_rejected_at + reapply_delay(rejections) - datetime.now(UTC)
+    remaining = reapply_at - datetime.now(UTC)
     if remaining > timedelta(0):
         raise errors.reapply_too_soon(math.ceil(remaining.total_seconds()))
 
@@ -300,14 +311,60 @@ async def create_project_join_request(
     return join_request
 
 
-async def get_my_project_request(
+async def get_my_request_statuses(
+    db_session: AsyncSession, user_id: int, project_ids: Iterable[int]
+) -> list[tuple[JoinRequest, datetime | None]]:
+    """Остання заявка користувача на кожен із проєктів, де вона є, і коли після відмови
+    можна подати нову (None — повторна заявка неможлива або не потрібна).
+
+    Одним запитом для всіх карток сторінки, а не запитом на кожну.
+    """
+    ids = set(project_ids)
+    latest = list(
+        await db_session.scalars(
+            _project_requests()
+            .options(joinedload(JoinRequest.project, innerjoin=True))
+            .where(JoinRequest.user_id == user_id, JoinRequest.project_id.in_(ids))
+            .ext(distinct_on(JoinRequest.project_id))
+            .order_by(JoinRequest.project_id, JoinRequest.created_at.desc(), JoinRequest.id.desc())
+        )
+    )
+    # Повторна заявка можлива лише після відмови, на відкритий проєкт і поза ігнором.
+    # Ігнор так виглядає звичайною відмовою, лише без часу повторної заявки
+    rejected = [
+        request
+        for request in latest
+        if request.status == JoinRequestStatusEnum.rejected and is_open(request.project)
+    ]
+    reapply_at: dict[int, datetime] = {}
+    if rejected:
+        ignored_organizations = set(
+            await db_session.scalars(
+                select(OrganizationIgnoredUser.organization_id).where(
+                    OrganizationIgnoredUser.user_id == user_id,
+                    OrganizationIgnoredUser.organization_id.in_(
+                        {request.organization_id for request in rejected}
+                    ),
+                )
+            )
+        )
+        times = await _reapply_times(db_session, user_id, (r.project_id for r in rejected))
+        reapply_at = {
+            request.project_id: times[request.project_id]
+            for request in rejected
+            if request.organization_id not in ignored_organizations and request.project_id in times
+        }
+    return [(request, reapply_at.get(request.project_id)) for request in latest]
+
+
+async def get_my_request_status(
     db_session: AsyncSession, user_id: int, project_id: int
-) -> JoinRequest:
+) -> tuple[JoinRequest, datetime | None]:
     """Остання заявка користувача на проєкт, хоч би яким був її статус."""
-    join_request = await _latest_request(db_session, user_id, project_id)
-    if join_request is None:
+    statuses = await get_my_request_statuses(db_session, user_id, [project_id])
+    if not statuses:
         raise errors.join_request_not_found()
-    return join_request
+    return statuses[0]
 
 
 async def cancel_my_project_request(

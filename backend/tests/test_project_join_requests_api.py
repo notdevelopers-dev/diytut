@@ -469,6 +469,7 @@ def test_read_my_request(client, db, setup) -> None:
     response = client.get(status_url(setup["project"]))
     assert response.status_code == 200
     assert response.json()["id"] == request_id
+    assert response.json()["can_reapply_at"] is None
 
 
 @pytest.mark.parametrize("status", [JoinRequestStatusEnum.pending, JoinRequestStatusEnum.accepted])
@@ -776,3 +777,90 @@ def test_plain_member_cannot_manage_ignored_users(client, db, make_user, setup) 
     assert client.get("/api/organizations/me/ignored-users").status_code == 403
     url = f"/api/organizations/me/ignored-users/{setup['volunteer']}"
     assert client.delete(url).status_code == 403
+
+
+# --- стани для карток одним запитом і час повторної заявки ---
+
+STATUSES_URL = "/api/projects/my-request-statuses"
+
+
+def test_statuses_for_several_projects(client, db, make_project, setup) -> None:
+    second = make_project(setup["org"])
+    without_request = make_project(setup["org"])
+    add_request(
+        db, setup["org"], setup["project"], setup["volunteer"],
+        status=JoinRequestStatusEnum.cancelled,
+    )  # fmt: skip
+    latest = add_request(db, setup["org"], setup["project"], setup["volunteer"])
+    accepted = add_request(
+        db, setup["org"], second, setup["volunteer"], status=JoinRequestStatusEnum.accepted
+    )
+    sign_in(client, setup["volunteer"])
+
+    response = client.get(
+        STATUSES_URL, params={"project_id": [setup["project"], second, without_request]}
+    )
+
+    assert response.status_code == 200
+    by_project = {item["project_id"]: item for item in response.json()}
+    # Проєкт без заявок у відповіді відсутній, з кількох заявок — остання
+    assert set(by_project) == {setup["project"], second}
+    assert by_project[setup["project"]]["id"] == latest
+    assert by_project[second]["id"] == accepted
+
+
+def test_statuses_show_only_own_requests(client, db, make_user, setup) -> None:
+    add_request(db, setup["org"], setup["project"], make_user())
+    sign_in(client, setup["volunteer"])
+
+    assert client.get(STATUSES_URL, params={"project_id": setup["project"]}).json() == []
+
+
+@pytest.mark.parametrize(
+    "params",
+    [{}, {"project_id": 0}, {"project_id": "abc"}, {"project_id": list(range(1, 102))}],
+    ids=["missing", "zero", "not_int", "too_many"],
+)
+def test_statuses_validation(client, setup, params) -> None:
+    sign_in(client, setup["volunteer"])
+
+    assert client.get(STATUSES_URL, params=params).status_code == 422
+
+
+def test_statuses_require_auth(client, setup) -> None:
+    assert client.get(STATUSES_URL, params={"project_id": 1}).status_code == 401
+
+
+def test_rejected_status_has_reapply_time(client, db, setup) -> None:
+    rejected_at = datetime.now(UTC) - timedelta(seconds=3)
+    add_rejections(db, setup, 2, rejected_at)
+    sign_in(client, setup["volunteer"])
+
+    body = client.get(status_url(setup["project"])).json()
+
+    assert body["status"] == "rejected"
+    # Друга відмова — пауза 50 с від останньої
+    assert datetime.fromisoformat(body["can_reapply_at"]) == rejected_at + timedelta(seconds=50)
+
+
+def test_ignored_volunteer_has_no_reapply_time(client, db, setup) -> None:
+    request_id = add_request(db, setup["org"], setup["project"], setup["volunteer"])
+    sign_in(client, setup["owner"])
+    client.patch(review_url(request_id), json={"status": "rejected", "ignore": True})
+    sign_in(client, setup["volunteer"])
+
+    body = client.get(status_url(setup["project"])).json()
+
+    assert body["status"] == "rejected"
+    assert body["can_reapply_at"] is None
+
+
+def test_started_project_has_no_reapply_time(client, db, make_project, setup) -> None:
+    project_id = make_project(setup["org"], starts_at=datetime.now(UTC) - timedelta(hours=1))
+    add_request(
+        db, setup["org"], project_id, setup["volunteer"],
+        status=JoinRequestStatusEnum.rejected, reviewed_at=datetime.now(UTC),
+    )  # fmt: skip
+    sign_in(client, setup["volunteer"])
+
+    assert client.get(status_url(project_id)).json()["can_reapply_at"] is None

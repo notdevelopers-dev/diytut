@@ -1,7 +1,11 @@
 import { apiClient } from '@/lib/api-client'
-import { getErrorStatus } from '@/lib/errors'
 import type { JoinRequest } from '@/types/organization'
-import type { CategoryItem, Project, ProjectCategory } from '@/types/project'
+import type {
+  CategoryItem,
+  Project,
+  ProjectCategory,
+  ProjectJoinRequestStatus,
+} from '@/types/project'
 
 export interface FetchProjectsParams {
   /** Пошук за назвою й описом (бекенд, ilike) */
@@ -40,19 +44,18 @@ export const fetchCategories = async (): Promise<CategoryItem[]> => {
   return data
 }
 
-/** Остання заявка користувача на проєкт; `null`, якщо заявок ще не було (404) */
-export const fetchMyProjectJoinRequest = async (
-  projectId: number,
-): Promise<JoinRequest | null> => {
-  try {
-    const { data } = await apiClient.get<JoinRequest>(
-      `/projects/${projectId}/my-request-status`,
-    )
-    return data
-  } catch (err: unknown) {
-    if (getErrorStatus(err) === 404) return null
-    throw err
-  }
+/**
+ * Останні заявки користувача на ці проєкти одним запитом (до 100 id); проєктів без
+ * заявок у відповіді немає
+ */
+export const fetchMyProjectRequestStatuses = async (
+  projectIds: number[],
+): Promise<ProjectJoinRequestStatus[]> => {
+  const { data } = await apiClient.get<ProjectJoinRequestStatus[]>(
+    '/projects/my-request-statuses',
+    { params: { project_id: projectIds } },
+  )
+  return data
 }
 
 /** Заявка на проєкт; супровідний лист необов'язковий (до 1000 символів) */
@@ -63,6 +66,16 @@ export const createProjectJoinRequest = async (
   const { data } = await apiClient.post<JoinRequest>(
     `/projects/${projectId}/join-requests`,
     { message: message.trim() || null },
+  )
+  return data
+}
+
+/** Скасувати свою заявку (в очікуванні чи схвалену) до початку події */
+export const cancelProjectJoinRequest = async (
+  projectId: number,
+): Promise<JoinRequest> => {
+  const { data } = await apiClient.delete<JoinRequest>(
+    `/projects/${projectId}/my-request`,
   )
   return data
 }

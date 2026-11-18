@@ -45,7 +45,7 @@ export const projectsCatalogUrl = (filter: {
 }
 
 /** «Через 17 хв» тощо для заголовка Retry-After (секунди) */
-const formatRetryAfter = (seconds: number) => {
+export const formatRetryAfter = (seconds: number) => {
   if (seconds < 60) return `${seconds} с`
   if (seconds < 3600) return `${Math.ceil(seconds / 60)} хв`
   if (seconds < 86400) return `${Math.ceil(seconds / 3600)} год`
@@ -82,5 +82,17 @@ export const projectJoinErrorText = (error: unknown) => {
       return 'Проєкт не знайдено.'
     default:
       return 'Не вдалося надіслати запит. Спробуйте ще раз.'
+  }
+}
+
+/** Тексти для помилок скасування заявки */
+export const projectCancelErrorText = (error: unknown) => {
+  switch (getErrorStatus(error)) {
+    case 409:
+      return 'Проєкт уже розпочався: скасувати запит не можна.'
+    case 404:
+      return 'Активного запиту вже немає.'
+    default:
+      return 'Не вдалося скасувати запит. Спробуйте ще раз.'
   }
 }

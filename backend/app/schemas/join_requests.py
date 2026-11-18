@@ -86,6 +86,23 @@ class JoinRequestReviewRead(JoinRequestRead):
     reviewed_by: int | None
 
 
+class ProjectJoinRequestStatusRead(JoinRequestRead):
+    """Стан кнопки «Приєднатись» на картці проєкту."""
+
+    # Лише для відхиленої заявки: коли закінчиться пауза й можна подати нову. None —
+    # повторна заявка неможлива (проєкт уже почався чи закритий) або не потрібна
+    can_reapply_at: datetime | None
+
+    @classmethod
+    def from_status(
+        cls, join_request: JoinRequest, can_reapply_at: datetime | None
+    ) -> ProjectJoinRequestStatusRead:
+        return cls(
+            **JoinRequestRead.model_validate(join_request).model_dump(),
+            can_reapply_at=can_reapply_at,
+        )
+
+
 class ProjectJoinRequestApplicant(JoinRequestApplicant):
     """Волонтер у заявці на проєкт: організація бачить його рівень і години (R-27)."""
 

@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, status
-from pydantic import StringConstraints
+from pydantic import Field, StringConstraints
 
 from app.auth import CurrentUserId
 from app.db import DbSessionDep
@@ -10,12 +10,15 @@ from app.schemas.join_requests import (
     JoinRequestCreate,
     JoinRequestRead,
     ProjectJoinRequestRead,
+    ProjectJoinRequestStatusRead,
 )
 from app.schemas.projects import ProjectCreate, ProjectListItem, ProjectRead
 from app.schemas.users import MAX_BIGINT, MAX_INT32
 from app.services import project_join_requests as join_requests_service
 from app.services import projects as service
 
+# Більше карток на сторінці не буває: каталог віддає до 100 проєктів за раз
+MAX_STATUS_PROJECTS = 100
 # Більше хештегів у фільтрі каталогу не потрібно, а довгий список лише навантажує запит
 MAX_TAG_FILTERS = 20
 MAX_TAG_FILTER_LENGTH = 100
@@ -54,6 +57,22 @@ async def list_projects(
 
 
 ProjectId = Annotated[int, Path(gt=0, le=MAX_BIGINT)]
+
+
+# Оголошено до /{project_id}: інакше шлях сприймався б як id проєкту
+@router.get("/my-request-statuses")
+async def read_my_request_statuses(
+    db_session: DbSessionDep,
+    user_id: CurrentUserId,
+    # ?project_id=1&project_id=2: стани для всіх карток сторінки одним запитом;
+    # проєкти без заявок у відповіді відсутні
+    project_id: Annotated[
+        list[Annotated[int, Field(gt=0, le=MAX_BIGINT)]],
+        Query(min_length=1, max_length=MAX_STATUS_PROJECTS),
+    ],
+) -> list[ProjectJoinRequestStatusRead]:
+    statuses = await join_requests_service.get_my_request_statuses(db_session, user_id, project_id)
+    return [ProjectJoinRequestStatusRead.from_status(*item) for item in statuses]
 
 
 @router.get("/{project_id}")
@@ -105,11 +124,11 @@ async def list_join_requests(
 @router.get("/{project_id}/my-request-status")
 async def read_my_join_request(
     project_id: ProjectId, db_session: DbSessionDep, user_id: CurrentUserId
-) -> JoinRequestRead:
-    join_request = await join_requests_service.get_my_project_request(
+) -> ProjectJoinRequestStatusRead:
+    join_request, can_reapply_at = await join_requests_service.get_my_request_status(
         db_session, user_id, project_id
     )
-    return JoinRequestRead.model_validate(join_request)
+    return ProjectJoinRequestStatusRead.from_status(join_request, can_reapply_at)
 
 
 @router.delete("/{project_id}/my-request")

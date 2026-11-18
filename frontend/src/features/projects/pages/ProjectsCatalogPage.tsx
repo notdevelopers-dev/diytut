@@ -10,6 +10,7 @@ import {
 import {
   PROJECTS_PAGE_SIZE,
   useCategories,
+  useMyProjectRequestStatuses,
   useOrganizationNames,
   useProjects,
 } from '@/features/projects/hooks'
@@ -54,6 +55,9 @@ export const ProjectsCatalogPage = () => {
   } = useProjects({ query, cityId, categories })
 
   const projects = data?.items ?? []
+  const joinStatuses = useMyProjectRequestStatuses(
+    projects.map((project) => project.id),
+  )
 
   const cityNames = useMemo(
     () => new Map(cities.map((city) => [city.id, city.name])),
@@ -258,6 +262,8 @@ export const ProjectsCatalogPage = () => {
                       categoryNames={categoryNames}
                       onTagClick={handleTagClick}
                       onCategoryClick={handleCategoryClick}
+                      joinStatus={joinStatuses.statuses.get(project.id)}
+                      isJoinStatusLoading={joinStatuses.isLoading}
                       organizationName={organizationNames?.get(
                         project.organization_id,
                       )}

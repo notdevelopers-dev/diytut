@@ -1,21 +1,14 @@
 import { useId, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import cameraIcon from '@/assets/icons/camera.svg'
-import clockIcon from '@/assets/icons/clock.svg'
-import memberCheckIcon from '@/assets/icons/member-check.svg'
-import { useToast } from '@/components/feedback'
-import { useAuth } from '@/features/auth/hooks'
-import { JoinRequestModal } from '@/features/organizations/components/JoinRequestModal'
-import {
-  useCreateProjectJoinRequest,
-  useMyProjectJoinRequest,
-} from '@/features/projects/hooks'
-import {
-  projectJoinErrorText,
-  projectsCatalogUrl,
-} from '@/features/projects/utils'
-import type { JoinRequestStatus } from '@/types/organization'
-import type { ExperienceLevel, Project, ProjectCategory } from '@/types/project'
+import { ProjectJoinAction } from '@/features/projects/components/ProjectJoinAction'
+import { projectsCatalogUrl } from '@/features/projects/utils'
+import type {
+  ExperienceLevel,
+  Project,
+  ProjectCategory,
+  ProjectJoinRequestStatus,
+} from '@/types/project'
 
 /** Назви рівнів досвіду з документа скоупу (R-27) */
 const EXPERIENCE_LABELS: Record<ExperienceLevel, string> = {
@@ -44,19 +37,6 @@ const formatHours = (hours: string | null) => {
   return `${value.toLocaleString('uk-UA', { maximumFractionDigits: 2 })} год`
 }
 
-/** Стан кнопки на картці; скасована заявка — знову «Приєднатись» */
-type ProjectJoinState = 'default' | 'pending' | 'member' | 'rejected'
-
-const JOIN_STATES: Record<JoinRequestStatus, ProjectJoinState> = {
-  pending: 'pending',
-  accepted: 'member',
-  rejected: 'rejected',
-  cancelled: 'default',
-}
-
-const joinPillClass =
-  'mx-auto flex items-center gap-1.5 rounded-[5px] px-4 py-1 text-xs'
-
 const badgeClass = 'rounded-[5px] px-1.5 py-0.5 text-[10px] leading-tight'
 
 const clickableBadge =
@@ -76,6 +56,9 @@ interface ProjectCardProps {
    */
   onTagClick?: (tag: string) => void
   onCategoryClick?: (category: ProjectCategory) => void
+  /** Остання заявка користувача на проєкт (useMyProjectRequestStatuses на сторінці) */
+  joinStatus?: ProjectJoinRequestStatus | null
+  isJoinStatusLoading?: boolean
 }
 
 /** Картка проєкту за макетом Figma («Projects section») із бейджами з задачі. */
@@ -87,51 +70,11 @@ export const ProjectCard = ({
   categoryNames,
   onTagClick,
   onCategoryClick,
+  joinStatus,
+  isJoinStatusLoading,
 }: ProjectCardProps) => {
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(false)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const {
-    isAuthenticated,
-    isProfileComplete,
-    isLoading: isAuthLoading,
-  } = useAuth()
-  const navigate = useNavigate()
-  const { showToast } = useToast()
   const descriptionId = useId()
-
-  // Заявки має лише користувач із заповненою анкетою
-  const canHaveRequests = isAuthenticated && isProfileComplete
-  const { data: joinRequest, isLoading: isJoinRequestLoading } =
-    useMyProjectJoinRequest(project.id, canHaveRequests)
-  const createJoinRequest = useCreateProjectJoinRequest(project.id)
-  const joinState: ProjectJoinState = joinRequest
-    ? JOIN_STATES[joinRequest.status]
-    : 'default'
-  const isJoinStateLoading =
-    isAuthLoading || (canHaveRequests && isJoinRequestLoading)
-
-  const handleJoinClick = () => {
-    // Не увійшов — на сторінку входу; анкету не заповнив — спершу анкета
-    if (!isAuthenticated) {
-      void navigate('/login')
-      return
-    }
-    if (!isProfileComplete) {
-      void navigate('/register/complete')
-      return
-    }
-    createJoinRequest.reset()
-    setIsModalOpen(true)
-  }
-
-  const handleSubmit = (message: string) => {
-    createJoinRequest.mutate(message, {
-      onSuccess: () => {
-        setIsModalOpen(false)
-        showToast('Запит на участь надіслано')
-      },
-    })
-  }
 
   const date = formatDate(project.starts_at)
   const hours = formatHours(project.volunteer_hours)
@@ -236,60 +179,12 @@ export const ProjectCard = ({
         </p>
       </div>
 
-      {isJoinStateLoading ? (
-        <div
-          aria-hidden="true"
-          className="mx-auto h-6 w-28 animate-pulse rounded-[5px] bg-[#C2D4EA]"
-        />
-      ) : joinState === 'pending' ? (
-        <p
-          data-testid="project-join"
-          data-state="pending"
-          className={`${joinPillClass} bg-[#C2D4EA] text-[#8B99AA]`}
-        >
-          <img src={clockIcon} alt="" width={14} height={14} />
-          Запит очікує
-        </p>
-      ) : joinState === 'member' ? (
-        <p
-          data-testid="project-join"
-          data-state="member"
-          className={`${joinPillClass} bg-[#B5F291] text-black`}
-        >
-          <img src={memberCheckIcon} alt="" width={16} height={16} />
-          Ви учасник
-        </p>
-      ) : joinState === 'rejected' ? (
-        <p
-          data-testid="project-join"
-          data-state="rejected"
-          className={`${joinPillClass} bg-[#C2D4EA] text-[#8B99AA]`}
-        >
-          Запит відхилено
-        </p>
-      ) : (
-        <button
-          type="button"
-          data-testid="project-join"
-          data-state="default"
-          onClick={handleJoinClick}
-          className="mx-auto block cursor-pointer rounded-[5px] bg-[#B5F291] px-5 py-1 text-center text-xs text-black transition-colors hover:bg-[#a3e47c]"
-        >
-          Приєднатись
-        </button>
-      )}
-
-      {isModalOpen && (
-        <JoinRequestModal
-          title="Запит на участь у проєкті"
-          subtitle={project.title}
-          isSubmitting={createJoinRequest.isPending}
-          error={createJoinRequest.error}
-          describeError={projectJoinErrorText}
-          onSubmit={handleSubmit}
-          onClose={() => setIsModalOpen(false)}
-        />
-      )}
+      <ProjectJoinAction
+        projectId={project.id}
+        projectTitle={project.title}
+        status={joinStatus}
+        isLoading={isJoinStatusLoading}
+      />
     </article>
   )
 }

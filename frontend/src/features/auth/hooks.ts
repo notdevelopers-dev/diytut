@@ -1,6 +1,7 @@
 ﻿import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getErrorStatus } from '@/lib/errors'
+import { removeUserScopedQueries } from '@/lib/query-client'
 import { fetchMe, logoutRequest, registerUser } from './api'
 import type { MeResponse } from './api'
 import type { Role, User } from './types'
@@ -77,8 +78,9 @@ export const useLogout = () => {
   return useMutation({
     mutationFn: logoutRequest,
     onMutate: () => {
-      // Користувача прибираємо одразу, не чекаючи відповіді
+      // Користувача прибираємо одразу, не чекаючи відповіді, разом із його даними
       queryClient.setQueryData(AUTH_ME_QUERY_KEY, null)
+      removeUserScopedQueries(queryClient)
     },
     onError: (error: unknown) => {
       console.error('Помилка під час виходу:', error)
