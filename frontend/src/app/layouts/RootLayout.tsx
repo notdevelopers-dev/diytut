@@ -88,6 +88,45 @@ const MenuSection = ({
   </section>
 )
 
+/** Розділи під шапкою: шлях, назва (коротка — для телефона) і колір з Figma */
+interface Section {
+  to: string | null
+  label: string
+  shortLabel: string
+  tone: string
+}
+
+const SITE_SECTIONS: Section[] = [
+  {
+    to: '/projects',
+    label: 'Актуальні проєкти',
+    shortLabel: 'Актуальні проєкти',
+    tone: 'bg-info',
+  },
+  {
+    to: '/organizations',
+    label: 'Організації',
+    shortLabel: 'Організації',
+    tone: 'bg-main',
+  },
+]
+
+// Режим організації: сторінки з'являться в FE-201 (кабінет організації), поки заглушки
+const ORGANIZATION_SECTIONS: Section[] = [
+  {
+    to: null,
+    label: 'Учасники організації',
+    shortLabel: 'Учасники',
+    tone: 'bg-info',
+  },
+  {
+    to: null,
+    label: 'Проєкти організації',
+    shortLabel: 'Проєкти',
+    tone: 'bg-main',
+  },
+]
+
 export const RootLayout = () => {
   const { isAuthenticated, isProfileComplete, user, logout } = useAuth()
   // Увійшов через Google, але анкету ще не заповнив: профіль, меню й сповіщення
@@ -195,29 +234,46 @@ export const RootLayout = () => {
         </div>
         <div className="h-1 w-full bg-main" />
 
-        {/* Розділи сайту — невеликий список по центру під шапкою (Figma) */}
+        {/* Розділи сайту — невеликий список по центру під шапкою (Figma).
+            У режимі організації — її власні розділи замість каталогів (каталоги
+            лишаються доступними з головної) */}
         <nav
           aria-label="Розділи"
           className="flex justify-center gap-3 px-3 pt-4 pb-1 sm:gap-6"
         >
-          {[
-            { to: '/projects', label: 'Актуальні проєкти', tone: 'bg-info' },
-            { to: '/organizations', label: 'Організації', tone: 'bg-main' },
-          ].map((item) => {
-            const isActive = location.pathname.startsWith(item.to)
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                aria-current={isActive ? 'page' : undefined}
-                className={`flex h-8 max-w-[220px] min-w-0 flex-1 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline transition hover:brightness-95 sm:min-w-[220px] sm:flex-none sm:px-5 sm:text-base ${item.tone} ${
-                  isActive ? 'font-semibold ring-2 ring-black/15' : ''
-                }`}
-              >
-                {item.label}
-              </Link>
-            )
-          })}
+          {(isOrgMode && org ? ORGANIZATION_SECTIONS : SITE_SECTIONS).map(
+            (item) => {
+              const pillClass = `flex h-8 max-w-[240px] min-w-0 flex-1 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:min-w-[220px] sm:flex-none sm:px-5 sm:text-base ${item.tone}`
+              // Сторінок учасників і проєктів організації ще немає (FE-201, SCRUM-131)
+              if (!item.to) {
+                return (
+                  <span
+                    key={item.label}
+                    aria-disabled="true"
+                    title="Незабаром"
+                    className={`${pillClass} cursor-not-allowed opacity-60`}
+                  >
+                    <span className="sm:hidden">{item.shortLabel}</span>
+                    <span className="hidden sm:inline">{item.label}</span>
+                  </span>
+                )
+              }
+              const isActive = location.pathname.startsWith(item.to)
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`${pillClass} transition hover:brightness-95 ${
+                    isActive ? 'font-semibold ring-2 ring-black/15' : ''
+                  }`}
+                >
+                  <span className="sm:hidden">{item.shortLabel}</span>
+                  <span className="hidden sm:inline">{item.label}</span>
+                </Link>
+              )
+            },
+          )}
         </nav>
       </header>
 
