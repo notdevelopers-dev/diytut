@@ -94,6 +94,8 @@ interface Section {
   label: string
   shortLabel: string
   tone: string
+  /** Непарна кнопка: на телефоні й планшеті займає весь ряд під каталогами */
+  wide?: boolean
 }
 
 const SITE_SECTIONS: Section[] = [
@@ -111,19 +113,15 @@ const SITE_SECTIONS: Section[] = [
   },
 ]
 
-// Режим організації: вкладки кабінету організації (FE-201)
+// Режим організації: одна кнопка в панель організації (FE-201); проєкти, учасники
+// й заявки — вкладки самої панелі
 const ORGANIZATION_SECTIONS: Section[] = [
   {
-    to: '/organization/dashboard?tab=members',
-    label: 'Учасники організації',
-    shortLabel: 'Учасники',
-    tone: 'border-info',
-  },
-  {
     to: '/organization/dashboard',
-    label: 'Проєкти організації',
-    shortLabel: 'Наші проєкти',
+    label: 'Панель організації',
+    shortLabel: 'Панель організації',
     tone: 'border-main',
+    wide: true,
   },
 ]
 
@@ -244,9 +242,10 @@ export const RootLayout = () => {
             ? [...SITE_SECTIONS, ...ORGANIZATION_SECTIONS]
             : SITE_SECTIONS
           ).map((item) => {
-            const pillClass =
-              'flex h-8 min-w-0 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:text-base lg:w-[220px]'
-            // Сторінок учасників і проєктів організації ще немає (FE-201, SCRUM-131)
+            const pillClass = `flex h-8 min-w-0 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:text-base lg:w-[220px] ${
+              item.wide ? 'col-span-2' : ''
+            }`
+            // Кнопка без сторінки — заглушка
             if (!item.to) {
               return (
                 <span
@@ -264,8 +263,10 @@ export const RootLayout = () => {
             const [itemPath, itemQuery = ''] = item.to.split('?')
             const currentTab = new URLSearchParams(location.search).get('tab')
             const itemTab = new URLSearchParams(itemQuery).get('tab')
+            // Без ?tab у посиланні кнопка активна на будь-якій вкладці сторінки
             const isActive =
-              location.pathname.startsWith(itemPath) && currentTab === itemTab
+              location.pathname.startsWith(itemPath) &&
+              (itemTab === null || currentTab === itemTab)
             return (
               <Link
                 key={item.to}
