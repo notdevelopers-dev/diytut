@@ -74,8 +74,8 @@ const EmptyState = ({
 )
 
 /**
- * Кабінет організації (SCRUM-131, /organization/dashboard): вкладки «Проєкти»,
- * «Учасники», «Вхідні запити» за DES-103.
+ * Кабінет організації (SCRUM-131, /organization/dashboard): розділи «Проєкти»,
+ * «Учасники» (кнопки в шапці) і «Вхідні запити» (кнопка в картці), ?tab=… в URL.
  * Бекенд поки віддає лише опубліковані проєкти схваленої організації й заявки,
  * що чекають розгляду; список учасників з’явиться з бекендом наступного спринту.
  */
@@ -117,25 +117,6 @@ export const OrganizationDashboardPage = () => {
   const requestsCount = requests?.length ?? 0
   const status = myOrg?.status ?? membership?.status
 
-  const setTab = (next: DashboardTab) =>
-    setSearchParams(next === 'projects' ? {} : { tab: next }, {
-      replace: true,
-    })
-
-  const tabs: { id: DashboardTab; label: string; badge?: ReactNode }[] = [
-    {
-      id: 'projects',
-      label: 'Проєкти',
-      badge: isApproved ? projects.length : undefined,
-    },
-    { id: 'members', label: 'Учасники', badge: 'скоро' },
-    {
-      id: 'requests',
-      label: 'Вхідні запити',
-      badge: canReview && requestsCount > 0 ? requestsCount : undefined,
-    },
-  ]
-
   return (
     <div className="flex flex-col">
       <div className="border-y border-info bg-cream px-3 py-1 sm:px-8">
@@ -169,6 +150,28 @@ export const OrganizationDashboardPage = () => {
               </span>
             </div>
           </div>
+          {/* Розділи панелі перемикаються кнопками в шапці; заявки — окремою кнопкою */}
+          {canReview && (
+            <button
+              type="button"
+              onClick={() =>
+                setSearchParams({ tab: 'requests' }, { replace: true })
+              }
+              aria-current={tab === 'requests' ? 'page' : undefined}
+              className={`flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-full border px-5 text-sm font-medium transition-colors ${
+                tab === 'requests'
+                  ? 'border-main bg-main text-white'
+                  : 'border-main/40 bg-[#DCECFF] text-black hover:bg-[#cde2fe]'
+              }`}
+            >
+              Вхідні запити
+              {requestsCount > 0 && (
+                <span className="rounded-full bg-[#E14848] px-1.5 text-xs text-white">
+                  {requestsCount}
+                </span>
+              )}
+            </button>
+          )}
           {canEditOrganization(membership) && (
             <button
               type="button"
@@ -197,43 +200,6 @@ export const OrganizationDashboardPage = () => {
             подати її на перевірку знову.
           </p>
         )}
-
-        {/* Вкладки (DES-103) */}
-        <div
-          role="tablist"
-          aria-label="Розділи кабінету"
-          className="flex flex-wrap gap-2 border-b border-[#DCECFF] pb-3"
-        >
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex cursor-pointer items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                tab === t.id
-                  ? 'bg-main text-white'
-                  : 'bg-[#DCECFF] text-black hover:bg-[#cde2fe]'
-              }`}
-            >
-              {t.label}
-              {t.badge !== undefined && (
-                <span
-                  className={`rounded-full px-1.5 text-xs ${
-                    t.id === 'requests'
-                      ? 'bg-[#E14848] text-white'
-                      : tab === t.id
-                        ? 'bg-white text-main'
-                        : 'bg-white text-black'
-                  }`}
-                >
-                  {t.badge}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
 
         {tab === 'projects' && (
           <section aria-label="Проєкти" className="flex flex-col gap-4">

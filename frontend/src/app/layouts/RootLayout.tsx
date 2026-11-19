@@ -273,8 +273,9 @@ export const RootLayout = () => {
                 to={item.to}
                 aria-current={isActive ? 'page' : undefined}
                 className={`${pillClass} transition hover:brightness-95 ${item.tone} ${
-                  isActive ? 'font-semibold ring-2 ring-black/15' : ''
-                }`}
+                  // Розділи організації — біла кнопка з кольоровою рамкою
+                  item.tone.startsWith('border') ? 'border-2 bg-white' : ''
+                } ${isActive ? 'font-semibold ring-2 ring-black/15' : ''}`}
               >
                 <span className="sm:hidden">{item.shortLabel}</span>
                 <span className="hidden sm:inline">{item.label}</span>
