@@ -94,6 +94,10 @@ interface Section {
   label: string
   shortLabel: string
   tone: string
+  /** Лише для власника й адміністраторів організації (розгляд заявок) */
+  reviewersOnly?: boolean
+  /** Непарна кнопка: на телефоні й планшеті займає весь ряд */
+  wide?: boolean
 }
 
 const SITE_SECTIONS: Section[] = [
@@ -124,6 +128,14 @@ const ORGANIZATION_SECTIONS: Section[] = [
     label: 'Учасники організації',
     shortLabel: 'Учасники',
     tone: 'border-info',
+  },
+  {
+    to: null,
+    label: 'Вхідні запити',
+    shortLabel: 'Вхідні запити',
+    tone: 'border-peach',
+    reviewersOnly: true,
+    wide: true,
   },
 ]
 
@@ -237,14 +249,23 @@ export const RootLayout = () => {
             У режимі організації до каталогів додаються її власні розділи */}
         <nav
           aria-label="Розділи"
-          className="mx-auto grid w-full max-w-[480px] grid-cols-2 gap-2 px-3 pt-1 pb-4 sm:gap-3 lg:flex lg:max-w-none lg:justify-center lg:gap-4"
+          className="mx-auto grid w-full max-w-[480px] grid-cols-2 gap-2 px-3 pt-1 pb-4 sm:gap-3 lg:flex lg:max-w-none lg:flex-wrap lg:justify-center lg:gap-4"
         >
           {(isOrgMode && org
-            ? [...SITE_SECTIONS, ...ORGANIZATION_SECTIONS]
+            ? [
+                ...SITE_SECTIONS,
+                ...ORGANIZATION_SECTIONS.filter(
+                  (section) =>
+                    !section.reviewersOnly ||
+                    org.role === 'owner' ||
+                    org.role === 'admin',
+                ),
+              ]
             : SITE_SECTIONS
           ).map((item) => {
-            const pillClass =
-              'flex h-8 min-w-0 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:text-base lg:w-[220px]'
+            const pillClass = `flex h-8 min-w-0 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:text-base lg:w-[200px] ${
+              item.wide ? 'col-span-2' : ''
+            }`
             // Сторінок учасників і проєктів організації ще немає (FE-201, SCRUM-131)
             if (!item.to) {
               return (
