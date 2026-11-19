@@ -97,21 +97,28 @@ export const HomePage = () => {
     [categoryItems],
   )
 
+  // Герой бачать гості й волонтери без організації (ні власники, ні учасники)
+  const showHero = !isRegistered || !user?.organization
+
   // Куди ведуть заклики залежно від стану входу (критерій приймання):
-  // гість — на вхід, анкету не заповнено — на завершення реєстрації
-  const signUpTarget = isAuthenticated ? '/register/complete' : '/login'
-  // «Створити організацію»: волонтер створює одразу; хто вже має організацію —
-  // у профіль (форма створення таких не пускає); інші — спершу реєстрація
+  // гість — на вхід, анкету не заповнено — на завершення реєстрації,
+  // зареєстрований волонтер — до каталогу проєктів, щоб обрати, де допомогти
+  const volunteerTarget = isRegistered
+    ? '/projects'
+    : isAuthenticated
+      ? '/register/complete'
+      : '/login'
+  // «Створити організацію»: зареєстрований волонтер створює одразу, інші — спершу реєстрація
   const createOrganizationTarget = isRegistered
-    ? user?.organization
-      ? '/profile'
-      : '/organization/create'
-    : signUpTarget
+    ? '/organization/create'
+    : isAuthenticated
+      ? '/register/complete'
+      : '/login'
 
   return (
     <div className="flex flex-col gap-10 pb-12">
-      {/* Герой — лише для тих, хто ще не зареєструвався (Figma «Hero Section») */}
-      {!isRegistered && (
+      {/* Герой (Figma «Hero Section») — гостям і волонтерам без організації */}
+      {showHero && (
         <section
           aria-label="Вітаємо"
           className="mt-8 bg-[#DCECFF] p-2 sm:mt-12 sm:p-[7px]"
@@ -123,7 +130,7 @@ export const HomePage = () => {
             <div className="flex w-full flex-col items-center justify-center gap-4 sm:flex-row sm:gap-8 lg:gap-[86px]">
               <button
                 type="button"
-                onClick={() => void navigate(signUpTarget)}
+                onClick={() => void navigate(volunteerTarget)}
                 className={`${heroButtonClass} bg-main`}
               >
                 Стати волонтером
@@ -143,7 +150,7 @@ export const HomePage = () => {
       {/* Лічильники (Figma «main menu») */}
       <Section>
         <div
-          className={`flex flex-col gap-6 ${isRegistered ? 'pt-8' : ''}`}
+          className={`flex flex-col gap-6 ${showHero ? '' : 'pt-8'}`}
           aria-label="Статистика платформи"
         >
           <StatCard
