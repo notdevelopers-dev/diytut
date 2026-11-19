@@ -1,14 +1,20 @@
 import { useMemo } from 'react'
-import type { ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import circlePlusIcon from '@/assets/icons/organization/circle-plus.svg'
 import { useAuth } from '@/features/auth/hooks'
 import { useCities } from '@/features/cities/hooks'
+import { MembersSection } from '@/features/organizations/components/dashboard/MembersSection'
+import { RequestsSection } from '@/features/organizations/components/dashboard/RequestsSection'
+import {
+  EmptyState,
+  SectionTitle,
+  SoonButton,
+} from '@/features/organizations/components/dashboard/shared'
 import {
   useIncomingJoinRequests,
   useMyOrganization,
   useOrganization,
 } from '@/features/organizations/hooks'
-import { getOrgRoleLabel } from '@/features/organizations/utils'
 import {
   ProjectCard,
   ProjectCardSkeleton,
@@ -36,44 +42,10 @@ const PROJECT_STATUS: Record<ProjectStatus, { label: string; tone: string }> = {
   },
 }
 
-/** Неактивна кнопка «скоро»: дія з’явиться разом із бекендом або своєю задачею */
-const SoonButton = ({ children }: { children: ReactNode }) => (
-  <button
-    type="button"
-    disabled
-    title="Скоро"
-    className="flex h-10 cursor-not-allowed items-center gap-2 rounded-full border border-main/40 bg-[#DCECFF] px-5 text-sm font-medium text-black opacity-60"
-  >
-    {children}
-    <span className="rounded-full bg-white px-2 text-[11px] text-[#8B99AA]">
-      скоро
-    </span>
-  </button>
-)
-
-/** Порожній стан / заглушка вкладки (DES-103: порожні стани для всіх вкладок) */
-const EmptyState = ({
-  title,
-  text,
-  children,
-}: {
-  title: string
-  text: string
-  children?: ReactNode
-}) => (
-  <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-[#DCECFF] bg-white px-6 py-12 text-center">
-    <h3 className="text-lg font-semibold text-black">{title}</h3>
-    <p className="max-w-md text-sm text-[#5F6F82]">{text}</p>
-    {children}
-  </div>
-)
-
 /**
- * Кабінет організації (SCRUM-131, /organization/dashboard): розділи «Проєкти»,
- * «Учасники» і «Вхідні запити» перемикають кнопки в шапці (?tab=… в URL).
- * Редагування організації — з її профілю (режим організації).
- * Бекенд поки віддає лише опубліковані проєкти схваленої організації й заявки,
- * що чекають розгляду; список учасників з’явиться з бекендом наступного спринту.
+ * Панель організації (SCRUM-131, /organization/dashboard). Розділи «Проєкти»,
+ * «Учасники» й «Вхідні запити» перемикають кнопки в шапці (?tab=… в URL); кожен
+ * розділ — за своїм макетом Figma. Редагування організації — з її профілю.
  */
 export const OrganizationDashboardPage = () => {
   const { user } = useAuth()
@@ -84,18 +56,20 @@ export const OrganizationDashboardPage = () => {
 
   const membership = user?.organization
   const { data: myOrg, isLoading, isError } = useMyOrganization(true)
-  const isApproved = (myOrg?.status ?? membership?.status) === 'approved'
+  const status = myOrg?.status ?? membership?.status
+  const isApproved = status === 'approved'
   // У даних входу id може прийти рядком
   const orgId = myOrg?.id ?? (membership ? Number(membership.id) : undefined)
-  // Публічна картка зі списком опублікованих проєктів є лише у схваленої організації
+  // Опубліковані проєкти є лише в публічній картці схваленої організації
   const { data: detail, isLoading: isProjectsLoading } = useOrganization(
     isApproved && orgId ? orgId : 0,
   )
   const canReview = membership?.role === 'owner' || membership?.role === 'admin'
-  const { data: requests, isError: isRequestsError } = useIncomingJoinRequests(
-    orgId,
-    canReview,
-  )
+  const {
+    data: requests = [],
+    isLoading: isRequestsLoading,
+    isError: isRequestsError,
+  } = useIncomingJoinRequests(orgId, canReview)
 
   const { cities } = useCities()
   const { data: categoryItems = [] } = useCategories()
@@ -107,44 +81,43 @@ export const OrganizationDashboardPage = () => {
     () => new Map(categoryItems.map((item) => [item.key, item.name])),
     [categoryItems],
   )
-
   const projects = detail?.projects ?? []
-  const requestsCount = requests?.length ?? 0
-  const status = myOrg?.status ?? membership?.status
 
   return (
     <div className="flex flex-col">
-      <div className="border-y border-info bg-cream px-3 py-1 sm:px-8">
-        <h1 className="text-3xl font-normal text-black">Панель організації</h1>
-      </div>
+      {tab === 'members' && <MembersSection role={membership?.role} />}
 
-      <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-6 px-4 py-6 sm:px-8">
-        {isError && (
-          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700">
-            Не вдалося завантажити дані організації. Оновіть сторінку.
-          </p>
-        )}
-        {!isLoading && status === 'pending' && (
-          <p className="rounded-lg border border-info bg-[#FFF8E6] p-3 text-sm text-black">
-            Організація на перевірці. Після схвалення адміністратором вона
-            з’явиться в каталозі, а ви зможете публікувати проєкти.
-          </p>
-        )}
-        {!isLoading && status === 'rejected' && (
-          <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            Організацію відхилено. Виправте дані в «Редагувати організацію», щоб
-            подати її на перевірку знову.
-          </p>
-        )}
+      {tab === 'requests' && (
+        <RequestsSection
+          requests={requests}
+          canReview={canReview}
+          isLoading={isRequestsLoading}
+          isError={isRequestsError}
+        />
+      )}
 
-        {tab === 'projects' && (
-          <section aria-label="Проєкти" className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-xl font-semibold text-black">
-                Створені проєкти
-              </h2>
+      {tab === 'projects' && (
+        <section aria-label="Проєкти організації" className="flex flex-col">
+          <SectionTitle>Проєкти організації</SectionTitle>
+          <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-4 px-3 py-4 sm:px-6">
+            {isError ? (
+              <p className="rounded-[5px] border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700">
+                Не вдалося завантажити дані організації. Оновіть сторінку.
+              </p>
+            ) : !isLoading && status === 'pending' ? (
+              <p className="rounded-[5px] border border-info bg-[#FFF8E6] p-3 text-sm text-black">
+                Організація на перевірці. Після схвалення адміністратором вона
+                з’явиться в каталозі, а ви зможете публікувати проєкти.
+              </p>
+            ) : !isLoading && status === 'rejected' ? (
+              <p className="rounded-[5px] border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                Організацію відхилено. Виправте дані в профілі організації, щоб
+                подати її на перевірку знову.
+              </p>
+            ) : null}
+            <div className="flex justify-end">
               {/* Форма створення — FE-202 (SCRUM-132) */}
-              <SoonButton>＋ Створити проєкт</SoonButton>
+              <SoonButton iconSrc={circlePlusIcon}>Створити проєкт</SoonButton>
             </div>
             {!isApproved ? (
               <EmptyState
@@ -191,53 +164,9 @@ export const OrganizationDashboardPage = () => {
                 })}
               </ul>
             )}
-          </section>
-        )}
-
-        {tab === 'members' && (
-          <section aria-label="Учасники" className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-xl font-semibold text-black">
-                Учасники організації
-              </h2>
-              <SoonButton>＋ Запросити учасників</SoonButton>
-            </div>
-            <EmptyState
-              title="Список учасників скоро з’явиться"
-              text="Тут буде склад організації: ролі (власник, адміністратор, учасник), дата вступу, контакти й керування правами."
-            >
-              {membership && (
-                <p className="rounded-full bg-[#DCECFF] px-4 py-1.5 text-sm text-black">
-                  Ви в цій організації: {getOrgRoleLabel(membership.role)}
-                </p>
-              )}
-            </EmptyState>
-          </section>
-        )}
-
-        {tab === 'requests' && (
-          <section aria-label="Вхідні запити" className="flex flex-col gap-4">
-            <h2 className="text-xl font-semibold text-black">Вхідні запити</h2>
-            {!canReview ? (
-              <EmptyState
-                title="Розгляд заявок недоступний"
-                text="Заявки на вступ розглядають власник і адміністратори організації."
-              />
-            ) : (
-              <EmptyState
-                title="Розгляд заявок скоро з’явиться"
-                text={
-                  isRequestsError
-                    ? 'Не вдалося дізнатися кількість заявок.'
-                    : requestsCount > 0
-                      ? `Зараз на розгляд чекає заявок: ${requestsCount}. Скоро тут можна буде приймати й відхиляти їх.`
-                      : 'Нових заявок на вступ немає. Скоро тут можна буде приймати й відхиляти їх.'
-                }
-              />
-            )}
-          </section>
-        )}
-      </div>
+          </div>
+        </section>
+      )}
     </div>
   )
 }
