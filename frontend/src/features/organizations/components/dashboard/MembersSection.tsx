@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import avatarIcon from '@/assets/icons/menu/avatar.svg'
 import circlePlusIcon from '@/assets/icons/organization/circle-plus.svg'
+import facePlusIcon from '@/assets/icons/organization/face-plus.svg'
 import meatballIcon from '@/assets/icons/organization/meatball.svg'
 import { useMyProfile } from '@/features/users/hooks'
 import { getOrgRoleLabel } from '@/features/organizations/utils'
@@ -75,7 +77,15 @@ const MemberCard = ({ member }: { member: MemberCardData }) => (
  * Учасники організації за макетом Figma. Списку учасників бекенд поки не віддає
  * (задача наступного спринту), тож показуємо лише картку поточного користувача.
  */
-export const MembersSection = ({ role }: { role: OrgRole | undefined }) => {
+export const MembersSection = ({
+  role,
+  canReview,
+  requestsCount,
+}: {
+  role: OrgRole | undefined
+  canReview: boolean
+  requestsCount: number
+}) => {
   const [search, setSearch] = useState('')
   const { data: profile } = useMyProfile()
 
@@ -105,11 +115,28 @@ export const MembersSection = ({ role }: { role: OrgRole | undefined }) => {
       <SectionTitle>Учасники організації</SectionTitle>
 
       <div className="mx-auto flex w-full max-w-[860px] flex-col gap-4 px-3 py-4">
-        <SearchField
-          value={search}
-          onChange={setSearch}
-          placeholder="Пошук учасника"
-        />
+        {/* Пошук ліворуч, «Вхідні запити» праворуч — як у макеті */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <SearchField
+            value={search}
+            onChange={setSearch}
+            placeholder="Пошук учасника"
+          />
+          {canReview && (
+            <Link
+              to="/organization/dashboard?tab=requests"
+              className="relative flex h-8 w-fit shrink-0 items-center gap-2 rounded-[5px] bg-info px-3 text-base text-black no-underline transition hover:brightness-95 sm:w-[222px]"
+            >
+              <img src={facePlusIcon} alt="" width={20} height={20} />
+              Вхідні запити
+              {requestsCount > 0 && (
+                <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E14848] px-1 text-[11px] text-white">
+                  {requestsCount}
+                </span>
+              )}
+            </Link>
+          )}
+        </div>
 
         <ul className="flex flex-col gap-5">
           {visible.map((member) => (

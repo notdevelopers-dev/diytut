@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import circlePlusIcon from '@/assets/icons/organization/circle-plus.svg'
 import { useAuth } from '@/features/auth/hooks'
@@ -7,6 +7,7 @@ import { MembersSection } from '@/features/organizations/components/dashboard/Me
 import { RequestsSection } from '@/features/organizations/components/dashboard/RequestsSection'
 import {
   EmptyState,
+  SearchField,
   SectionTitle,
   SoonButton,
 } from '@/features/organizations/components/dashboard/shared'
@@ -20,27 +21,10 @@ import {
   ProjectCardSkeleton,
 } from '@/features/projects/components/ProjectCard'
 import { useCategories } from '@/features/projects/hooks'
-import type { ProjectStatus } from '@/types/project'
 
 export type DashboardTab = 'projects' | 'members' | 'requests'
 
 const TABS: DashboardTab[] = ['projects', 'members', 'requests']
-
-const PROJECT_STATUS: Record<ProjectStatus, { label: string; tone: string }> = {
-  draft: { label: 'Чернетка', tone: 'border-[#C2D4EA] text-[#5F6F82]' },
-  published: {
-    label: 'Опубліковано',
-    tone: 'border-[#7BC74D] bg-[#E9F9DD] text-[#3E7A1C]',
-  },
-  completed: {
-    label: 'Завершено',
-    tone: 'border-main bg-[#DCECFF] text-[#2f6fb8]',
-  },
-  cancelled: {
-    label: 'Скасовано',
-    tone: 'border-[#E14848] bg-[#FDECEC] text-[#B42323]',
-  },
-}
 
 /**
  * Панель організації (SCRUM-131, /organization/dashboard). Розділи «Проєкти»,
@@ -81,11 +65,28 @@ export const OrganizationDashboardPage = () => {
     () => new Map(categoryItems.map((item) => [item.key, item.name])),
     [categoryItems],
   )
-  const projects = detail?.projects ?? []
+  const projects = useMemo(() => detail?.projects ?? [], [detail])
+  const [projectSearch, setProjectSearch] = useState('')
+  const visibleProjects = useMemo(() => {
+    const q = projectSearch.trim().toLowerCase()
+    return q
+      ? projects.filter((p) =>
+          [p.title, p.description ?? '', ...(p.tags ?? [])].some((v) =>
+            v.toLowerCase().includes(q),
+          ),
+        )
+      : projects
+  }, [projects, projectSearch])
 
   return (
     <div className="flex flex-col">
-      {tab === 'members' && <MembersSection role={membership?.role} />}
+      {tab === 'members' && (
+        <MembersSection
+          role={membership?.role}
+          canReview={canReview}
+          requestsCount={requests.length}
+        />
+      )}
 
       {tab === 'requests' && (
         <RequestsSection
@@ -98,8 +99,8 @@ export const OrganizationDashboardPage = () => {
 
       {tab === 'projects' && (
         <section aria-label="Проєкти організації" className="flex flex-col">
-          <SectionTitle>Проєкти організації</SectionTitle>
-          <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-4 px-3 py-4 sm:px-6">
+          <SectionTitle>Проєкти</SectionTitle>
+          <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-5 px-3 py-4 sm:px-6">
             {isError ? (
               <p className="rounded-[5px] border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700">
                 Не вдалося завантажити дані організації. Оновіть сторінку.
@@ -115,7 +116,13 @@ export const OrganizationDashboardPage = () => {
                 подати її на перевірку знову.
               </p>
             ) : null}
-            <div className="flex justify-end">
+            {/* Пошук ліворуч, «Створити проєкт» праворуч — як у макеті */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <SearchField
+                value={projectSearch}
+                onChange={setProjectSearch}
+                placeholder="Пошук проєкту"
+              />
               {/* Форма створення — FE-202 (SCRUM-132) */}
               <SoonButton iconSrc={circlePlusIcon}>Створити проєкт</SoonButton>
             </div>
@@ -125,43 +132,38 @@ export const OrganizationDashboardPage = () => {
                 text="Проєкти з’являться після схвалення організації адміністратором платформи."
               />
             ) : isProjectsLoading ? (
-              <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                 {[0, 1, 2].map((i) => (
                   <li key={i}>
                     <ProjectCardSkeleton />
                   </li>
                 ))}
               </ul>
+            ) : projects.length > 0 && visibleProjects.length === 0 ? (
+              <p className="py-6 text-center text-sm text-[#8B99AA]">
+                Нічого не знайдено
+              </p>
             ) : projects.length === 0 ? (
               <EmptyState
                 title="Ще немає опублікованих проєктів"
                 text="Тут з’являться проєкти вашої організації. Чернетки, завершені й скасовані проєкти буде видно, щойно їх почне віддавати бекенд."
               />
             ) : (
-              <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {projects.map((project) => {
-                  const projectStatus =
-                    PROJECT_STATUS[project.status] ?? PROJECT_STATUS.published
-                  return (
-                    <li key={project.id} className="flex flex-col gap-2">
-                      <span
-                        className={`w-fit rounded-full border px-3 py-0.5 text-xs font-medium ${projectStatus.tone}`}
-                      >
-                        {projectStatus.label}
-                      </span>
-                      <ProjectCard
-                        project={project}
-                        showOrganization={false}
-                        categoryNames={categoryNames}
-                        cityName={
-                          project.city_id !== null
-                            ? cityNames.get(project.city_id)
-                            : undefined
-                        }
-                      />
-                    </li>
-                  )
-                })}
+              <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {visibleProjects.map((project) => (
+                  <li key={project.id}>
+                    <ProjectCard
+                      project={project}
+                      showOrganization={false}
+                      categoryNames={categoryNames}
+                      cityName={
+                        project.city_id !== null
+                          ? cityNames.get(project.city_id)
+                          : undefined
+                      }
+                    />
+                  </li>
+                ))}
               </ul>
             )}
           </div>
