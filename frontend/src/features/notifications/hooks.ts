@@ -24,7 +24,7 @@ const REFRESH_MS = 30_000
  * Бекенд віддає до 50 за раз; «Показати ще» довантажує наступні.
  */
 export const useNotifications = () => {
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, isProfileComplete, user } = useAuth()
   const mode = useProfileMode()
 
   const query = useInfiniteQuery({
@@ -35,7 +35,8 @@ export const useNotifications = () => {
       lastPage.length === NOTIFICATIONS_PAGE_SIZE
         ? pages.length * NOTIFICATIONS_PAGE_SIZE
         : undefined,
-    enabled: isAuthenticated,
+    // Без заповненої анкети бекенд сповіщень не віддає
+    enabled: isAuthenticated && isProfileComplete,
     refetchInterval: REFRESH_MS,
   })
 
