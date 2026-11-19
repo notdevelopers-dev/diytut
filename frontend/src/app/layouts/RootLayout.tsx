@@ -12,6 +12,7 @@ import { HeaderSearch } from '@/app/layouts/HeaderSearch'
 import { Logo } from '@/components/ui/Logo'
 import { NotificationBell } from '@/features/notifications'
 import { useAuth } from '@/features/auth/hooks'
+import { useIncomingJoinRequests } from '@/features/organizations/hooks'
 import {
   canEditOrganization,
   getOrgRoleLabel,
@@ -94,6 +95,10 @@ interface Section {
   label: string
   shortLabel: string
   tone: string
+  /** Лише для власника й адміністраторів організації (розгляд заявок) */
+  reviewersOnly?: boolean
+  /** Непарна кнопка: на телефоні й планшеті займає весь ряд */
+  wide?: boolean
 }
 
 const SITE_SECTIONS: Section[] = [
@@ -124,6 +129,14 @@ const ORGANIZATION_SECTIONS: Section[] = [
     label: 'Учасники організації',
     shortLabel: 'Учасники',
     tone: 'border-info',
+  },
+  {
+    to: '/organization/dashboard?tab=requests',
+    label: 'Вхідні запити',
+    shortLabel: 'Вхідні запити',
+    tone: 'border-peach',
+    reviewersOnly: true,
+    wide: true,
   },
 ]
 
@@ -169,6 +182,13 @@ export const RootLayout = () => {
 
   // Організація користувача (для режиму організації та перемикання)
   const org = user?.organization
+  // Заявки на вступ, що чекають розгляду: лічильник на кнопці «Вхідні запити»
+  const canReviewRequests = org?.role === 'owner' || org?.role === 'admin'
+  const { data: incomingRequests } = useIncomingJoinRequests(
+    org ? Number(org.id) : undefined,
+    isRegistered && isOrgMode && canReviewRequests,
+  )
+  const incomingCount = incomingRequests?.length ?? 0
 
   return (
     <div className="relative flex min-h-screen flex-col justify-between bg-[#F7FBFF] overflow-x-hidden">
@@ -237,14 +257,23 @@ export const RootLayout = () => {
             У режимі організації до каталогів додаються її власні розділи */}
         <nav
           aria-label="Розділи"
-          className="mx-auto grid w-full max-w-[480px] grid-cols-2 gap-2 px-3 pt-1 pb-4 sm:gap-3 lg:flex lg:max-w-none lg:justify-center lg:gap-4"
+          className="mx-auto grid w-full max-w-[480px] grid-cols-2 gap-2 px-3 pt-1 pb-4 sm:gap-3 lg:flex lg:max-w-none lg:flex-wrap lg:justify-center lg:gap-4"
         >
           {(isOrgMode && org
-            ? [...SITE_SECTIONS, ...ORGANIZATION_SECTIONS]
+            ? [
+                ...SITE_SECTIONS,
+                ...ORGANIZATION_SECTIONS.filter(
+                  (section) =>
+                    !section.reviewersOnly ||
+                    org.role === 'owner' ||
+                    org.role === 'admin',
+                ),
+              ]
             : SITE_SECTIONS
           ).map((item) => {
-            const pillClass =
-              'flex h-8 min-w-0 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:text-base lg:w-[220px]'
+            const pillClass = `flex h-8 min-w-0 items-center justify-center gap-2 rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:text-base lg:w-[200px] ${
+              item.wide ? 'col-span-2' : ''
+            }`
             // Кнопка без сторінки — заглушка
             if (!item.to) {
               return (
@@ -279,6 +308,12 @@ export const RootLayout = () => {
               >
                 <span className="sm:hidden">{item.shortLabel}</span>
                 <span className="hidden sm:inline">{item.label}</span>
+                {/* Кількість заявок, що чекають розгляду */}
+                {item.reviewersOnly && incomingCount > 0 && (
+                  <span className="rounded-full bg-[#E14848] px-1.5 text-xs leading-5 font-medium text-white">
+                    {incomingCount}
+                  </span>
+                )}
               </Link>
             )
           })}

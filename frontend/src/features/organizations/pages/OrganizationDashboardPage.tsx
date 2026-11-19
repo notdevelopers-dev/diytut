@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import organizationIcon from '@/assets/icons/menu/organization.svg'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/features/auth/hooks'
 import { useCities } from '@/features/cities/hooks'
 import {
@@ -9,11 +8,7 @@ import {
   useMyOrganization,
   useOrganization,
 } from '@/features/organizations/hooks'
-import {
-  canEditOrganization,
-  getOrgRoleLabel,
-  getOrgStatusLabel,
-} from '@/features/organizations/utils'
+import { getOrgRoleLabel } from '@/features/organizations/utils'
 import {
   ProjectCard,
   ProjectCardSkeleton,
@@ -75,14 +70,14 @@ const EmptyState = ({
 
 /**
  * Кабінет організації (SCRUM-131, /organization/dashboard): розділи «Проєкти»,
- * «Учасники» (кнопки в шапці) і «Вхідні запити» (кнопка в картці), ?tab=… в URL.
+ * «Учасники» і «Вхідні запити» перемикають кнопки в шапці (?tab=… в URL).
+ * Редагування організації — з її профілю (режим організації).
  * Бекенд поки віддає лише опубліковані проєкти схваленої організації й заявки,
  * що чекають розгляду; список учасників з’явиться з бекендом наступного спринту.
  */
 export const OrganizationDashboardPage = () => {
-  const navigate = useNavigate()
   const { user } = useAuth()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const tabParam = searchParams.get('tab') as DashboardTab | null
   const tab: DashboardTab =
     tabParam && TABS.includes(tabParam) ? tabParam : 'projects'
@@ -124,65 +119,6 @@ export const OrganizationDashboardPage = () => {
       </div>
 
       <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-6 px-4 py-6 sm:px-8">
-        {/* Організація: назва, статус, роль */}
-        <div className="flex flex-col gap-4 rounded-2xl border-2 border-[#DCECFF] bg-white p-5 sm:flex-row sm:items-center">
-          <span className="flex size-16 shrink-0 items-center justify-center rounded-full bg-main">
-            <img
-              src={organizationIcon}
-              alt=""
-              width={34}
-              height={34}
-              className="brightness-0 invert"
-            />
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <span className="truncate text-xl font-bold text-black">
-              {myOrg?.name ?? membership?.name}
-            </span>
-            <div className="flex flex-wrap gap-2 text-xs">
-              {getOrgStatusLabel(status) && (
-                <span className="rounded-full border border-[#C2D4EA] bg-white px-3 py-0.5 text-black">
-                  {getOrgStatusLabel(status)}
-                </span>
-              )}
-              <span className="rounded-full border border-main bg-[#DCECFF] px-3 py-0.5 text-main">
-                Ваша роль: {getOrgRoleLabel(membership?.role)}
-              </span>
-            </div>
-          </div>
-          {/* Розділи панелі перемикаються кнопками в шапці; заявки — окремою кнопкою */}
-          {canReview && (
-            <button
-              type="button"
-              onClick={() =>
-                setSearchParams({ tab: 'requests' }, { replace: true })
-              }
-              aria-current={tab === 'requests' ? 'page' : undefined}
-              className={`flex h-10 shrink-0 cursor-pointer items-center gap-2 rounded-full border px-5 text-sm font-medium transition-colors ${
-                tab === 'requests'
-                  ? 'border-main bg-main text-white'
-                  : 'border-main/40 bg-[#DCECFF] text-black hover:bg-[#cde2fe]'
-              }`}
-            >
-              Вхідні запити
-              {requestsCount > 0 && (
-                <span className="rounded-full bg-[#E14848] px-1.5 text-xs text-white">
-                  {requestsCount}
-                </span>
-              )}
-            </button>
-          )}
-          {canEditOrganization(membership) && (
-            <button
-              type="button"
-              onClick={() => void navigate('/organization/edit')}
-              className="h-10 shrink-0 cursor-pointer rounded-full border border-main/40 bg-[#DCECFF] px-5 text-sm font-medium text-black transition-colors hover:bg-[#cde2fe]"
-            >
-              Редагувати організацію
-            </button>
-          )}
-        </div>
-
         {isError && (
           <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700">
             Не вдалося завантажити дані організації. Оновіть сторінку.
