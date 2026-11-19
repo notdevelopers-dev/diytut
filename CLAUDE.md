@@ -10,7 +10,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `frontend/`: React 19, TypeScript 7, Vite, React Query, Tailwind 4, Oxlint, Prettier
 - repo root: infrastructure (Docker Compose, nginx config in `nginx/conf.d/`, Cloudflare Tunnel)
 
-The detailed docs are in Ukrainian: `README.md`, `backend/README.md` and `frontend/README.md`. `backend/README.md` is the spec for API behavior: status codes, who may do what, and known limitations, per endpoint. Update it whenever endpoint behavior changes. Code comments, docs and user-facing UI strings are written in Ukrainian, while the `detail` messages in API errors are in English.
+The detailed docs are in Ukrainian: `README.md`, `backend/README.md` and `frontend/README.md`. Code comments, docs and user-facing UI strings are written in Ukrainian, while the `detail` messages in API errors are in English.
+
+## When this file is wrong
+
+Other developers change the code without always updating this file. If anything here contradicts the code, trust the code, tell the user about the mismatch, and propose a fix to this file.
 
 ## Design across the stack
 
@@ -98,20 +102,9 @@ CI (`.github/workflows/ci.yml`) runs these backend checks, and all of them must 
   - The caller's `commit()` saves it, so the notification is atomic with the event it reports.
   - The frontend paths stored in `notification.link` come from helper functions in the same file. Change them only together with the matching frontend routes.
 
-### Domain rules that span many files
+### Business rules
 
-- **Multiple organizations**: a user can belong to several organizations.
-  - The *default* organization is the earliest-joined membership.
-  - `/organizations/me`-style endpoints take `?organization_id=` (or `organization_id` in the body for `POST /projects`) to select a different one.
-  - Role and status checks must target the selected or affected organization, never the default one. Use `require_membership`, `get_user_membership` and `EDITOR_ROLES` (owner and admin) from `services/organizations.py`.
-- **Hiding resources**: to volunteers, unapproved organizations look nonexistent (404). Another organization's resources also return 404, not 403.
-- **Platform admin** endpoints (`/api/admin`) check `users.platform_role` in the DB on every request. Admins are assigned directly in the DB.
-- **Auth**: Google OAuth with Authlib and PKCE, run entirely on the server.
-  - A known user (looked up by Google `sub`, not by email) gets a 7-day `session` JWT cookie.
-  - A new user gets a short-lived `registration` cookie. The DB row is created only on `POST /api/auth/register`.
-  - The JWT `typ` claim stops one cookie type from being used as the other.
-  - `SessionMiddleware` exists only to hold OAuth state under `/api/auth/google`.
-- **Volunteer hours** are the sum of `attendances.hours`; no stored balance exists. Deleting a user anonymizes attendances and feedback (the FKs become `NULL`) instead of deleting them.
+`backend/README.md` is the spec for endpoint behavior and domain rules: multiple organizations per user, who may do what, 404 instead of 403, the sign-in flow, notifications, volunteer hours and known limitations. Read the relevant section before you change an endpoint, and update it in the same change.
 
 ### Migrations
 
