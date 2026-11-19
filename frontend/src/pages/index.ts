@@ -1,7 +1,0 @@
-export * from './HomePage.tsx'
-export * from './admin/AdminPage.tsx'
-export * from './auth/LoginPage.tsx'
-export * from './auth/RegistrationCompletePage.tsx'
-export * from './organizations/CreateOrganisationPage.tsx'
-export * from './organizations/EditOrganizationPage.tsx'
-export * from './users/ProfilePage.tsx'
