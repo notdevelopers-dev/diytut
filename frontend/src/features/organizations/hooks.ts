@@ -8,6 +8,7 @@ import { AUTH_ME_QUERY_KEY } from '@/features/auth/hooks'
 import {
   createJoinRequest,
   createOrganization,
+  fetchIncomingJoinRequests,
   fetchMyJoinRequest,
   fetchMyOrganization,
   fetchMyOrganizations,
@@ -121,3 +122,16 @@ export const useCreateJoinRequest = (organizationId: number) => {
     },
   })
 }
+
+/** Заявки на вступ, що чекають розгляду (кабінет організації) */
+export const useIncomingJoinRequests = (
+  organizationId: number | undefined,
+  enabled: boolean,
+) =>
+  useQuery({
+    queryKey: ['organizations', 'incoming-requests', organizationId],
+    queryFn: () => fetchIncomingJoinRequests(organizationId as number),
+    enabled: enabled && Boolean(organizationId),
+    // Учаснику без прав бекенд відповідає 403 — повторювати немає сенсу
+    retry: false,
+  })

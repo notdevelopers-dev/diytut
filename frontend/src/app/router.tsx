@@ -3,6 +3,7 @@ import { RootLayout } from '@/app/layouts/RootLayout'
 import { AdminPage } from '@/features/admin'
 import {
   AdminRoute,
+  OrgRoute,
   LoginPage,
   ProtectedRoute,
   RegistrationCompletePage,
@@ -11,6 +12,7 @@ import { HomePage } from '@/features/home'
 import {
   CreateOrganizationPage,
   EditOrganizationPage,
+  OrganizationDashboardPage,
   OrganizationsCatalogPage,
   OrganizationViewPage,
 } from '@/features/organizations'
@@ -39,6 +41,19 @@ export const AppRoutes = () => (
     {/* Внутрішній сайт під спільним RootLayout */}
     <Route element={<RootLayout />}>
       <Route path="/" element={<HomePage />} />
+      {/* Кабінет організації (SCRUM-131); старі посилання сповіщень /organization?… ведуть сюди */}
+      <Route
+        path="/organization/dashboard"
+        element={
+          <OrgRoute>
+            <OrganizationDashboardPage />
+          </OrgRoute>
+        }
+      />
+      <Route
+        path="/organization"
+        element={<Navigate to="/organization/dashboard" replace />}
+      />
       <Route path="/organizations" element={<OrganizationsCatalogPage />} />
       <Route path="/organizations/:id" element={<OrganizationViewPage />} />
       <Route path="/projects" element={<ProjectsCatalogPage />} />
