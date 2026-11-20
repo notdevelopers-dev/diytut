@@ -1,28 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { Download } from 'lucide-react'
-import { apiClient } from '@/lib/api-client'
-
-interface DailyLogins {
-  date: string
-  logins: number
-  unique_users: number
-}
-
-interface LoginStats {
-  date_from: string
-  date_to: string
-  total_logins: number
-  unique_users: number
-  days: DailyLogins[]
-}
+import { useLoginStats } from '../hooks'
+import type { DailyLogins } from '../types'
 
 type Period = 'today' | '7d' | '30d'
-
-interface Result {
-  period: Period
-  current: LoginStats | null
-  previous: LoginStats | null
-}
 
 const PERIODS: { key: Period; label: string; days: number }[] = [
   { key: 'today', label: 'Сьогодні', days: 1 },
@@ -72,6 +53,19 @@ const addDays = (d: Date, n: number) => {
   const result = new Date(d)
   result.setDate(result.getDate() + n)
   return result
+}
+
+/** Обраний період, що закінчується сьогодні, і такий самий період перед ним */
+const getPeriodRanges = (period: Period) => {
+  const days = PERIODS.find((p) => p.key === period)?.days ?? 30
+  const today = new Date()
+  const from = addDays(today, -(days - 1))
+  const prevTo = addDays(from, -1)
+  const prevFrom = addDays(prevTo, -(days - 1))
+  return {
+    current: { from: toIso(from), to: toIso(today) },
+    previous: { from: toIso(prevFrom), to: toIso(prevTo) },
+  }
 }
 
 const getDelta = (current: number, previous: number | undefined) => {
@@ -128,40 +122,15 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, badge }) => (
 
 export const LoginStatsSection: React.FC = () => {
   const [period, setPeriod] = useState<Period>('30d')
-  const [result, setResult] = useState<Result | null>(null)
+  const ranges = getPeriodRanges(period)
+  const currentQuery = useLoginStats(ranges.current.from, ranges.current.to)
+  const previousQuery = useLoginStats(ranges.previous.from, ranges.previous.to)
 
-  useEffect(() => {
-    let isCancelled = false
-    const days = PERIODS.find((p) => p.key === period)?.days ?? 30
-    const today = new Date()
-    const from = addDays(today, -(days - 1))
-    const prevTo = addDays(from, -1)
-    const prevFrom = addDays(prevTo, -(days - 1))
-
-    void Promise.allSettled([
-      apiClient.get<LoginStats>('/admin/stats/logins', {
-        params: { date_from: toIso(from), date_to: toIso(today) },
-      }),
-      apiClient.get<LoginStats>('/admin/stats/logins', {
-        params: { date_from: toIso(prevFrom), date_to: toIso(prevTo) },
-      }),
-    ]).then(([cur, prev]) => {
-      if (isCancelled) return
-      setResult({
-        period,
-        current: cur.status === 'fulfilled' ? cur.value.data : null,
-        previous: prev.status === 'fulfilled' ? prev.value.data : null,
-      })
-    })
-
-    return () => {
-      isCancelled = true
-    }
-  }, [period])
-
-  const isLoading = result?.period !== period
-  const current = isLoading ? null : (result?.current ?? null)
-  const previous = isLoading ? null : (result?.previous ?? null)
+  // Чекаємо обидва періоди, щоб порівняння не з'являлося окремо від цифр.
+  // Без попереднього періоду просто не показуємо порівняння
+  const isLoading = currentQuery.isPending || previousQuery.isPending
+  const current = isLoading ? null : (currentQuery.data ?? null)
+  const previous = isLoading ? null : (previousQuery.data ?? null)
   const hasError = !isLoading && current === null
 
   const maxLogins = current

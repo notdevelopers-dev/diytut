@@ -1,28 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
-import { apiClient } from '@/lib/api-client'
-
-type OrgStatus = 'pending' | 'approved' | 'rejected' | 'blocked'
-
-interface OrgRequest {
-  id: number
-  name: string
-  edrpou: string | null
-  status: OrgStatus
-  created_at: string
-  review_comment: string | null
-  creator: {
-    email: string
-    first_name: string | null
-    last_name: string
-    phone: string
-  }
-}
-
-interface OrgRequestPage {
-  items: OrgRequest[]
-  total: number
-}
+import { getApiErrorMessage, getErrorStatus } from '@/lib/errors'
+import type { OrgStatus } from '@/types/common'
+import { useOrganizationRequests, useReviewOrganizationRequest } from '../hooks'
+import type { OrganizationRequest } from '../types'
 
 const PAGE_SIZE = 10
 
@@ -35,65 +16,60 @@ const STATUS_STYLES: Record<OrgStatus, { label: string; className: string }> = {
 
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString('uk-UA')
 
-const contactName = (req: OrgRequest) =>
+const contactName = (req: OrganizationRequest) =>
   [req.creator.first_name, req.creator.last_name].filter(Boolean).join(' ')
 
+/** Тексти для відповідей бекенду на рішення по заявці */
+const reviewErrorText = (error: unknown) => {
+  switch (getErrorStatus(error)) {
+    case 409:
+      return 'Цю заявку вже розглянув інший адміністратор.'
+    case 404:
+      return 'Заявку не знайдено.'
+    default:
+      return getApiErrorMessage(
+        error,
+        'Не вдалося зберегти рішення. Спробуйте ще раз.',
+      )
+  }
+}
+
 export const OrgRequestsSection: React.FC = () => {
-  const [items, setItems] = useState<OrgRequest[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [hasError, setHasError] = useState(false)
-  const [reloadKey, setReloadKey] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
 
-  const [viewing, setViewing] = useState<OrgRequest | null>(null)
-  const [rejecting, setRejecting] = useState<OrgRequest | null>(null)
+  const [viewing, setViewing] = useState<OrganizationRequest | null>(null)
+  const [rejecting, setRejecting] = useState<OrganizationRequest | null>(null)
   const [rejectComment, setRejectComment] = useState('')
 
-  useEffect(() => {
-    let isCancelled = false
-    apiClient
-      .get<OrgRequestPage>('/admin/organizations', { params: { limit: 100 } })
-      .then((response) => {
-        if (isCancelled) return
-        setItems(response.data.items)
-        setHasError(false)
-      })
-      .catch((error: unknown) => {
-        console.error('Не вдалося завантажити заявки організацій:', error)
-        if (!isCancelled) setHasError(true)
-      })
-      .finally(() => {
-        if (!isCancelled) setIsLoading(false)
-      })
-    return () => {
-      isCancelled = true
-    }
-  }, [reloadKey])
+  const {
+    data,
+    isPending: isLoading,
+    isError: hasError,
+  } = useOrganizationRequests({ limit: 100 })
+  const items = data?.items ?? []
 
-  const submitReview = useCallback(
-    async (id: number, decision: 'approved' | 'rejected', comment?: string) => {
-      setIsSaving(true)
-      setActionError(null)
-      try {
-        await apiClient.post(`/admin/organizations/${id}/review`, {
-          decision,
-          comment: comment ?? null,
-        })
-        setRejecting(null)
-        setRejectComment('')
-        setReloadKey((key) => key + 1)
-      } catch (error: unknown) {
-        console.error('Не вдалося опрацювати заявку:', error)
-        setActionError('Не вдалося зберегти рішення. Спробуйте ще раз.')
-      } finally {
-        setIsSaving(false)
-      }
-    },
-    [],
-  )
+  const review = useReviewOrganizationRequest()
+  const isSaving = review.isPending
+
+  const submitReview = async (
+    id: number,
+    decision: 'approved' | 'rejected',
+    comment?: string,
+  ) => {
+    setActionError(null)
+    try {
+      await review.mutateAsync({
+        id,
+        review: { decision, comment: comment ?? null },
+      })
+      setRejecting(null)
+      setRejectComment('')
+    } catch (error: unknown) {
+      setActionError(reviewErrorText(error))
+    }
+  }
 
   const query = searchQuery.trim().toLowerCase()
   const filtered = items.filter(
