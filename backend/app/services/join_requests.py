@@ -16,14 +16,17 @@ from app.models import (
     OrganizationMember,
     OrgMemberRoleEnum,
     OrgStatusEnum,
+    Project,
     User,
 )
 from app.notifications import (
     create_notification,
     organization_join_requests_link,
     organization_page_link,
+    project_page_link,
 )
 from app.schemas.join_requests import JoinRequestCreate, JoinRequestReview
+from app.services import project_join_requests
 from app.services.organizations import (
     EDITOR_ROLES,
     get_approved_organization,
@@ -170,24 +173,60 @@ async def _lock_join_request(db_session: AsyncSession, join_request_id: int) -> 
     )
 
 
-def _notify_applicant(db_session: AsyncSession, join_request: JoinRequest) -> None:
+def _notify_applicant(
+    db_session: AsyncSession, join_request: JoinRequest, project: Project | None
+) -> None:
     name = join_request.organization.name
-    if join_request.status == JoinRequestStatusEnum.accepted:
+    accepted = join_request.status == JoinRequestStatusEnum.accepted
+    if project is None:
+        subject = "вашу заявку на вступ"
+        link = organization_page_link(join_request.organization_id)
+    else:
+        subject = f"вашу заявку на проєкт «{project.title}»"
+        link = project_page_link(project.id)
+    if accepted:
         type_ = NotificationTypeEnum.join_request_accepted
         title = "Заявку прийнято"
-        message = f"Організація «{name}» прийняла вашу заявку на вступ."
+        message = f"Організація «{name}» прийняла {subject}."
     else:
         type_ = NotificationTypeEnum.join_request_rejected
         title = "Заявку відхилено"
-        message = f"Організація «{name}» відхилила вашу заявку на вступ."
-    create_notification(
-        db_session,
-        join_request.user_id,
-        type_,
-        title,
-        message,
-        link=organization_page_link(join_request.organization_id),
+        message = f"Організація «{name}» відхилила {subject}."
+    create_notification(db_session, join_request.user_id, type_, title, message, link=link)
+
+
+async def _accept_into_organization(db_session: AsyncSession, join_request: JoinRequest) -> None:
+    # Членство в інших організаціях не заважає; у цій волонтер міг з'явитися за час
+    # розгляду заявки
+    membership_here = await get_user_membership(
+        db_session, join_request.user_id, join_request.organization_id
     )
+    if membership_here is not None:
+        raise errors.applicant_already_member()
+    db_session.add(
+        OrganizationMember(
+            organization_id=join_request.organization_id,
+            user_id=join_request.user_id,
+            role=OrgMemberRoleEnum.member,
+        )
+    )
+
+
+async def _check_project_decision(
+    db_session: AsyncSession, user_id: int, join_request: JoinRequest, data: JoinRequestReview
+) -> Project:
+    """Перевірки рішення щодо заявки на проєкт (R-24): схвалених не більше, ніж місць."""
+    project = await project_join_requests.lock_project(db_session, join_request.project_id)
+    # Відхилити можна й заявку на проєкт, що вже почався, а прийняти — лише поки він відкритий
+    if data.status == JoinRequestStatusEnum.accepted:
+        if not project_join_requests.is_open(project):
+            raise errors.project_not_open()
+        accepted = await project_join_requests.count_accepted(db_session, project.id)
+        if accepted >= project.capacity:
+            raise errors.project_full()
+    if data.ignore:
+        await project_join_requests.ignore_applicant(db_session, join_request, user_id)
+    return project
 
 
 async def review_join_request(
@@ -209,32 +248,23 @@ async def review_join_request(
         raise errors.not_join_request_reviewer()
     if membership.organization.status == OrgStatusEnum.blocked:
         raise errors.organization_blocked()
-    # Заявки на проєкти розглядаються з перевіркою кількості місць (R-24), тут лише вступ
-    if join_request.target != JoinRequestTargetEnum.organization:
-        raise errors.project_join_request_not_supported()
+    if join_request.status == JoinRequestStatusEnum.cancelled:
+        raise errors.join_request_cancelled()
     if join_request.status != JoinRequestStatusEnum.pending:
         raise errors.join_request_already_reviewed()
 
-    if data.status == JoinRequestStatusEnum.accepted:
-        # Членство в інших організаціях не заважає; у цій волонтер міг з'явитися за час
-        # розгляду заявки
-        membership_here = await get_user_membership(
-            db_session, join_request.user_id, join_request.organization_id
-        )
-        if membership_here is not None:
-            raise errors.applicant_already_member()
-        db_session.add(
-            OrganizationMember(
-                organization_id=join_request.organization_id,
-                user_id=join_request.user_id,
-                role=OrgMemberRoleEnum.member,
-            )
-        )
+    project = None
+    if join_request.target == JoinRequestTargetEnum.project:
+        project = await _check_project_decision(db_session, user_id, join_request, data)
+    elif data.ignore:
+        raise errors.ignore_requires_project_request()
+    elif data.status == JoinRequestStatusEnum.accepted:
+        await _accept_into_organization(db_session, join_request)
 
     join_request.status = data.status
     join_request.reviewed_by = user_id
     join_request.reviewed_at = datetime.now(UTC)
-    _notify_applicant(db_session, join_request)
+    _notify_applicant(db_session, join_request, project)
 
     # Статус заявки, новий учасник і сповіщення зберігаються в одній транзакції
     try:

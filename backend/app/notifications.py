@@ -37,6 +37,16 @@ def organization_page_link(organization_id: int) -> str:
     return f"/organizations/{organization_id}"
 
 
+def project_page_link(project_id: int) -> str:
+    """Публічна сторінка проєкту."""
+    return f"/projects/{project_id}"
+
+
+def project_join_requests_link(organization_id: int, project_id: int) -> str:
+    """Заявки на проєкт у кабінеті організації."""
+    return f"/organization/projects/{project_id}/join-requests?organization_id={organization_id}"
+
+
 def create_notification(
     db_session: AsyncSession,
     user_id: int,

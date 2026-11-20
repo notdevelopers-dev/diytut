@@ -6,15 +6,19 @@ import { getApiErrorMessage, getErrorStatus } from '@/lib/errors'
 const MAX_MESSAGE_LENGTH = 1000
 
 interface JoinRequestModalProps {
-  organizationName: string
+  /** Назва організації чи проєкту під заголовком */
+  subtitle: string
+  title?: string
   isSubmitting: boolean
   error: unknown
+  /** Текст помилки для користувача; за замовчуванням — для заявки на вступ до ГО */
+  describeError?: (error: unknown) => string
   onSubmit: (message: string) => void
   onClose: () => void
 }
 
-/** Тексти для відповідей бекенду, які користувач може побачити */
-const errorText = (error: unknown) => {
+/** Тексти для відповідей бекенду на заявку на вступ, які користувач може побачити */
+const organizationErrorText = (error: unknown) => {
   switch (getErrorStatus(error)) {
     case 409:
       return getApiErrorMessage(error, '').includes('member')
@@ -29,11 +33,13 @@ const errorText = (error: unknown) => {
   }
 }
 
-/** Модальне вікно «Запит на приєднання до ГО» за макетом Figma. */
+/** Модальне вікно «Запит на приєднання» за макетом Figma: до ГО чи на проєкт. */
 export const JoinRequestModal = ({
-  organizationName,
+  subtitle,
+  title = 'Запит на приєднання до ГО',
   isSubmitting,
   error,
+  describeError = organizationErrorText,
   onSubmit,
   onClose,
 }: JoinRequestModalProps) => {
@@ -71,9 +77,9 @@ export const JoinRequestModal = ({
       <form onSubmit={handleSubmit} className="flex flex-col gap-3 p-4">
         <div className="text-center">
           <h2 id={titleId} className="text-base font-normal text-black">
-            Запит на приєднання до ГО
+            {title}
           </h2>
-          <p className="text-base break-words text-black">{organizationName}</p>
+          <p className="text-base break-words text-black">{subtitle}</p>
         </div>
 
         <label
@@ -97,7 +103,7 @@ export const JoinRequestModal = ({
 
         {Boolean(error) && (
           <p role="alert" className="text-center text-xs text-red-600">
-            {errorText(error)}
+            {describeError(error)}
           </p>
         )}
 
