@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import errors
 from app.models import OrgStatusEnum, Project, ProjectCategoryEnum, ProjectStatusEnum
-from app.schemas.projects import ProjectCreate, ProjectDraft, ProjectPublication, normalize_tag
+from app.schemas.projects import ProjectCreate, ProjectDraft, check_publication, normalize_tag
 from app.services.cities import ensure_city_exists
 from app.services.organizations import EDITOR_ROLES, get_user_membership
 from app.services.project_join_requests import lock_project
@@ -56,20 +56,14 @@ async def list_active_projects(
     return list(await db_session.scalars(query))
 
 
-def _check_publication(fields: dict[str, Any]) -> dict[str, Any]:
-    """Повна перевірка полів перед публікацією; повертає їх нормалізованими.
-
-    Та сама для створення одразу опублікованого проєкту й для публікації чернетки.
-    """
-    # Порожнє поле — це поле, якого бракує: помилка «Field required», а не про тип значення
-    provided = {field: value for field, value in fields.items() if value is not None}
+def _check_publication(fields: dict[str, Any]) -> None:
+    """Повна перевірка полів перед публікацією; 422 з усіма помилками одразу."""
     try:
-        publication = ProjectPublication.model_validate(provided)
+        check_publication(fields)
     except ValidationError as error:
         raise errors.project_incomplete(
             error.errors(include_url=False, include_context=False, include_input=False)
         ) from None
-    return publication.model_dump()
 
 
 async def get_visible_project(
@@ -113,10 +107,9 @@ async def list_organization_projects(
 
 
 async def create_project(db_session: AsyncSession, user_id: int, data: ProjectCreate) -> Project:
+    # Повноту полів одразу опублікованого проєкту вже перевірив ProjectCreate
     publish = data.status == ProjectStatusEnum.published
     fields = data.project_fields()
-    if publish:
-        fields = _check_publication(fields)
 
     # Блокування: роль і статус організації не зміняться, доки проєкт не збережено
     membership = await get_user_membership(db_session, user_id, data.organization_id, lock=True)
@@ -161,6 +154,8 @@ async def publish_project(db_session: AsyncSession, user_id: int, project_id: in
     if membership is None:
         raise errors.project_not_found()
     project = await lock_project(db_session, project_id)
+    if project is None:
+        raise errors.project_not_found()
 
     if membership.role not in EDITOR_ROLES:
         raise errors.not_project_publisher()

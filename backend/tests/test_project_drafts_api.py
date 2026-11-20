@@ -264,8 +264,120 @@ def test_create_published_without_status_still_requires_all_fields(client: TestC
         ("body", "ends_at"),
         ("body", "capacity"),
         ("body", "volunteer_hours"),
+        ("body", "categories"),
     }
+    # Офлайн за замовчуванням: про місце сказано одразу, а не після виправлення інших полів
+    assert model_errors(errors) == [OFFLINE_ERROR]
     assert all("msg" in error for error in errors)
+
+
+def model_errors(errors: list[dict]) -> list[str]:
+    """Помилки рівня моделі (loc лише "body"): зв'язки між полями."""
+    return [error["msg"] for error in errors if error["loc"] == ["body"]]
+
+
+def field_errors(errors: list[dict]) -> dict[str, str]:
+    return {error["loc"][1]: error["type"] for error in errors if len(error["loc"]) > 1}
+
+
+OFFLINE_ERROR = "Value error, Offline project requires city_id and address"
+TIMES_ERROR = "Value error, ends_at must be after starts_at"
+
+
+def test_create_published_reports_value_and_missing_errors_together(
+    client: TestClient, org
+) -> None:
+    sign_in(client, org["owner"])
+    payload = {"title": "Толока"} | COMPLETE_FIELDS | {"capacity": 0}
+    del payload["description"]
+
+    response = client.post("/api/projects", json=payload)
+
+    assert response.status_code == 422
+    assert field_errors(response.json()["detail"]) == {
+        "capacity": "greater_than",
+        "description": "missing",
+    }
+
+
+def test_create_published_reports_cross_field_errors_with_field_errors(
+    client: TestClient, org, city_id: int
+) -> None:
+    sign_in(client, org["owner"])
+    payload = {"title": "Толока"} | COMPLETE_FIELDS
+    payload |= {
+        "is_online": False,
+        "city_id": city_id,
+        "ends_at": (STARTS_AT - timedelta(hours=1)).isoformat(),
+        "capacity": None,
+    }
+
+    response = client.post("/api/projects", json=payload)
+
+    assert response.status_code == 422
+    errors = response.json()["detail"]
+    assert field_errors(errors) == {"capacity": "missing"}
+    assert model_errors(errors) == [TIMES_ERROR, OFFLINE_ERROR]
+
+
+def test_create_published_reports_each_error_once(client: TestClient, org) -> None:
+    # Помилки значень дають обидві перевірки — і чернетки, і публікації; у відповіді по одній
+    sign_in(client, org["owner"])
+    payload = {"title": "a"} | COMPLETE_FIELDS | {"tags": ["тег!"], "unknown": 1}
+    payload["ends_at"] = (STARTS_AT - timedelta(hours=1)).isoformat()
+
+    response = client.post("/api/projects", json=payload)
+
+    assert response.status_code == 422
+    errors = response.json()["detail"]
+    locs = [tuple(error["loc"]) for error in errors]
+    assert sorted(locs) == sorted(
+        [("body", "title"), ("body", "tags", 0), ("body", "unknown"), ("body",)]
+    )
+    assert model_errors(errors) == [TIMES_ERROR]
+
+
+def test_cross_field_check_skips_invalid_fields(client: TestClient, org) -> None:
+    # is_online некоректне: перевірка місця на ньому дала б хибну помилку
+    sign_in(client, org["owner"])
+    payload = {"title": "Толока"} | COMPLETE_FIELDS | {"is_online": "maybe"}
+
+    response = client.post("/api/projects", json=payload)
+
+    assert response.status_code == 422
+    errors = response.json()["detail"]
+    assert field_errors(errors) == {"is_online": "bool_parsing"}
+    assert model_errors(errors) == []
+
+
+@pytest.mark.parametrize("status", ["draft", "published"])
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("capacity", 2**31), ("volunteer_hours", "1000"), ("volunteer_hours", "999.995")],
+)
+def test_values_beyond_column_limits_422(
+    client: TestClient, org, status: str, field: str, value
+) -> None:
+    # Раніше БД відхиляла їх, і запит падав з 500
+    sign_in(client, org["owner"])
+    payload = {"title": "Толока", "status": status} | COMPLETE_FIELDS | {field: value}
+
+    response = client.post("/api/projects", json=payload)
+
+    assert response.status_code == 422
+    assert field_errors(response.json()["detail"]) == {field: "less_than_equal"}
+
+
+def test_values_at_column_limits_are_saved(client: TestClient, org) -> None:
+    sign_in(client, org["owner"])
+    payload = {"title": "Толока"} | COMPLETE_FIELDS
+    payload |= {"capacity": 2**31 - 1, "volunteer_hours": "999.99"}
+
+    response = client.post("/api/projects", json=payload)
+
+    assert response.status_code == 201
+    assert response.json()["capacity"] == 2**31 - 1
+    assert response.json()["volunteer_hours"] == "999.99"
 
 
 def test_create_published_201_sets_published_at(client: TestClient, org) -> None:
@@ -313,6 +425,27 @@ def test_unapproved_organization_can_save_draft_but_not_publish(
     assert draft.status_code == 201
     assert published.status_code == 403
     assert published.json()["detail"] == "Only approved organizations can publish projects"
+
+
+@pytest.mark.parametrize(
+    ("status", "code"),
+    [(OrgStatusEnum.pending, 201), (OrgStatusEnum.rejected, 201), (OrgStatusEnum.blocked, 403)],
+)
+def test_draft_for_chosen_organization_checks_its_status(
+    client: TestClient, org, make_org, status: OrgStatusEnum, code: int
+) -> None:
+    # Організація за замовчуванням схвалена, а перевіряється статус саме обраної
+    second_org = make_org({org["owner"]: OrgMemberRoleEnum.owner}, status=status)
+    sign_in(client, org["owner"])
+
+    response = client.post(
+        "/api/projects",
+        json={"title": "Толока", "status": "draft", "organization_id": second_org},
+    )
+
+    assert response.status_code == code
+    if code == 201:
+        assert response.json()["organization_id"] == second_org
 
 
 def test_blocked_organization_cannot_save_draft_403(client: TestClient, db, org) -> None:
@@ -397,6 +530,29 @@ def test_draft_is_not_in_public_lists(client: TestClient, org, make_project) -> 
     assert [project["id"] for project in organization["projects"]] == [published_id]
 
 
+def test_public_organization_profile_orders_by_published_at(
+    client: TestClient, org, make_project
+) -> None:
+    now = datetime.now(UTC)
+    # Створений раніше, але опублікований пізніше — першим
+    published_later = make_project(
+        org["org"],
+        status=ProjectStatusEnum.published,
+        created_at=now - timedelta(days=10),
+        published_at=now - timedelta(days=1),
+    )
+    published_earlier = make_project(
+        org["org"],
+        status=ProjectStatusEnum.published,
+        created_at=now - timedelta(days=5),
+        published_at=now - timedelta(days=4),
+    )
+
+    projects = client.get(f"/api/organizations/{org['org']}").json()["projects"]
+
+    assert [project["id"] for project in projects] == [published_later, published_earlier]
+
+
 # =====================================================================
 # POST /api/projects/{id}/publish
 # =====================================================================
@@ -471,7 +627,10 @@ def test_publish_title_only_draft_422(client: TestClient, db, org, make_project)
         ("body", "capacity"),
         ("body", "volunteer_hours"),
         ("body", "categories"),
+        ("body",),
     }
+    # Чернетка офлайн за замовчуванням: місце — в тому ж списку, а не з наступної спроби
+    assert model_errors(errors) == [OFFLINE_ERROR]
     project = load_project(db, project_id)
     assert project.status == ProjectStatusEnum.draft
     assert project.published_at is None
@@ -489,6 +648,36 @@ def test_publish_offline_draft_without_address_422(
     assert response.status_code == 422
     assert "Offline project requires city_id and address" in response.json()["detail"][0]["msg"]
     assert load_project(db, project_id).status == ProjectStatusEnum.draft
+
+
+def test_publish_reports_location_with_missing_fields(
+    client: TestClient, org, make_project, city_id: int
+) -> None:
+    fields = _complete_draft_fields() | {"is_online": False, "city_id": city_id}
+    del fields["capacity"]
+    project_id = make_project(org["org"], **fields)
+    sign_in(client, org["owner"])
+
+    response = client.post(f"/api/projects/{project_id}/publish")
+
+    assert response.status_code == 422
+    errors = response.json()["detail"]
+    assert field_errors(errors) == {"capacity": "missing"}
+    assert model_errors(errors) == [OFFLINE_ERROR]
+
+
+def test_published_draft_accepts_join_requests(client: TestClient, org, make_project) -> None:
+    project_id = make_project(org["org"], **_complete_draft_fields())
+    sign_in(client, org["outsider"])
+    assert client.post(f"/api/projects/{project_id}/join-requests", json={}).status_code == 404
+
+    sign_in(client, org["owner"])
+    assert client.post(f"/api/projects/{project_id}/publish").status_code == 200
+
+    sign_in(client, org["outsider"])
+    response = client.post(f"/api/projects/{project_id}/join-requests", json={})
+    assert response.status_code == 201
+    assert response.json()["status"] == "pending"
 
 
 def test_publish_requires_login_401(client: TestClient, org, make_project) -> None:
