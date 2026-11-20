@@ -23,6 +23,9 @@ export interface OrganizationDetail extends OrganizationListItem {
 /** Статус заявки на вступ (app.models.JoinRequestStatusEnum) */
 export type JoinRequestStatus = 'pending' | 'accepted' | 'rejected'
 
+/** Рішення організації щодо заявки (app.schemas.join_requests.JoinRequestReview) */
+export type JoinRequestDecision = Exclude<JoinRequestStatus, 'pending'>
+
 /** Заявка на вступ до організації (app.schemas.join_requests.JoinRequestRead) */
 export interface JoinRequest {
   id: number

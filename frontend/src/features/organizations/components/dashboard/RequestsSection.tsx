@@ -1,7 +1,14 @@
-import { Fragment, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useCities } from '@/features/cities/hooks'
-import type { OrganizationJoinRequest } from '@/types/organization'
-import { formatDateTime } from './format'
+import { useReviewJoinRequest } from '@/features/organizations/hooks'
+import { getApiErrorMessage, getErrorStatus } from '@/lib/errors'
+import type {
+  JoinRequestDecision,
+  OrganizationJoinRequest,
+} from '@/types/organization'
+import { ConfirmRejectDialog } from './ConfirmRejectDialog'
+import { applicantName, JOIN_REQUEST_GRID } from './format'
+import { JoinRequestCard } from './JoinRequestCard'
 import { EmptyState, SearchField } from './shared'
 
 type Tab = 'all' | 'pending' | 'processed'
@@ -19,48 +26,38 @@ const pluralRequests = (n: number) => {
   return `${n} нових запитів чекають`
 }
 
-const applicantName = (r: OrganizationJoinRequest) =>
-  [r.user.first_name, r.user.last_name].filter(Boolean).join(' ')
+type Feedback = { tone: 'success' | 'error'; text: string }
 
-/** Кнопки розгляду — у FE-203; тут видно, але не активні */
-const ReviewButtons = () => (
-  <div className="flex gap-2">
-    <button
-      type="button"
-      disabled
-      title="Розгляд заявок — незабаром"
-      className="h-6 cursor-not-allowed rounded-[5px] bg-[#B5F291] px-3 text-xs text-black opacity-70"
-    >
-      Схвалити
-    </button>
-    <button
-      type="button"
-      disabled
-      title="Розгляд заявок — незабаром"
-      className="h-6 cursor-not-allowed rounded-[5px] bg-[#E14848] px-3 text-xs text-white opacity-70"
-    >
-      Відхилити
-    </button>
-  </div>
-)
-
-const StatusChip = () => (
-  <span className="inline-flex h-6 items-center rounded-[5px] bg-info px-3 text-xs text-black">
-    На розгляді
-  </span>
-)
+/** Зрозумілі пояснення відмов бекенду (PATCH /api/join-requests/{id}) */
+const reviewErrorText = (err: unknown): string => {
+  const detail = getApiErrorMessage(err, '')
+  if (detail.includes('already been reviewed'))
+    return 'Цю заявку вже розглянув інший адміністратор. Список оновлено.'
+  if (detail.includes('already a member'))
+    return 'Волонтер уже є учасником організації. Список оновлено.'
+  if (detail.includes('blocked'))
+    return 'Організацію заблоковано, розглядати заявки не можна.'
+  const status = getErrorStatus(err)
+  if (status === 403)
+    return 'Розглядати заявки можуть лише власник і адміністратори.'
+  if (status === 404) return 'Заявку не знайдено. Список оновлено.'
+  return 'Не вдалося зберегти рішення. Спробуйте ще раз.'
+}
 
 /**
  * Вхідні запити за макетом Figma «Сповіщення організації»: вкладки, пошук,
  * сортування й таблиця заявок. Бекенд віддає лише заявки на розгляді, тож
- * «Опрацьовані» поки порожні; схвалення й відхилення — у FE-203.
+ * «Опрацьовані» поки порожні. «Схвалити» додає волонтера до організації,
+ * «Відхилити» — після підтвердження; розглянута заявка зникає зі списку (FE-203).
  */
 export const RequestsSection = ({
+  organizationId,
   requests,
   canReview,
   isLoading,
   isError,
 }: {
+  organizationId: number | undefined
   requests: OrganizationJoinRequest[]
   canReview: boolean
   isLoading: boolean
@@ -76,6 +73,42 @@ export const RequestsSection = ({
   const [sort, setSort] = useState<Sort>('newest')
   const [page, setPage] = useState(0)
   const [openId, setOpenId] = useState<number | null>(null)
+  const [rejectTarget, setRejectTarget] =
+    useState<OrganizationJoinRequest | null>(null)
+  const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const review = useReviewJoinRequest(organizationId)
+
+  const decide = (
+    request: OrganizationJoinRequest,
+    status: JoinRequestDecision,
+  ) => {
+    setFeedback(null)
+    review.mutate(
+      { id: request.id, status },
+      {
+        onSuccess: () => {
+          const name = applicantName(request)
+          setFeedback({
+            tone: 'success',
+            text:
+              status === 'accepted'
+                ? `${name} тепер учасник вашої організації`
+                : `Заявку ${name} відхилено`,
+          })
+        },
+        onError: (err) =>
+          setFeedback({ tone: 'error', text: reviewErrorText(err) }),
+        onSettled: () => setRejectTarget(null),
+      },
+    )
+  }
+  const closeRejectDialog = useCallback(() => setRejectTarget(null), [])
+
+  /** Яка дія виконується для заявки (кнопки цієї заявки неактивні) */
+  const pendingActionFor = (id: number) =>
+    review.isPending && review.variables?.id === id
+      ? review.variables.status
+      : null
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -134,6 +167,17 @@ export const RequestsSection = ({
         </p>
       </div>
 
+      {feedback && (
+        <p
+          role={feedback.tone === 'error' ? 'alert' : 'status'}
+          className={`rounded-[5px] px-3 py-2 text-sm text-black ${
+            feedback.tone === 'success' ? 'bg-[#B5F291]/60' : 'bg-[#E14848]/15'
+          }`}
+        >
+          {feedback.text}
+        </p>
+      )}
+
       {/* Вкладки з лічильниками */}
       <div
         role="tablist"
@@ -186,7 +230,9 @@ export const RequestsSection = ({
 
       <div className="overflow-hidden rounded-[5px] border border-main bg-white">
         {/* Заголовки таблиці (на телефоні — картки) */}
-        <div className="hidden grid-cols-[1.4fr_1.4fr_1fr_1fr_1.4fr] gap-3 bg-info px-3 py-2 text-sm text-black md:grid">
+        <div
+          className={`hidden gap-3 bg-info px-3 py-2 text-sm text-black md:grid ${JOIN_REQUEST_GRID}`}
+        >
           <span>Волонтер / контакт</span>
           <span>Запит</span>
           <span>Дата подачі</span>
@@ -212,63 +258,22 @@ export const RequestsSection = ({
           </p>
         ) : (
           <ul className="divide-y divide-[#DCECFF]">
-            {visible.map((r) => {
-              const { date, time } = formatDateTime(r.created_at)
-              const city =
-                r.user.city_id !== null
-                  ? cityNames.get(r.user.city_id)
-                  : undefined
-              const contact = [
-                r.user.nickname ? `@${r.user.nickname}` : null,
-                city,
-              ]
-                .filter(Boolean)
-                .join(' · ')
-              const isOpen = openId === r.id
-              return (
-                <Fragment key={r.id}>
-                  <li className="relative grid grid-cols-1 gap-2 bg-[#F3F8FF] px-3 py-3 text-sm md:grid-cols-[1.4fr_1.4fr_1fr_1fr_1.4fr] md:items-center md:gap-3">
-                    <span
-                      aria-hidden="true"
-                      className="absolute inset-y-0 left-0 w-[3px] bg-main"
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-black">{applicantName(r)}</span>
-                      <span className="text-xs text-black">
-                        {contact || '—'}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-start gap-1">
-                      <span className="text-black">Вступ до організації</span>
-                      {r.message && (
-                        <button
-                          type="button"
-                          onClick={() => setOpenId(isOpen ? null : r.id)}
-                          aria-expanded={isOpen}
-                          className="h-5 cursor-pointer rounded-[5px] border border-main bg-white px-3 text-xs text-black hover:bg-[#F3F8FF]"
-                        >
-                          {isOpen ? 'Сховати' : 'Переглянути'}
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex gap-2 text-black md:flex-col md:gap-0">
-                      <span>{date}</span>
-                      <span>{time}</span>
-                    </div>
-                    <div>
-                      <StatusChip />
-                    </div>
-                    <ReviewButtons />
-                  </li>
-                  {isOpen && r.message && (
-                    <li className="bg-white px-3 py-3 text-sm whitespace-pre-wrap text-black">
-                      <span className="font-semibold">Мотивація: </span>
-                      {r.message}
-                    </li>
-                  )}
-                </Fragment>
-              )
-            })}
+            {visible.map((r) => (
+              <JoinRequestCard
+                key={r.id}
+                request={r}
+                cityName={
+                  r.user.city_id !== null
+                    ? cityNames.get(r.user.city_id)
+                    : undefined
+                }
+                isMessageOpen={openId === r.id}
+                onToggleMessage={() => setOpenId(openId === r.id ? null : r.id)}
+                onAccept={() => decide(r, 'accepted')}
+                onReject={() => setRejectTarget(r)}
+                pendingAction={pendingActionFor(r.id)}
+              />
+            ))}
           </ul>
         )}
 
@@ -303,6 +308,15 @@ export const RequestsSection = ({
           </div>
         </div>
       </div>
+
+      {rejectTarget && (
+        <ConfirmRejectDialog
+          applicantName={applicantName(rejectTarget)}
+          isPending={review.isPending}
+          onConfirm={() => decide(rejectTarget, 'rejected')}
+          onCancel={closeRejectDialog}
+        />
+      )}
     </section>
   )
 }

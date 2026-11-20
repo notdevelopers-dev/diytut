@@ -90,6 +90,7 @@ export const OrganizationDashboardPage = () => {
 
       {tab === 'requests' && (
         <RequestsSection
+          organizationId={orgId}
           requests={requests}
           canReview={canReview}
           isLoading={isRequestsLoading}

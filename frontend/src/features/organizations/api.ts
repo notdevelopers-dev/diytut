@@ -2,6 +2,7 @@ import { apiClient } from '@/lib/api-client'
 import { getErrorStatus } from '@/lib/errors'
 import type {
   JoinRequest,
+  JoinRequestDecision,
   OrganizationDetail,
   OrganizationListItem,
   OrganizationJoinRequest,
@@ -141,6 +142,21 @@ export const fetchIncomingJoinRequests = async (
         limit: INCOMING_REQUESTS_LIMIT,
       },
     },
+  )
+  return data
+}
+
+/**
+ * Рішення щодо заявки на вступ (PATCH /api/join-requests/{id}). Після схвалення
+ * бекенд додає волонтера до організації з роллю member і надсилає йому сповіщення.
+ */
+export const reviewJoinRequest = async (
+  joinRequestId: number,
+  status: JoinRequestDecision,
+): Promise<JoinRequest> => {
+  const { data } = await apiClient.patch<JoinRequest>(
+    `/join-requests/${joinRequestId}`,
+    { status },
   )
   return data
 }

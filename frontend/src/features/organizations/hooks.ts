@@ -5,6 +5,10 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { AUTH_ME_QUERY_KEY } from '@/features/auth/hooks'
+import type {
+  JoinRequestDecision,
+  OrganizationJoinRequest,
+} from '@/types/organization'
 import {
   createJoinRequest,
   createOrganization,
@@ -14,6 +18,7 @@ import {
   fetchMyOrganizations,
   fetchOrganization,
   fetchOrganizations,
+  reviewJoinRequest,
   updateMyOrganization,
 } from './api'
 
@@ -123,15 +128,39 @@ export const useCreateJoinRequest = (organizationId: number) => {
   })
 }
 
+const incomingRequestsKey = (organizationId: number | undefined) =>
+  ['organizations', 'incoming-requests', organizationId] as const
+
 /** Заявки на вступ, що чекають розгляду (кабінет організації) */
 export const useIncomingJoinRequests = (
   organizationId: number | undefined,
   enabled: boolean,
 ) =>
   useQuery({
-    queryKey: ['organizations', 'incoming-requests', organizationId],
+    queryKey: incomingRequestsKey(organizationId),
     queryFn: () => fetchIncomingJoinRequests(organizationId as number),
     enabled: enabled && Boolean(organizationId),
     // Учаснику без прав бекенд відповідає 403 — повторювати немає сенсу
     retry: false,
   })
+
+/**
+ * Схвалити або відхилити заявку на вступ. Після успіху заявка зникає зі списку
+ * (показуємо лише pending), а дані організації оновлюються — у ній новий учасник.
+ */
+export const useReviewJoinRequest = (organizationId: number | undefined) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, status }: { id: number; status: JoinRequestDecision }) =>
+      reviewJoinRequest(id, status),
+    onSuccess: (_data, { id }) => {
+      queryClient.setQueryData<OrganizationJoinRequest[]>(
+        incomingRequestsKey(organizationId),
+        (old) => old?.filter((r) => r.id !== id),
+      )
+    },
+    // І після помилки (заявку вже розглянув інший адмін) — свіжий список із бекенду
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: ['organizations'] }),
+  })
+}
