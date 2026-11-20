@@ -18,6 +18,7 @@ from app.models import (
     ProjectStatusEnum,
 )
 from app.models.experience import ExperienceLevelEnum, level_for_hours
+from app.schemas.projects import EventDetails
 from app.schemas.users import _empty_to_none
 
 JoinRequestMessage = Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)]
@@ -132,17 +133,16 @@ class ProjectJoinRequestRead(JoinRequestRead):
         )
 
 
-class JoinRequestProject(BaseModel):
-    """Коротко про проєкт у списку власних заявок волонтера."""
+class JoinRequestProject(EventDetails):
+    """Коротко про проєкт у списку власних заявок волонтера.
 
-    model_config = ConfigDict(from_attributes=True)
+    Точний час — лише після схвалення заявки (R-22), до того тільки дні події.
+    """
 
     id: int
     organization_id: int
     title: str
     status: ProjectStatusEnum
-    starts_at: datetime
-    ends_at: datetime
     is_online: bool
     city_id: int | None
 

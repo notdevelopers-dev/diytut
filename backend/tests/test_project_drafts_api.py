@@ -523,7 +523,7 @@ def test_draft_is_not_in_public_lists(client: TestClient, org, make_project) -> 
     )
     sign_in(client, org["owner"])
 
-    catalog = client.get("/api/projects").json()
+    catalog = client.get("/api/projects").json()["items"]
     organization = client.get(f"/api/organizations/{org['org']}").json()
 
     assert [project["id"] for project in catalog] == [published_id]
@@ -587,7 +587,7 @@ def test_publish_complete_draft(client: TestClient, db, org, make_project) -> No
     assert data["status"] == "published"
     assert data["published_at"] is not None
     # Каталог ставить нові проєкти першими за часом публікації, а не створення
-    catalog = client.get("/api/projects").json()
+    catalog = client.get("/api/projects").json()["items"]
     assert [project["id"] for project in catalog] == [project_id, older_id]
     client.cookies.clear()
     assert client.get(f"/api/projects/{project_id}").status_code == 200

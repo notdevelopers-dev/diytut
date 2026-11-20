@@ -1,15 +1,18 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import ValidationError
-from sqlalchemy import func, or_, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import errors
 from app.models import OrgStatusEnum, Project, ProjectCategoryEnum, ProjectStatusEnum
+from app.models.experience import ExperienceLevelEnum
 from app.schemas.projects import ProjectCreate, ProjectDraft, check_publication, normalize_tag
 from app.services.cities import ensure_city_exists
 from app.services.organizations import EDITOR_ROLES, get_user_membership
 from app.services.project_join_requests import lock_project
+from app.services.project_visibility import projects_with_details
 
 
 def _escape_like(value: str) -> str:
@@ -17,8 +20,14 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+def _catalog_filters() -> list[ColumnElement[bool]]:
+    """Що потрапляє в каталог: опубліковані проєкти, які ще не завершилися."""
+    return [Project.status == ProjectStatusEnum.published, Project.ends_at > func.now()]
+
+
 async def list_active_projects(
     db_session: AsyncSession,
+    user_id: int | None,
     *,
     limit: int,
     offset: int,
@@ -26,34 +35,79 @@ async def list_active_projects(
     city_id: int | None = None,
     categories: list[ProjectCategoryEnum] | None = None,
     tags: list[str] | None = None,
-) -> list[Project]:
-    """Каталог: опубліковані проєкти, які ще не завершилися.
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    is_adult_only: bool | None = None,
+    experience_level: ExperienceLevelEnum | None = None,
+) -> tuple[list[Project], int, set[int]]:
+    """Каталог (R-14): сторінка проєктів, їх загальна кількість під фільтром і id проєктів,
+    точні час і місце яких бачить користувач (R-22).
 
-    Кілька сфер чи хештегів — «будь-який із них»; сфери, хештеги й місто разом — «усі умови».
+    Кілька сфер чи хештегів — «будь-який із них»; різні фільтри разом — «усі умови».
     """
-    query = select(Project).where(
-        Project.status == ProjectStatusEnum.published,
-        Project.ends_at > func.now(),
-    )
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise errors.invalid_period("date_from must not be later than date_to")
+
+    filters = _catalog_filters()
     if search and search.strip():
         pattern = f"%{_escape_like(search.strip())}%"
-        query = query.where(or_(Project.title.ilike(pattern), Project.description.ilike(pattern)))
+        filters.append(or_(Project.title.ilike(pattern), Project.description.ilike(pattern)))
     if city_id is not None:
-        query = query.where(Project.city_id == city_id)
+        filters.append(Project.city_id == city_id)
     # Оператор && (перетин масивів) використовує GIN-індекси на categories і tags
     if categories:
-        query = query.where(Project.categories.overlap(sorted(set(categories))))
+        filters.append(Project.categories.overlap(sorted(set(categories))))
     # Хештег у фільтрі нормалізуємо так само, як під час збереження: «#Толока» знайде «толока».
     # Порожні значення (?tags=) ігноруємо, щоб не відфільтрувати все
     wanted_tags = sorted({tag for raw in tags or [] if (tag := normalize_tag(raw))})
     if wanted_tags:
-        query = query.where(Project.tags.overlap(wanted_tags))
+        filters.append(Project.tags.overlap(wanted_tags))
+    # Події, що відбуваються в цей проміжок хоча б частково: багатоденний проєкт, який
+    # почався раніше й ще триває, теж підходить
+    if date_from is not None:
+        filters.append(Project.ends_at > date_from)
+    if date_to is not None:
+        filters.append(Project.starts_at <= date_to)
+    if is_adult_only is not None:
+        filters.append(Project.is_adult_only.is_(is_adult_only))
+    # Проєкти, на які волонтер цього рівня може подати заявку: вимога не вища за рівень
+    if experience_level is not None:
+        levels = list(ExperienceLevelEnum)
+        filters.append(Project.experience_level.in_(levels[: levels.index(experience_level) + 1]))
 
+    total = await db_session.scalar(select(func.count()).select_from(Project).where(*filters))
     # Нові першими за часом публікації: чернетка, опублікована пізніше, теж потрапить нагору
-    query = (
-        query.order_by(Project.published_at.desc(), Project.id.desc()).limit(limit).offset(offset)
+    projects = list(
+        await db_session.scalars(
+            select(Project)
+            .where(*filters)
+            .order_by(Project.published_at.desc(), Project.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
     )
-    return list(await db_session.scalars(query))
+    return projects, total or 0, await projects_with_details(db_session, user_id, projects)
+
+
+async def suggest_tags(
+    db_session: AsyncSession, prefix: str, *, limit: int
+) -> list[tuple[str, int]]:
+    """Хештеги проєктів каталогу, що починаються з prefix, популярні першими.
+
+    Беремо лише проєкти, які видно в каталозі: так кожна підказка знаходить проєкти, а
+    хештеги чернеток лишаються в організації. Порожній prefix — найпопулярніші загалом.
+    """
+    project_tags = (
+        select(func.unnest(Project.tags).label("tag")).where(*_catalog_filters()).subquery()
+    )
+    tag = project_tags.c.tag
+    projects_count = func.count().label("projects_count")
+    query = select(tag, projects_count).group_by(tag).order_by(projects_count.desc(), tag)
+    # Хештеги зберігаються нормалізованими, тож і префікс нормалізуємо так само
+    if wanted := normalize_tag(prefix):
+        query = query.where(tag.startswith(wanted, autoescape=True))
+    rows = await db_session.execute(query.limit(limit))
+    return [(row.tag, row.projects_count) for row in rows]
 
 
 def _check_publication(fields: dict[str, Any]) -> None:
@@ -68,19 +122,23 @@ def _check_publication(fields: dict[str, Any]) -> None:
 
 async def get_visible_project(
     db_session: AsyncSession, project_id: int, user_id: int | None
-) -> Project:
-    """Опублікований проєкт бачать усі, а чернетку, завершений і скасований — лише учасники
+) -> tuple[Project, bool]:
+    """Проєкт і те, чи бачить користувач його точні час і місце (R-22).
+
+    Опублікований проєкт бачать усі, а чернетку, завершений і скасований — лише учасники
     його організації (з будь-якою роллю). Для решти такого проєкту не існує: 404, а не 403.
     """
     project = await db_session.get(Project, project_id)
     if project is None:
         raise errors.project_not_found()
-    if project.status != ProjectStatusEnum.published and (
-        user_id is None
-        or await get_user_membership(db_session, user_id, project.organization_id) is None
-    ):
-        raise errors.project_not_found()
-    return project
+    if project.status != ProjectStatusEnum.published:
+        if (
+            user_id is None
+            or await get_user_membership(db_session, user_id, project.organization_id) is None
+        ):
+            raise errors.project_not_found()
+        return project, True
+    return project, project.id in await projects_with_details(db_session, user_id, [project])
 
 
 async def list_organization_projects(

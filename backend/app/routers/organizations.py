@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query, status
 
-from app.auth import CurrentUserId
+from app.auth import CurrentUserId, OptionalUserId
 from app.db import DbSessionDep
 from app.models import OrganizationMember, ProjectStatusEnum
 from app.schemas.join_requests import (
@@ -15,6 +15,7 @@ from app.schemas.organizations import (
     OrganizationCreate,
     OrganizationDetailRead,
     OrganizationListItem,
+    OrganizationPage,
     OrganizationProfile,
     OrganizationRead,
     OrganizationUpdate,
@@ -67,11 +68,13 @@ async def list_organizations(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
     city_id: Annotated[int | None, Query(gt=0, le=MAX_INT32)] = None,
-) -> list[OrganizationListItem]:
-    organizations = await service.list_approved_organizations(
+) -> OrganizationPage:
+    organizations, total = await service.list_approved_organizations(
         db_session, limit=limit, offset=offset, city_id=city_id
     )
-    return [OrganizationListItem.model_validate(org) for org in organizations]
+    return OrganizationPage(
+        items=[OrganizationListItem.model_validate(org) for org in organizations], total=total
+    )
 
 
 @router.get("/me")
@@ -99,8 +102,10 @@ async def list_my_organization_projects(
     projects, total = await projects_service.list_organization_projects(
         db_session, membership.organization_id, status=status, limit=limit, offset=offset
     )
+    # Кабінет бачать лише учасники організації, тож точні час і місце показуємо (R-22)
     return ProjectPage(
-        items=[ProjectListItem.model_validate(project) for project in projects], total=total
+        items=[ProjectListItem.for_viewer(project, show_details=True) for project in projects],
+        total=total,
     )
 
 
@@ -155,13 +160,16 @@ async def unignore_user(
 
 @router.get("/{organization_id}")
 async def get_organization(
-    organization_id: OrganizationId, db_session: DbSessionDep
+    organization_id: OrganizationId, db_session: DbSessionDep, user_id: OptionalUserId
 ) -> OrganizationDetailRead:
     organization = await service.get_approved_organization(db_session, organization_id)
-    projects = await service.list_published_projects(db_session, organization_id)
+    projects, visible = await service.list_published_projects(db_session, organization_id, user_id)
     return OrganizationDetailRead(
         **OrganizationRead.model_validate(organization).model_dump(),
-        projects=[ProjectListItem.model_validate(project) for project in projects],
+        projects=[
+            ProjectListItem.for_viewer(project, show_details=project.id in visible)
+            for project in projects
+        ],
     )
 
 
