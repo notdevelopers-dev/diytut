@@ -19,15 +19,13 @@ const EXPERIENCE_LABELS: Record<ExperienceLevel, string> = {
   pro: 'Профі',
 }
 
-const formatDate = (iso: string | null) => {
-  if (!iso) return null
-  const value = new Date(iso)
-  if (Number.isNaN(value.getTime())) return null
-  return value.toLocaleDateString('uk-UA', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
+/**
+ * "2026-12-01" → "01.12.2026". Дата вже за київським часом (starts_on), тож без
+ * перетворення в пояс браузера, яке могло б зсунути її на день.
+ */
+const formatDay = (day: string | null) => {
+  const match = day?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : null
 }
 
 /** "4.50" → "4,5 год" */
@@ -76,7 +74,8 @@ export const ProjectCard = ({
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(false)
   const descriptionId = useId()
 
-  const date = formatDate(project.starts_at)
+  // Точний час бачать лише учасники (R-22), а день події — усі
+  const date = formatDay(project.starts_on)
   const hours = formatHours(project.volunteer_hours)
   const location = project.is_online ? 'Онлайн' : cityName
 

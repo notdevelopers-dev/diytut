@@ -7,3 +7,9 @@ export interface CityItem {
   name: string
   region: string
 }
+
+/** Сторінка списку з бекенду: елементи та їх загальна кількість під фільтром */
+export interface Page<T> {
+  items: T[]
+  total: number
+}

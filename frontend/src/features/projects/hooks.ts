@@ -53,8 +53,7 @@ export interface ProjectFilters {
 
 /**
  * Каталог із кнопкою «Показати ще»: пошук, хештеги, сфери, місто й зсув виконує
- * бекенд. Загальної кількості бекенд не повертає, тому просимо на один проєкт більше,
- * ніж показуємо: якщо він прийшов, є що довантажувати.
+ * бекенд. Довантажувати є що, поки показано менше, ніж total.
  */
 export const useProjects = (
   { query, cityId, categories }: ProjectFilters,
@@ -76,15 +75,18 @@ export const useProjects = (
         tags,
         city_id: cityId,
         categories: sortedCategories,
-        limit: pageSize + 1,
+        limit: pageSize,
         offset: pageParam,
       }),
     getNextPageParam: (lastPage, _pages, lastOffset) =>
-      lastPage.length > pageSize ? lastOffset + pageSize : undefined,
+      lastOffset + pageSize < lastPage.total
+        ? lastOffset + pageSize
+        : undefined,
     // Поки йде новий пошук, лишаємо попередні результати замість скелетонів
     placeholderData: keepPreviousData,
     select: (data) => ({
-      items: data.pages.flatMap((rows) => rows.slice(0, pageSize)),
+      items: data.pages.flatMap((page) => page.items),
+      total: data.pages.at(-1)?.total ?? 0,
     }),
   })
 }
@@ -109,7 +111,7 @@ export const useOrganizationNames = () =>
     queryFn: () => fetchOrganizations({ limit: 100 }),
     staleTime: 5 * 60 * 1000,
     select: (organizations) =>
-      new Map(organizations.map((org) => [org.id, org.name])),
+      new Map(organizations.items.map((org) => [org.id, org.name])),
   })
 
 const MY_REQUEST_STATUSES_KEY = ['projects', 'my-request-statuses'] as const

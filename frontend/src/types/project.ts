@@ -46,8 +46,14 @@ export interface Project {
   city_id: number | null
   status: ProjectStatus
   created_at: string
+  /** Точні час і адреса (R-22): null, якщо приховані від користувача (details_hidden) */
   starts_at: string | null
   ends_at: string | null
+  /** Дні початку й кінця за київським часом (YYYY-MM-DD): їх бачать усі */
+  starts_on: string | null
+  ends_on: string | null
+  /** true — точні час і адресу бачать лише учасники організації й прийняті волонтери */
+  details_hidden: boolean
   is_online: boolean
   address: string | null
   capacity: number | null
