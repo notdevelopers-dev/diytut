@@ -173,6 +173,6 @@ async def list_published_projects(db_session: AsyncSession, organization_id: int
             Project.organization_id == organization_id,
             Project.status == ProjectStatusEnum.published,
         )
-        .order_by(Project.created_at.desc(), Project.id.desc())
+        .order_by(Project.published_at.desc(), Project.id.desc())
     )
     return list(await db_session.scalars(query))

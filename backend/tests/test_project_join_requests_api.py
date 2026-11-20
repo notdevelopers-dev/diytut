@@ -127,6 +127,8 @@ def make_project(db):
             "volunteer_hours": Decimal("2"),
             "status": ProjectStatusEnum.published,
         } | changes
+        if fields["status"] != ProjectStatusEnum.draft:
+            fields.setdefault("published_at", datetime.now(UTC))
 
         async def create(session) -> int:
             project = Project(
