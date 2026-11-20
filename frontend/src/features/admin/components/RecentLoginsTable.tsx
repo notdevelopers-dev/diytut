@@ -1,15 +1,9 @@
 import React, { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useRecentLogins } from '../hooks'
-import type { LoginEvent, LoginMethod } from '../types'
+import type { LoginEvent } from '../types'
 
 const PAGE_SIZE = 10
-
-const METHOD_LABELS: Record<LoginMethod, string> = {
-  google: 'Google',
-  registration: 'Після реєстрації',
-  dev: 'Dev-вхід',
-}
 
 // Дні статистики бекенд рахує за київським часом, тож і час входу показуємо за ним
 const formatDateTime = (iso: string) =>
@@ -54,7 +48,7 @@ export const RecentLoginsTable: React.FC = () => {
               <th className="px-3 py-2">Роль</th>
               <th className="px-3 py-2">Дата і Час</th>
               <th className="px-3 py-2">IP-адреса</th>
-              <th className="px-3 py-2">Спосіб входу</th>
+              <th className="px-3 py-2">Статус</th>
             </tr>
           </thead>
           <tbody>
@@ -111,7 +105,12 @@ export const RecentLoginsTable: React.FC = () => {
                   {formatDateTime(login.created_at)}
                 </td>
                 <td className="px-3 py-2">{login.ip ?? '—'}</td>
-                <td className="px-3 py-2">{METHOD_LABELS[login.method]}</td>
+                <td className="px-3 py-2">
+                  {/* Бекенд записує лише успішні входи (див. backend/README.md) */}
+                  <span className="rounded-full bg-[#B5F291] px-3 py-0.5 font-bold">
+                    Успішно
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -123,8 +122,6 @@ export const RecentLoginsTable: React.FC = () => {
           {total === 0
             ? 'Показано 0 з 0'
             : `Показано ${startIndex + 1}-${startIndex + items.length} з ${total}`}
-          {/* Бекенд не записує невдалих спроб, див. backend/README.md */}
-          {' · '}Записуються лише успішні входи
         </span>
         <div className="flex gap-2">
           <button
