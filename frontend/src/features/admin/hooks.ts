@@ -1,9 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { AUTH_ME_QUERY_KEY } from '@/features/auth/hooks'
 import { USER_SCOPED_META } from '@/lib/query-client'
 import {
   fetchLoginStats,
   fetchOrganizationRequests,
+  fetchRecentLogins,
   reviewOrganizationRequest,
 } from './api'
 import type { FetchOrganizationRequestsParams } from './api'
@@ -14,13 +20,17 @@ import type { OrganizationReview } from './types'
 
 const ORGANIZATION_REQUESTS_QUERY_KEY = ['admin', 'organizations'] as const
 
-/** Заявки на створення організацій */
+/**
+ * Сторінка заявок на створення організацій; пошук і пагінацію виконує бекенд.
+ * Поки вантажиться нова сторінка чи пошук, таблиця показує попередні рядки
+ */
 export const useOrganizationRequests = (
   params: FetchOrganizationRequestsParams,
 ) =>
   useQuery({
     queryKey: [...ORGANIZATION_REQUESTS_QUERY_KEY, params],
     queryFn: () => fetchOrganizationRequests(params),
+    placeholderData: keepPreviousData,
     meta: USER_SCOPED_META,
   })
 
@@ -51,5 +61,14 @@ export const useLoginStats = (dateFrom: string, dateTo: string) =>
   useQuery({
     queryKey: ['admin', 'stats', 'logins', { dateFrom, dateTo }],
     queryFn: () => fetchLoginStats(dateFrom, dateTo),
+    meta: USER_SCOPED_META,
+  })
+
+/** Сторінка останніх успішних входів */
+export const useRecentLogins = (limit: number, offset: number) =>
+  useQuery({
+    queryKey: ['admin', 'logins', { limit, offset }],
+    queryFn: () => fetchRecentLogins({ limit, offset }),
+    placeholderData: keepPreviousData,
     meta: USER_SCOPED_META,
   })

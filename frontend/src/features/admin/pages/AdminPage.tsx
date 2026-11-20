@@ -3,7 +3,6 @@ import {
   ChevronsLeft,
   ChevronsRight,
   FileText,
-  MessageSquare,
   Settings,
   TrendingUp,
   User,
@@ -12,14 +11,12 @@ import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '@/features/auth/hooks'
 import { LoginStatsSection } from './LoginStatsSection'
 import { OrgRequestsSection } from './OrgRequestsSection'
-import { SupportChatSection } from './SupportChatSection'
 
-type SectionKey = 'stats' | 'requests' | 'chat' | 'settings'
+type SectionKey = 'stats' | 'requests' | 'settings'
 
 const NAV_ITEMS: { key: SectionKey; label: string; icon: LucideIcon }[] = [
   { key: 'stats', label: 'Статистика входів', icon: TrendingUp },
   { key: 'requests', label: 'Запити організацій', icon: FileText },
-  { key: 'chat', label: 'Чат підтримки', icon: MessageSquare },
   { key: 'settings', label: 'Налаштування', icon: Settings },
 ]
 
@@ -116,7 +113,6 @@ export const AdminPage: React.FC = () => {
       <main className="min-w-0 flex-1">
         {section === 'stats' && <LoginStatsSection />}
         {section === 'requests' && <OrgRequestsSection />}
-        {section === 'chat' && <SupportChatSection />}
         {section === 'settings' && (
           <div>
             <h1 className="mb-6 inline-block rounded-lg bg-[#F1D387] px-4 py-2 text-xl font-bold shadow-sm">

@@ -51,3 +51,32 @@ export interface OrganizationReview {
   decision: 'approved' | 'rejected'
   comment: string | null
 }
+
+/** Спосіб входу (app.models.LoginMethodEnum) */
+export type LoginMethod = 'google' | 'registration' | 'dev'
+
+/**
+ * Один успішний вхід (app.schemas.admin.LoginEventRead). Невдалі спроби бекенд
+ * не записує, тож статусу немає: кожен запис — успішний вхід
+ */
+export interface LoginEvent {
+  id: number
+  created_at: string
+  method: LoginMethod
+  /** Порожній у входах до появи цього поля */
+  ip: string | null
+  /** null, якщо акаунт уже видалено */
+  user: {
+    id: number
+    email: string
+    first_name: string | null
+    last_name: string
+    platform_role: 'user' | 'admin'
+  } | null
+}
+
+/** GET /api/admin/logins (app.schemas.admin.LoginEventPage) */
+export interface LoginEventPage {
+  items: LoginEvent[]
+  total: number
+}

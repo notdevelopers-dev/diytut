@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Download } from 'lucide-react'
+import { RecentLoginsTable } from '../components/RecentLoginsTable'
 import { useLoginStats } from '../hooks'
 import type { DailyLogins } from '../types'
 
@@ -19,31 +20,6 @@ const WEEKDAYS = [
   'Четвер',
   'П’ятниця',
   'Субота',
-]
-
-// Демо-дані: ендпоінта «останні авторизації» на бекенді поки немає
-const RECENT_LOGINS = [
-  {
-    user: 'user1@example.com',
-    role: 'Користувач',
-    at: '11.11.2026, 12:45',
-    ip: '192.168.1.54',
-    ok: true,
-  },
-  {
-    user: 'user2@example.com',
-    role: 'Представник ГО',
-    at: '10.11.2026, 14:00',
-    ip: '192.168.1.54',
-    ok: true,
-  },
-  {
-    user: 'user3@example.com',
-    role: 'Адміністратор',
-    at: '09.01.2026, 23:59',
-    ip: '192.168.1.54',
-    ok: false,
-  },
 ]
 
 const toIso = (d: Date) =>
@@ -234,46 +210,7 @@ export const LoginStatsSection: React.FC = () => {
         </>
       )}
 
-      {/* Останні авторизації */}
-      <div className="rounded-lg border border-[#79B7FF] bg-white p-3">
-        <div className="mb-2 text-sm font-bold">Останні авторизації</div>
-        {/* RootLayout обрізає горизонтальне переповнення, тож таблиця прокручується сама */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-xs">
-            <thead>
-              <tr className="bg-[#F1D387]/60 font-bold">
-                <th className="px-3 py-2">Користувач</th>
-                <th className="px-3 py-2">Роль</th>
-                <th className="px-3 py-2">Дата і Час</th>
-                <th className="px-3 py-2">IP-адреса</th>
-                <th className="px-3 py-2">Статус</th>
-              </tr>
-            </thead>
-            <tbody>
-              {RECENT_LOGINS.map((row) => (
-                <tr key={row.user} className="border-t border-[#DCECFF]">
-                  <td className="px-3 py-2">{row.user}</td>
-                  <td className="px-3 py-2">{row.role}</td>
-                  <td className="px-3 py-2">{row.at}</td>
-                  <td className="px-3 py-2">{row.ip}</td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`rounded-full px-3 py-0.5 font-bold ${
-                        row.ok ? 'bg-[#B5F291]' : 'bg-[#E14848] text-white'
-                      }`}
-                    >
-                      {row.ok ? 'Успішно' : 'Помилка'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-2 text-xs text-[#8B99AA]">
-          Показано 1-{RECENT_LOGINS.length} з {RECENT_LOGINS.length}
-        </div>
-      </div>
+      <RecentLoginsTable />
     </div>
   )
 }

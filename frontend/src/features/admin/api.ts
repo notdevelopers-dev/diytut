@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/api-client'
 import type { OrgStatus } from '@/types/common'
 import type {
+  LoginEventPage,
   LoginStats,
   OrganizationRequest,
   OrganizationRequestPage,
@@ -10,6 +11,8 @@ import type {
 export interface FetchOrganizationRequestsParams {
   /** Без статусу бекенд повертає заявки з будь-яким статусом */
   status?: OrgStatus
+  /** Частина назви або ЄДРПОУ; порожній рядок бекенд ігнорує */
+  search?: string
   limit?: number
   offset?: number
 }
@@ -42,6 +45,17 @@ export const fetchLoginStats = async (
 ): Promise<LoginStats> => {
   const { data } = await apiClient.get<LoginStats>('/admin/stats/logins', {
     params: { date_from: dateFrom, date_to: dateTo },
+  })
+  return data
+}
+
+/** Останні успішні входи, свіжіші першими */
+export const fetchRecentLogins = async (params: {
+  limit: number
+  offset: number
+}): Promise<LoginEventPage> => {
+  const { data } = await apiClient.get<LoginEventPage>('/admin/logins', {
+    params,
   })
   return data
 }

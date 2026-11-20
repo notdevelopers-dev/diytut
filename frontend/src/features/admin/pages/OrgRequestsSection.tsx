@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { useDebounce } from '@/hooks/useDebounce'
 import { getApiErrorMessage, getErrorStatus } from '@/lib/errors'
 import type { OrgStatus } from '@/types/common'
 import { useOrganizationRequests, useReviewOrganizationRequest } from '../hooks'
@@ -47,8 +48,15 @@ export const OrgRequestsSection: React.FC = () => {
     data,
     isPending: isLoading,
     isError: hasError,
-  } = useOrganizationRequests({ limit: 100 })
-  const items = data?.items ?? []
+    isPlaceholderData,
+  } = useOrganizationRequests({
+    // Запит іде, коли користувач перестав друкувати, а не на кожну літеру
+    search: useDebounce(searchQuery.trim(), 400) || undefined,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+  })
+  const pageItems = data?.items ?? []
+  const total = data?.total ?? 0
 
   const review = useReviewOrganizationRequest()
   const isSaving = review.isPending
@@ -71,18 +79,9 @@ export const OrgRequestsSection: React.FC = () => {
     }
   }
 
-  const query = searchQuery.trim().toLowerCase()
-  const filtered = items.filter(
-    (req) =>
-      query === '' ||
-      req.name.toLowerCase().includes(query) ||
-      (req.edrpou ?? '').includes(query),
-  )
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const currentPage = Math.min(page, totalPages)
-  const startIndex = (currentPage - 1) * PAGE_SIZE
-  const pageItems = filtered.slice(startIndex, startIndex + PAGE_SIZE)
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const currentPage = page
+  const startIndex = (page - 1) * PAGE_SIZE
 
   return (
     <div>
@@ -134,7 +133,7 @@ export const OrgRequestsSection: React.FC = () => {
                 </td>
               </tr>
             )}
-            {!isLoading && hasError && (
+            {hasError && !data && (
               <tr>
                 <td
                   colSpan={5}
@@ -144,7 +143,7 @@ export const OrgRequestsSection: React.FC = () => {
                 </td>
               </tr>
             )}
-            {!isLoading && !hasError && pageItems.length === 0 && (
+            {data && pageItems.length === 0 && (
               <tr>
                 <td
                   colSpan={5}
@@ -215,9 +214,9 @@ export const OrgRequestsSection: React.FC = () => {
         {/* Футер таблиці */}
         <div className="flex items-center justify-between border-t border-[#DCECFF] px-4 py-3 text-xs">
           <span>
-            {filtered.length === 0
+            {total === 0
               ? 'Показано 0 з 0'
-              : `Показано ${startIndex + 1}-${startIndex + pageItems.length} з ${filtered.length}`}
+              : `Показано ${startIndex + 1}-${startIndex + pageItems.length} з ${total}`}
           </span>
           <div className="flex gap-2">
             <button
@@ -230,7 +229,7 @@ export const OrgRequestsSection: React.FC = () => {
             </button>
             <button
               onClick={() => setPage(currentPage + 1)}
-              disabled={currentPage >= totalPages}
+              disabled={currentPage >= totalPages || isPlaceholderData}
               aria-label="Наступна сторінка"
               className="flex h-6 w-9 items-center justify-center rounded bg-[#79B7FF] disabled:cursor-not-allowed disabled:bg-[#C2D4EA]"
             >
