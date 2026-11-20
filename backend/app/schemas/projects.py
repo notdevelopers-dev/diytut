@@ -1,7 +1,7 @@
 import re
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     AfterValidator,
@@ -82,27 +82,29 @@ def _validate_tag(raw: str) -> str:
 ProjectTag = Annotated[str, AfterValidator(_validate_tag)]
 
 
-class ProjectCreate(BaseModel):
+class ProjectDraft(BaseModel):
+    """Поля проєкту, з якими його можна зберегти як чернетку (R-12, рішення 18.11).
+
+    Обов'язкова лише назва, решту можна дописати пізніше. Передані значення
+    перевіряються одразу; повну перевірку робить ProjectPublication під час публікації.
+    Назви полів збігаються зі стовпцями projects.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
-    # Від імені якої з організацій користувача створюється проєкт; без поля —
-    # організація за замовчуванням
-    organization_id: int | None = Field(default=None, gt=0, le=MAX_BIGINT)
     title: ProjectTitle
-    description: ProjectDescription
-    # Обов'язкові без значень за замовчуванням (R-12, R-22): від них залежать
-    # дата події, кількість місць і нарахування годин
-    starts_at: datetime
-    ends_at: datetime
+    description: ProjectDescription | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
     is_online: bool = False
     city_id: int | None = Field(default=None, gt=0, le=MAX_INT32)
     address: str | None = None
-    capacity: int = Field(gt=0)
-    volunteer_hours: Decimal = Field(gt=0)
+    capacity: int | None = Field(default=None, gt=0)
+    volunteer_hours: Decimal | None = Field(default=None, gt=0)
     is_adult_only: bool = False
     experience_level: ExperienceLevelEnum = ExperienceLevelEnum.novice
     # Сфера зі сталого набору: основний фільтр каталогу (R-14)
-    categories: list[ProjectCategoryEnum] = Field(min_length=1)
+    categories: list[ProjectCategoryEnum] = Field(default_factory=list)
     # Вільні хештеги організації; дублікати після нормалізації відкидаються
     tags: list[ProjectTag] = Field(default_factory=list)
 
@@ -123,21 +125,57 @@ class ProjectCreate(BaseModel):
         return unique
 
     @model_validator(mode="after")
-    def validate_times_and_location(self) -> ProjectCreate:
+    def validate_times(self) -> ProjectDraft:
         # Час без поясу вважаємо UTC (NF-08)
-        if self.starts_at.tzinfo is None:
+        if self.starts_at is not None and self.starts_at.tzinfo is None:
             self.starts_at = self.starts_at.replace(tzinfo=UTC)
-        if self.ends_at.tzinfo is None:
+        if self.ends_at is not None and self.ends_at.tzinfo is None:
             self.ends_at = self.ends_at.replace(tzinfo=UTC)
 
-        if self.ends_at <= self.starts_at:
+        if (
+            self.starts_at is not None
+            and self.ends_at is not None
+            and self.ends_at <= self.starts_at
+        ):
             raise ValueError("ends_at must be after starts_at")
+        return self
 
+
+class ProjectPublication(ProjectDraft):
+    """Повний набір полів, без якого проєкт не публікується.
+
+    Обов'язкові без значень за замовчуванням (R-12, R-22): від них залежать дата події,
+    кількість місць і нарахування годин. Перевіряє і створення одразу опублікованого
+    проєкту, і публікацію збереженої чернетки.
+    """
+
+    description: ProjectDescription
+    starts_at: datetime
+    ends_at: datetime
+    capacity: int = Field(gt=0)
+    volunteer_hours: Decimal = Field(gt=0)
+    categories: list[ProjectCategoryEnum] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_location(self) -> ProjectPublication:
         # Офлайн-подія без міста й адреси — помилка, а не мовчазне перетворення на онлайн
         if not self.is_online and (self.city_id is None or self.address is None):
             raise ValueError("Offline project requires city_id and address")
-
         return self
+
+
+class ProjectCreate(ProjectDraft):
+    # Від імені якої з організацій користувача створюється проєкт; без поля —
+    # організація за замовчуванням
+    organization_id: int | None = Field(default=None, gt=0, le=MAX_BIGINT)
+    # draft — зберегти чернетку, published — одразу опублікувати з повною перевіркою полів
+    status: Literal[ProjectStatusEnum.draft, ProjectStatusEnum.published] = (
+        ProjectStatusEnum.published
+    )
+
+    def project_fields(self) -> dict[str, Any]:
+        """Значення стовпців проєкту без службових полів запиту."""
+        return self.model_dump(exclude={"organization_id", "status"})
 
 
 class ProjectListItem(BaseModel):
@@ -146,10 +184,12 @@ class ProjectListItem(BaseModel):
     id: int
     organization_id: int
     title: str
-    description: str
+    # У чернетці може бути порожнім, як і поля нижче зі значенням None
+    description: str | None = None
     city_id: int | None = None
     status: ProjectStatusEnum
     created_at: datetime
+    published_at: datetime | None = None
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     is_online: bool = False
@@ -164,6 +204,12 @@ class ProjectListItem(BaseModel):
 
 class ProjectRead(ProjectListItem):
     updated_at: datetime
+
+
+class ProjectPage(BaseModel):
+    items: list[ProjectListItem]
+    # Скільки всього проєктів під фільтром, для пагінації
+    total: int
 
 
 class CategoryRead(BaseModel):

@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Path, Query, status
 from pydantic import Field, StringConstraints
 
-from app.auth import CurrentUserId
+from app.auth import CurrentUserId, OptionalUserId
 from app.db import DbSessionDep
 from app.models import JoinRequestStatusEnum, ProjectCategoryEnum
 from app.schemas.join_requests import (
@@ -76,8 +76,10 @@ async def read_my_request_statuses(
 
 
 @router.get("/{project_id}")
-async def get_project(project_id: ProjectId, db_session: DbSessionDep) -> ProjectRead:
-    project = await service.get_published_project(db_session, project_id)
+async def get_project(
+    project_id: ProjectId, db_session: DbSessionDep, user_id: OptionalUserId
+) -> ProjectRead:
+    project = await service.get_visible_project(db_session, project_id, user_id)
     return ProjectRead.model_validate(project)
 
 
@@ -86,6 +88,14 @@ async def create_project(
     data: ProjectCreate, db_session: DbSessionDep, user_id: CurrentUserId
 ) -> ProjectRead:
     project = await service.create_project(db_session, user_id, data)
+    return ProjectRead.model_validate(project)
+
+
+@router.post("/{project_id}/publish")
+async def publish_project(
+    project_id: ProjectId, db_session: DbSessionDep, user_id: CurrentUserId
+) -> ProjectRead:
+    project = await service.publish_project(db_session, user_id, project_id)
     return ProjectRead.model_validate(project)
 
 

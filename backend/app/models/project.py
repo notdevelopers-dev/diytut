@@ -72,14 +72,26 @@ class Project(Base):
         CheckConstraint("capacity > 0", name="capacity_positive"),
         CheckConstraint("volunteer_hours > 0", name="volunteer_hours_positive"),
         CheckConstraint("ends_at > starts_at", name="ends_after_start"),
-        # Офлайн-подія без міста й адреси не потрапить у фільтр за містом і не знайдеться на місці
+        # Чернетку можна зберегти з однією назвою (рішення 18.11), а решту дописати пізніше.
+        # Опублікований, завершений чи скасований проєкт має всі поля, від яких залежать
+        # дата події, кількість місць, нарахування годин і порядок у каталозі
         CheckConstraint(
-            "is_online OR (city_id IS NOT NULL AND address IS NOT NULL)",
+            "status = 'draft' OR (description IS NOT NULL AND starts_at IS NOT NULL"
+            " AND ends_at IS NOT NULL AND capacity IS NOT NULL AND volunteer_hours IS NOT NULL"
+            " AND published_at IS NOT NULL)",
+            name="complete_unless_draft",
+        ),
+        # Офлайн-подія без міста й адреси не потрапить у фільтр за містом і не знайдеться на місці;
+        # у чернетці місце можна вказати пізніше
+        CheckConstraint(
+            "status = 'draft' OR is_online OR (city_id IS NOT NULL AND address IS NOT NULL)",
             name="offline_has_location",
         ),
-        # Від 1 до 2 сфер: інакше проєкт не знайдеться у фільтрі або «засмічуватиме» всі сфери
+        # Від 1 до 2 сфер: інакше проєкт не знайдеться у фільтрі або «засмічуватиме» всі сфери.
+        # Чернетка може бути й без сфери
         CheckConstraint(
-            f"cardinality(categories) BETWEEN 1 AND {MAX_PROJECT_CATEGORIES}",
+            f"cardinality(categories) <= {MAX_PROJECT_CATEGORIES}"
+            " AND (status = 'draft' OR cardinality(categories) >= 1)",
             name="categories_count",
         ),
         CheckConstraint(
@@ -96,20 +108,22 @@ class Project(Base):
         BigInteger, ForeignKey("organizations.id"), index=True
     )
     title: Mapped[str] = mapped_column(Text)
-    description: Mapped[str] = mapped_column(Text)
+    # Поля, які в чернетці можуть бути порожніми, а з публікацією стають обов'язковими
+    # (ck_projects_complete_unless_draft)
+    description: Mapped[str | None] = mapped_column(Text)
 
-    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    # Обов'язковий: від завершення події залежать підтвердження годин і відгуки
-    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Обов'язковий для публікації: від завершення події залежать підтвердження годин і відгуки
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     is_online: Mapped[bool] = mapped_column(default=False)
     # Може відрізнятися від міста організації
     city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"))
     address: Mapped[str | None] = mapped_column(Text)
 
-    capacity: Mapped[int] = mapped_column(Integer)
+    capacity: Mapped[int | None] = mapped_column(Integer)
     # Години, що за замовчуванням нараховуються учаснику; можуть бути дробовими
-    volunteer_hours: Mapped[Decimal] = mapped_column(Numeric(5, 2))
+    volunteer_hours: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
 
     is_adult_only: Mapped[bool] = mapped_column(default=False)
     # Мінімальний рівень волонтера для подання заявки
@@ -123,6 +137,9 @@ class Project(Base):
     # Хештеги організації: вільний текст, нормалізований схемою (нижній регістр, без «#»)
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
     status: Mapped[ProjectStatusEnum] = mapped_column(default=ProjectStatusEnum.draft)
+    # Коли проєкт опубліковано: за цим часом, а не за created_at, каталог ставить нові
+    # проєкти першими, тож чернетка, опублікована пізніше, не загубиться серед старих
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

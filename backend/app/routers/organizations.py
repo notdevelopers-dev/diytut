@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Path, Query, status
 
 from app.auth import CurrentUserId
 from app.db import DbSessionDep
-from app.models import OrganizationMember
+from app.models import OrganizationMember, ProjectStatusEnum
 from app.schemas.join_requests import (
     IgnoredUserRead,
     JoinRequestCreate,
@@ -19,11 +19,12 @@ from app.schemas.organizations import (
     OrganizationRead,
     OrganizationUpdate,
 )
-from app.schemas.projects import ProjectListItem
+from app.schemas.projects import ProjectListItem, ProjectPage
 from app.schemas.users import MAX_BIGINT, MAX_INT32
 from app.services import join_requests as join_requests_service
 from app.services import organizations as service
 from app.services import project_join_requests as project_join_requests_service
+from app.services import projects as projects_service
 
 router = APIRouter()
 
@@ -84,6 +85,23 @@ async def update_my_organization(
 ) -> OrganizationProfile:
     await service.update_organization(db_session, membership, data)
     return OrganizationProfile.from_membership(membership)
+
+
+@router.get("/me/projects")
+async def list_my_organization_projects(
+    db_session: DbSessionDep,
+    membership: CurrentMembership,
+    # Без статусу — усі: чернетки, опубліковані, завершені й скасовані
+    status: ProjectStatusEnum | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
+) -> ProjectPage:
+    projects, total = await projects_service.list_organization_projects(
+        db_session, membership.organization_id, status=status, limit=limit, offset=offset
+    )
+    return ProjectPage(
+        items=[ProjectListItem.model_validate(project) for project in projects], total=total
+    )
 
 
 @router.get("/me/join-requests")

@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import HTTPException, status
 
 
@@ -124,8 +126,35 @@ def not_project_manager() -> HTTPException:
 
 
 def organization_not_approved() -> HTTPException:
+    # Чернетку може зберегти й організація, що чекає на схвалення, а публікувати — лише схвалена
     return HTTPException(
-        status.HTTP_403_FORBIDDEN, "Only approved organizations can create projects"
+        status.HTTP_403_FORBIDDEN, "Only approved organizations can publish projects"
+    )
+
+
+def not_project_publisher() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Only organization owner or admin can publish projects"
+    )
+
+
+def project_not_draft() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "Only a draft project can be published")
+
+
+def project_incomplete(validation_errors: list[dict[str, Any]]) -> HTTPException:
+    """422 з помилками полів проєкту, яких бракує для публікації.
+
+    Формат — як у помилок валідації тіла запиту FastAPI (loc починається з "body"), і для
+    створення опублікованого проєкту, і для публікації збереженої чернетки: форма проєкту
+    на фронтенді розбирає їх однаково.
+    """
+    return HTTPException(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        [
+            {"type": error["type"], "loc": ["body", *error["loc"]], "msg": error["msg"]}
+            for error in validation_errors
+        ],
     )
 
 
