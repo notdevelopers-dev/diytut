@@ -60,7 +60,11 @@ def make_user(db, city_id: int):
 
 @pytest.fixture
 def make_organization(db, make_user, city_id: int):
-    def make(status: OrgStatusEnum = OrgStatusEnum.pending, name: str = "Добрі справи") -> int:
+    def make(
+        status: OrgStatusEnum = OrgStatusEnum.pending,
+        name: str = "Добрі справи",
+        edrpou: str | None = None,
+    ) -> int:
         owner_id = make_user()
 
         async def create(session) -> int:
@@ -70,6 +74,7 @@ def make_organization(db, make_user, city_id: int):
                 phone="+380671234567",
                 city_id=city_id,
                 status=status,
+                edrpou=edrpou,
                 created_by=owner_id,
             )
             organization.members.append(
@@ -101,6 +106,7 @@ ADMIN_ENDPOINTS = [
     ("get", "/api/admin/organizations/1"),
     ("post", "/api/admin/organizations/1/review"),
     ("get", "/api/admin/stats/logins"),
+    ("get", "/api/admin/logins"),
 ]
 
 
@@ -185,8 +191,36 @@ def test_oldest_requests_come_first_and_are_paginated(
 
 
 @pytest.mark.usefixtures("admin_id")
+def test_searches_by_name_or_edrpou(client: TestClient, make_organization) -> None:
+    kind_id = make_organization(name="Добрі Справи Львова", edrpou="12345678")
+    other_id = make_organization(name="Зелене місто", edrpou="45670000")
+
+    def found(**params) -> list[int]:
+        body = client.get("/api/admin/organizations", params=params).json()
+        assert body["total"] == len(body["items"])
+        return [item["id"] for item in body["items"]]
+
+    assert found(search="добрі справи") == [kind_id]
+    assert found(search="  ЗЕЛЕНЕ ") == [other_id]
+    assert found(search="4567") == [kind_id, other_id]
+    assert found(search="4567", status="approved") == []
+    assert found(search="  ") == [kind_id, other_id]
+
+
+@pytest.mark.usefixtures("admin_id")
+def test_search_treats_like_wildcards_literally(client: TestClient, make_organization) -> None:
+    percent_id = make_organization(name="Допомога 100%")
+    make_organization(name="Допомога 1000")
+
+    body = client.get("/api/admin/organizations", params={"search": "100%"}).json()
+
+    assert [item["id"] for item in body["items"]] == [percent_id]
+
+
+@pytest.mark.usefixtures("admin_id")
 @pytest.mark.parametrize(
-    "params", [{"status": "unknown"}, {"limit": 0}, {"limit": 101}, {"offset": -1}]
+    "params",
+    [{"status": "unknown"}, {"limit": 0}, {"limit": 101}, {"offset": -1}, {"search": "x" * 201}],
 )
 def test_invalid_list_params(client: TestClient, params: dict) -> None:
     assert client.get("/api/admin/organizations", params=params).status_code == 422
@@ -318,6 +352,98 @@ def add_logins(db, *logins: tuple[int | None, datetime]) -> None:
             )
 
     db(create)
+
+
+# --- Останні входи ---
+
+
+@pytest.mark.parametrize(
+    ("host", "stored"),
+    [
+        ("203.0.113.7", "203.0.113.7"),
+        ("2001:db8::1", "2001:db8::1"),
+        # Так TestClient називає клієнта; не IP — не записуємо
+        ("testclient", None),
+        (None, None),
+    ],
+)
+def test_record_login_stores_valid_ip_only(
+    db, db_session, client: TestClient, make_user, host: str | None, stored: str | None
+) -> None:
+    user_id = make_user()
+    db(lambda session: logins_service.record_login(session, user_id, LoginMethodEnum.dev, host))
+
+    ip = client.portal.call(db_session.scalar, select(LoginEvent.ip))
+
+    assert (None if ip is None else str(ip)) == stored
+
+
+def test_recent_logins_newest_first_with_user(
+    client: TestClient, db, admin_id: int, make_user
+) -> None:
+    volunteer = make_user()
+
+    async def create(session) -> None:
+        session.add_all(
+            [
+                LoginEvent(
+                    user_id=volunteer,
+                    method=LoginMethodEnum.google,
+                    ip="203.0.113.7",
+                    created_at=datetime(2026, 3, 1, 10, 0, tzinfo=UTC),
+                ),
+                LoginEvent(
+                    user_id=admin_id,
+                    method=LoginMethodEnum.registration,
+                    created_at=datetime(2026, 3, 2, 10, 0, tzinfo=UTC),
+                ),
+                # Акаунт видалено: вхід лишається, але без користувача
+                LoginEvent(
+                    user_id=None,
+                    method=LoginMethodEnum.dev,
+                    ip="2001:db8::1",
+                    created_at=datetime(2026, 3, 3, 10, 0, tzinfo=UTC),
+                ),
+            ]
+        )
+
+    db(create)
+
+    response = client.get("/api/admin/logins")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 3
+    deleted, admin, user = body["items"]
+    assert deleted["user"] is None
+    assert (deleted["method"], deleted["ip"]) == ("dev", "2001:db8::1")
+    assert admin["user"]["id"] == admin_id
+    assert admin["user"]["platform_role"] == "admin"
+    assert (admin["method"], admin["ip"]) == ("registration", None)
+    assert user["user"]["id"] == volunteer
+    assert user["user"]["email"].endswith("@example.com")
+    assert user["user"]["platform_role"] == "user"
+    assert user["ip"] == "203.0.113.7"
+    assert "status" not in user
+
+
+@pytest.mark.usefixtures("admin_id")
+def test_recent_logins_are_paginated(client: TestClient, db, make_user) -> None:
+    user_id = make_user()
+    add_logins(db, *[(user_id, datetime(2026, 3, day, 10, 0, tzinfo=UTC)) for day in range(1, 4)])
+
+    first = client.get("/api/admin/logins", params={"limit": 2}).json()
+    second = client.get("/api/admin/logins", params={"limit": 2, "offset": 2}).json()
+
+    assert first["total"] == second["total"] == 3
+    dates = [item["created_at"][:10] for item in first["items"] + second["items"]]
+    assert dates == ["2026-03-03", "2026-03-02", "2026-03-01"]
+
+
+@pytest.mark.usefixtures("admin_id")
+@pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 101}, {"offset": -1}])
+def test_invalid_recent_logins_params(client: TestClient, params: dict) -> None:
+    assert client.get("/api/admin/logins", params=params).status_code == 422
 
 
 @pytest.mark.usefixtures("admin_id")

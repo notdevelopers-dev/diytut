@@ -1,7 +1,9 @@
+import ipaddress
 from datetime import date, timedelta
 
 from sqlalchemy import Date, DateTime, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app import errors
 from app.models import LoginEvent, LoginMethodEnum
@@ -12,9 +14,37 @@ DEFAULT_STATS_DAYS = 30
 MAX_STATS_DAYS = 366
 
 
-async def record_login(db_session: AsyncSession, user_id: int, method: LoginMethodEnum) -> None:
-    db_session.add(LoginEvent(user_id=user_id, method=method))
+def _valid_ip(host: str | None) -> str | None:
+    """IP клієнта або None, якщо це не IP (наприклад, «testclient» у тестах)."""
+    if host is None:
+        return None
+    try:
+        return str(ipaddress.ip_address(host))
+    except ValueError:
+        return None
+
+
+async def record_login(
+    db_session: AsyncSession, user_id: int, method: LoginMethodEnum, ip: str | None
+) -> None:
+    """Записує успішний вхід. Невдалі спроби не записуються (див. README)."""
+    db_session.add(LoginEvent(user_id=user_id, method=method, ip=_valid_ip(ip)))
     await db_session.commit()
+
+
+async def list_recent_logins(
+    db_session: AsyncSession, limit: int, offset: int
+) -> tuple[list[LoginEvent], int]:
+    """Останні входи, свіжіші першими, разом із користувачем (якщо акаунт ще існує)."""
+    total = await db_session.scalar(select(func.count()).select_from(LoginEvent))
+    events = await db_session.scalars(
+        select(LoginEvent)
+        .options(joinedload(LoginEvent.user))
+        .order_by(LoginEvent.created_at.desc(), LoginEvent.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(events), total
 
 
 def _local_midnight(day: date):
