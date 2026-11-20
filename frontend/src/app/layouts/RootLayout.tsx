@@ -127,9 +127,11 @@ export const RootLayout = () => {
   const org = user?.organization
 
   return (
+    // Сітка «шапка / вміст / футер»: вміст займає решту екрана, і сторінка може
+    // розтягнутися на всю цю висоту (min-h-full) без підрахунку висот шапки й футера.
     // overflow-x-clip, а не hidden: hidden робить обгортку контейнером прокрутки,
     // і sticky всередині сторінок (бічна панель адмінки) перестає працювати
-    <div className="relative flex min-h-screen flex-col justify-between bg-[#F7FBFF] overflow-x-clip">
+    <div className="relative grid min-h-screen grid-rows-[auto_1fr_auto] bg-[#F7FBFF] overflow-x-clip">
       {/* 1. Шапка за макетом із Figma: логотип ДійТут + жовта кнопка ☰ */}
       <header className="w-full bg-[#F7FBFF]">
         <div className="flex items-center justify-between gap-2 px-3 pt-6 pb-4 sm:px-8">

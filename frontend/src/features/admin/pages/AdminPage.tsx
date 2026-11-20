@@ -32,8 +32,8 @@ export const AdminPage: React.FC = () => {
   const hiddenWhenCollapsed = isCollapsed ? 'md:hidden' : ''
 
   return (
-    // 138px — висота шапки й футера RootLayout: панель займає екран під шапкою
-    <div className="flex flex-col gap-4 bg-[#F7FBFF] p-4 font-sans text-black md:min-h-[calc(100dvh-138px)] md:flex-row">
+    // min-h-full: панель займає всю висоту між шапкою й футером RootLayout
+    <div className="flex flex-col gap-4 bg-[#F7FBFF] p-4 font-sans text-black md:min-h-full md:flex-row">
       {/* Бічна панель */}
       <aside
         className={`flex shrink-0 flex-col gap-4 rounded-2xl border border-[#DCECFF] bg-[#F7FBFF] p-3 transition-all ${
