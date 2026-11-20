@@ -28,54 +28,75 @@ export const AdminPage: React.FC = () => {
   const [section, setSection] = useState<SectionKey>('stats')
   const [isCollapsed, setIsCollapsed] = useState(false)
 
+  // На мобільних панель завжди розгорнута: згортання діє лише від md
+  const hiddenWhenCollapsed = isCollapsed ? 'md:hidden' : ''
+
   return (
-    <div className="flex min-h-screen gap-4 bg-[#F7FBFF] p-4 font-sans text-black">
+    // 138px — висота шапки й футера RootLayout: панель займає екран під шапкою
+    <div className="flex flex-col gap-4 bg-[#F7FBFF] p-4 font-sans text-black md:min-h-[calc(100dvh-138px)] md:flex-row">
       {/* Бічна панель */}
       <aside
-        className={`flex shrink-0 flex-col rounded-2xl border border-[#DCECFF] bg-[#F7FBFF] p-3 transition-all ${
-          isCollapsed ? 'w-16' : 'w-64'
+        className={`flex shrink-0 flex-col gap-4 rounded-2xl border border-[#DCECFF] bg-[#F7FBFF] p-3 transition-all ${
+          isCollapsed ? 'md:w-16 md:px-2' : 'md:w-64'
         }`}
       >
-        <div className="mb-4 flex items-center justify-between gap-2">
-          {!isCollapsed && (
-            <span className="rounded-lg bg-[#F1D387]/60 px-3 py-1 text-lg font-bold">
+        {/* Заголовок і меню прилипають до верху екрана */}
+        <div className="flex flex-col gap-4 md:sticky md:top-4">
+          <div
+            className={`flex items-center justify-between gap-2 ${
+              isCollapsed ? 'md:justify-center' : ''
+            }`}
+          >
+            <span
+              className={`rounded-lg bg-[#F1D387]/60 px-3 py-1 text-lg font-bold ${hiddenWhenCollapsed}`}
+            >
               Адмін панель
             </span>
-          )}
-          <button
-            onClick={() => setIsCollapsed((prev) => !prev)}
-            aria-label={isCollapsed ? 'Розгорнути меню' : 'Згорнути меню'}
-            className="flex h-7 w-9 items-center justify-center rounded-md bg-[#79B7FF] text-black"
-          >
-            {isCollapsed ? (
-              <ChevronsRight className="h-4 w-4" />
-            ) : (
-              <ChevronsLeft className="h-4 w-4" />
-            )}
-          </button>
+            <button
+              onClick={() => setIsCollapsed((prev) => !prev)}
+              aria-label={isCollapsed ? 'Розгорнути меню' : 'Згорнути меню'}
+              className="hidden h-7 w-9 shrink-0 items-center justify-center rounded-md bg-[#79B7FF] text-black md:flex"
+            >
+              {isCollapsed ? (
+                <ChevronsRight className="h-4 w-4" />
+              ) : (
+                <ChevronsLeft className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+
+          <nav className="flex flex-col gap-2 md:gap-3">
+            {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setSection(key)}
+                title={label}
+                className={`flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold shadow-md transition ${
+                  isCollapsed ? 'md:justify-center md:px-0' : ''
+                } ${
+                  section === key
+                    ? 'bg-[#79B7FF]'
+                    : 'bg-[#DCECFF] hover:bg-[#79B7FF]/50'
+                }`}
+              >
+                <Icon className="h-5 w-5 shrink-0" />
+                <span className={hiddenWhenCollapsed}>{label}</span>
+              </button>
+            ))}
+          </nav>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-3">
-          {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => setSection(key)}
-              title={label}
-              className={`flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold shadow-md transition ${
-                section === key
-                  ? 'bg-[#79B7FF]'
-                  : 'bg-[#DCECFF] hover:bg-[#79B7FF]/50'
-              }`}
-            >
-              <Icon className="h-5 w-5 shrink-0" />
-              {!isCollapsed && <span>{label}</span>}
-            </button>
-          ))}
-        </nav>
-
-        {/* Профіль адміна */}
-        <div className="mt-4 flex items-center gap-3 border-t border-[#DCECFF] pt-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#79B7FF]">
+        {/* Профіль адміна закріплений унизу екрана; на мобільних прихований */}
+        <div
+          className={`mt-auto hidden items-center gap-3 border-t border-[#DCECFF] bg-[#F7FBFF] pt-4 md:sticky md:bottom-4 md:flex ${
+            isCollapsed ? 'md:justify-center' : ''
+          }`}
+        >
+          <div
+            className={`flex shrink-0 items-center justify-center rounded-full bg-[#79B7FF] ${
+              isCollapsed ? 'h-10 w-10' : 'h-12 w-12'
+            }`}
+          >
             <User className="h-6 w-6 text-white" />
           </div>
           {!isCollapsed && (
