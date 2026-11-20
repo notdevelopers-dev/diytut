@@ -1,15 +1,58 @@
+from datetime import UTC, datetime
 from typing import Any
 
+from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import errors
-from app.models import OrgStatusEnum, Project, ProjectCategoryEnum, ProjectStatusEnum
-from app.schemas.projects import ProjectCreate, ProjectDraft, check_publication, normalize_tag
+from app.models import (
+    JoinRequest,
+    JoinRequestStatusEnum,
+    JoinRequestTargetEnum,
+    NotificationTypeEnum,
+    OrgStatusEnum,
+    Project,
+    ProjectCategoryEnum,
+    ProjectStatusEnum,
+)
+from app.notifications import create_notification, project_page_link
+from app.schemas.projects import (
+    ProjectCreate,
+    ProjectDraft,
+    ProjectUpdate,
+    check_publication,
+    normalize_tag,
+)
 from app.services.cities import ensure_city_exists
 from app.services.organizations import EDITOR_ROLES, get_user_membership
-from app.services.project_join_requests import lock_project
+from app.services.project_join_requests import count_accepted, lock_project
+
+# Зміни опублікованого проєкту, про які сповіщаємо (рішення 18.11): поля, назва зміни для
+# тексту сповіщення і чиїх заявок вона стосується. Дата чи час — усіх, хто збирається
+# прийти, зокрема тих, чия заявка ще на розгляді; місце й кількість годин — лише схвалених.
+# Назва, опис, сфери, хештеги та інші поля сповіщень не дають
+NOTIFIED_CHANGES: tuple[tuple[frozenset[str], str, frozenset[JoinRequestStatusEnum]], ...] = (
+    (
+        frozenset({"starts_at", "ends_at"}),
+        "дата або час",
+        frozenset({JoinRequestStatusEnum.accepted, JoinRequestStatusEnum.pending}),
+    ),
+    (
+        frozenset({"is_online", "city_id", "address"}),
+        "місце",
+        frozenset({JoinRequestStatusEnum.accepted}),
+    ),
+    (
+        frozenset({"volunteer_hours"}),
+        "кількість волонтерських годин",
+        frozenset({JoinRequestStatusEnum.accepted}),
+    ),
+)
+# Завершений чи скасований проєкт уже не змінюється: від нього залежать нараховані години
+# й відгуки
+NOT_EDITABLE_STATUSES = frozenset({ProjectStatusEnum.completed, ProjectStatusEnum.cancelled})
 
 
 def _escape_like(value: str) -> str:
@@ -56,14 +99,26 @@ async def list_active_projects(
     return list(await db_session.scalars(query))
 
 
+def _validation_failed(error: ValidationError) -> HTTPException:
+    return errors.project_incomplete(
+        error.errors(include_url=False, include_context=False, include_input=False)
+    )
+
+
 def _check_publication(fields: dict[str, Any]) -> None:
     """Повна перевірка полів перед публікацією; 422 з усіма помилками одразу."""
     try:
         check_publication(fields)
     except ValidationError as error:
-        raise errors.project_incomplete(
-            error.errors(include_url=False, include_context=False, include_input=False)
-        ) from None
+        raise _validation_failed(error) from None
+
+
+def _check_draft(fields: dict[str, Any]) -> None:
+    """Перевірка полів чернетки: заповнені поля коректні й не суперечать одне одному; 422."""
+    try:
+        ProjectDraft.model_validate(fields)
+    except ValidationError as error:
+        raise _validation_failed(error) from None
 
 
 async def get_visible_project(
@@ -173,5 +228,101 @@ async def publish_project(db_session: AsyncSession, user_id: int, project_id: in
     project.published_at = func.now()
     await db_session.commit()
     # published_at і updated_at обчислює БД
+    await db_session.refresh(project)
+    return project
+
+
+async def _notify_about_changes(
+    db_session: AsyncSession, project: Project, organization_name: str, changed: set[str]
+) -> None:
+    """Сповіщення project_updated волонтерам, яких стосуються зміни (рішення 18.11).
+
+    Кожен отримує одне сповіщення з переліком саме тих змін, що його стосуються. Нових
+    значень у тексті немає: точні час і місце показує сторінка проєкту тим, кому їх можна
+    бачити (R-22).
+    """
+    relevant = [
+        (label, statuses) for fields, label, statuses in NOTIFIED_CHANGES if fields & changed
+    ]
+    if not relevant:
+        return
+    requests = await db_session.execute(
+        select(JoinRequest.user_id, JoinRequest.status).where(
+            JoinRequest.target == JoinRequestTargetEnum.project,
+            JoinRequest.project_id == project.id,
+            JoinRequest.status.in_(set().union(*(statuses for _, statuses in relevant))),
+        )
+    )
+    for user_id, status in requests:
+        labels = [label for label, statuses in relevant if status in statuses]
+        create_notification(
+            db_session,
+            user_id,
+            NotificationTypeEnum.project_updated,
+            "Зміни в проєкті",
+            f"Організація «{organization_name}» оновила проєкт «{project.title}». "
+            f"Змінено: {', '.join(labels)}. Подробиці — на сторінці проєкту.",
+            link=project_page_link(project.id),
+        )
+
+
+async def update_project(
+    db_session: AsyncSession, user_id: int, project_id: int, data: ProjectUpdate
+) -> Project:
+    project = await db_session.get(Project, project_id)
+    if project is None:
+        raise errors.project_not_found()
+    # Спершу членство, потім проєкт — у тому ж порядку, що й публікація та розгляд заявок,
+    # тож паралельні запити не заблокують одне одного
+    membership = await get_user_membership(db_session, user_id, project.organization_id, lock=True)
+    # Проєкт чужої організації, зокрема чернетку, не видно: так не видно й того, які id зайняті
+    if membership is None:
+        raise errors.project_not_found()
+    # Блокування рядка проєкту: паралельне прийняття заявки чекає, доки зміну збережено, і
+    # рахує місця вже з новою capacity, а ця зміна — з усіма вже прийнятими заявками
+    project = await lock_project(db_session, project_id)
+    if project is None:
+        raise errors.project_not_found()
+
+    if membership.role not in EDITOR_ROLES:
+        raise errors.not_project_editor()
+    if membership.organization.status == OrgStatusEnum.blocked:
+        raise errors.organization_blocked()
+    if project.status in NOT_EDITABLE_STATUSES:
+        raise errors.project_not_editable()
+    published = project.status == ProjectStatusEnum.published
+    # Учасники вже на події: змінювати її пізно. Чернетку з минулою датою виправити можна
+    if published and project.starts_at <= datetime.now(UTC):
+        raise errors.project_already_started()
+
+    changes = data.project_changes()
+    # Зв'язки між полями й повноту перевіряємо на тому, що вийде після зміни: передане поле
+    # може суперечити збереженому, наприклад новий кінець — старому початку
+    result = {field: getattr(project, field) for field in ProjectDraft.model_fields} | changes
+    if published:
+        _check_publication(result)
+    else:
+        _check_draft(result)
+
+    if changes.get("city_id") is not None:
+        await ensure_city_exists(db_session, changes["city_id"])
+    if changes.get("capacity") is not None:
+        accepted = await count_accepted(db_session, project.id)
+        if changes["capacity"] < accepted:
+            raise errors.capacity_below_accepted(accepted)
+
+    if "categories" in changes:
+        changes["categories"] = [category.value for category in changes["categories"]]
+    # Те саме значення, надіслане повторно (форма шле всі поля), зміною не вважається
+    changed = {field for field, value in changes.items() if getattr(project, field) != value}
+    for field in changed:
+        setattr(project, field, changes[field])
+    # У чернетки немає заявок, а її публікація зміною для волонтерів не є
+    if published:
+        await _notify_about_changes(db_session, project, membership.organization.name, changed)
+
+    # Зміни й сповіщення про них зберігаються в одній транзакції
+    await db_session.commit()
+    # updated_at обчислює БД
     await db_session.refresh(project)
     return project

@@ -109,6 +109,20 @@ def _check_location(is_online: bool, city_id: int | None, address: str | None) -
         raise ValueError("Offline project requires city_id and address")
 
 
+def _unique_categories(value: list[ProjectCategoryEnum]) -> list[ProjectCategoryEnum]:
+    unique = list(dict.fromkeys(value))
+    if len(unique) > MAX_PROJECT_CATEGORIES:
+        raise ValueError(f"At most {MAX_PROJECT_CATEGORIES} categories are allowed")
+    return unique
+
+
+def _unique_tags(value: list[str]) -> list[str]:
+    unique = list(dict.fromkeys(value))
+    if len(unique) > MAX_TAGS:
+        raise ValueError(f"At most {MAX_TAGS} tags are allowed")
+    return unique
+
+
 class ProjectDraft(BaseModel):
     """Поля проєкту, з якими його можна зберегти як чернетку (R-12, рішення 18.11).
 
@@ -138,18 +152,12 @@ class ProjectDraft(BaseModel):
     @field_validator("categories")
     @classmethod
     def validate_categories(cls, value: list[ProjectCategoryEnum]) -> list[ProjectCategoryEnum]:
-        unique = list(dict.fromkeys(value))
-        if len(unique) > MAX_PROJECT_CATEGORIES:
-            raise ValueError(f"At most {MAX_PROJECT_CATEGORIES} categories are allowed")
-        return unique
+        return _unique_categories(value)
 
     @field_validator("tags")
     @classmethod
     def validate_tags(cls, value: list[str]) -> list[str]:
-        unique = list(dict.fromkeys(value))
-        if len(unique) > MAX_TAGS:
-            raise ValueError(f"At most {MAX_TAGS} tags are allowed")
-        return unique
+        return _unique_tags(value)
 
     @model_validator(mode="after")
     def validate_times(self) -> ProjectDraft:
@@ -299,6 +307,88 @@ class ProjectCreate(ProjectDraft):
     def project_fields(self) -> dict[str, Any]:
         """Значення стовпців проєкту без службових полів запиту."""
         return self.model_dump(exclude=_REQUEST_ONLY_FIELDS)
+
+
+# Поля, які не бувають порожніми ні в чернетці, ні в опублікованому проєкті: у PATCH їх
+# можна пропустити, але не стерти через null
+_NOT_NULL_ON_UPDATE = (
+    "title",
+    "is_online",
+    "is_adult_only",
+    "experience_level",
+    "categories",
+    "tags",
+)
+
+
+def _hide_null_in_schema(schema: dict[str, Any]) -> None:
+    """Прибирає null зі схеми OpenAPI для полів, де null відхиляється.
+
+    Тип X | None потрібен, щоб поле можна було пропустити; SkipJsonSchema[None] тут не
+    підходить, бо змінює формат помилок валідації.
+    """
+    for field in _NOT_NULL_ON_UPDATE:
+        variants = schema["properties"][field].pop("anyOf")
+        schema["properties"][field].update(*(v for v in variants if v != {"type": "null"}))
+
+
+class ProjectUpdate(BaseModel):
+    """Часткове оновлення проєкту (PATCH): змінюються лише передані поля.
+
+    Обмеження значень ті самі, що й у ProjectDraft. Явний null стирає поле, яке в чернетці
+    може бути порожнім; в опублікованому проєкті такі поля обов'язкові, і стерти їх не дасть
+    повна перевірка в сервісі. Зв'язки між полями (порядок дат, місце офлайн-події) залежать
+    і від збережених значень, тож їх теж перевіряє сервіс, на об'єднаних даних.
+    """
+
+    model_config = ConfigDict(extra="forbid", json_schema_extra=_hide_null_in_schema)
+
+    # Для полів з _NOT_NULL_ON_UPDATE None означає лише «поле не передали»: явний null
+    # відхиляє валідатор нижче
+    title: ProjectTitle | None = None
+    description: ProjectDescription | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    is_online: bool | None = None
+    city_id: int | None = Field(default=None, gt=0, le=MAX_INT32)
+    address: str | None = None
+    capacity: int | None = Field(default=None, gt=0, le=MAX_CAPACITY)
+    volunteer_hours: Decimal | None = Field(default=None, gt=0, le=MAX_VOLUNTEER_HOURS)
+    is_adult_only: bool | None = None
+    experience_level: ExperienceLevelEnum | None = None
+    categories: list[ProjectCategoryEnum] | None = None
+    tags: list[ProjectTag] | None = None
+
+    @field_validator(*_NOT_NULL_ON_UPDATE)
+    @classmethod
+    def _not_null(cls, value: object) -> object:
+        # Не викликається для пропущених полів, лише для явно переданого null
+        if value is None:
+            raise ValueError("Field cannot be null")
+        return value
+
+    @field_validator("categories")
+    @classmethod
+    def validate_categories(
+        cls, value: list[ProjectCategoryEnum] | None
+    ) -> list[ProjectCategoryEnum] | None:
+        return None if value is None else _unique_categories(value)
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, value: list[str] | None) -> list[str] | None:
+        return None if value is None else _unique_tags(value)
+
+    @field_validator("starts_at", "ends_at")
+    @classmethod
+    def validate_timezone(cls, value: datetime | None) -> datetime | None:
+        # Валідатор поля, а не моделі: присвоєння в моделі позначило б пропущене поле
+        # переданим, і PATCH стер би його
+        return _as_utc(value)
+
+    def project_changes(self) -> dict[str, Any]:
+        """Лише передані поля: назви збігаються зі стовпцями projects."""
+        return self.model_dump(exclude_unset=True)
 
 
 class ProjectListItem(BaseModel):

@@ -12,7 +12,7 @@ from app.schemas.join_requests import (
     ProjectJoinRequestRead,
     ProjectJoinRequestStatusRead,
 )
-from app.schemas.projects import ProjectCreate, ProjectListItem, ProjectRead
+from app.schemas.projects import ProjectCreate, ProjectListItem, ProjectRead, ProjectUpdate
 from app.schemas.users import MAX_BIGINT, MAX_INT32
 from app.services import project_join_requests as join_requests_service
 from app.services import projects as service
@@ -88,6 +88,14 @@ async def create_project(
     data: ProjectCreate, db_session: DbSessionDep, user_id: CurrentUserId
 ) -> ProjectRead:
     project = await service.create_project(db_session, user_id, data)
+    return ProjectRead.model_validate(project)
+
+
+@router.patch("/{project_id}")
+async def update_project(
+    project_id: ProjectId, data: ProjectUpdate, db_session: DbSessionDep, user_id: CurrentUserId
+) -> ProjectRead:
+    project = await service.update_project(db_session, user_id, project_id, data)
     return ProjectRead.model_validate(project)
 
 
