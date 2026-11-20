@@ -15,6 +15,7 @@ import {
   OrganizationViewPage,
 } from '@/features/organizations'
 import { ProjectsCatalogPage, ProjectViewPage } from '@/features/projects'
+import { NotificationsPage } from '@/features/notifications'
 import { ProfilePage } from '@/features/users'
 
 /** Усі маршрути застосунку в одному місці. */
@@ -56,6 +57,14 @@ export const AppRoutes = () => (
           <AdminRoute>
             <AdminPage />
           </AdminRoute>
+        }
+      />
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <NotificationsPage />
+          </ProtectedRoute>
         }
       />
       <Route path="*" element={<Navigate to="/" replace />} />
