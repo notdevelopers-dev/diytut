@@ -248,6 +248,37 @@ def test_partial_update_changes_only_sent_fields(client: TestClient, db, publish
     assert project.published_at == before.published_at
 
 
+def test_accepted_count_is_returned_to_everyone(client: TestClient, published) -> None:
+    # Схвалена заявка в фікстурі одна; заявки в інших статусах місць не займають
+    assert client.get(f"/api/projects/{published['project']}").json()["accepted_count"] == 1
+
+    sign_in(client, published["owner"])
+    assert client.get(f"/api/projects/{published['project']}").json()["accepted_count"] == 1
+    response = patch(client, published["project"], description="Новий опис")
+    assert response.json()["accepted_count"] == 1
+
+
+def test_new_and_published_drafts_have_no_accepted(client: TestClient, org, make_project) -> None:
+    sign_in(client, org["owner"])
+
+    created = client.post("/api/projects", json={"title": "Толока", "status": "draft"})
+    assert created.json()["accepted_count"] == 0
+
+    project_id = make_project(
+        org["org"],
+        description="Опис",
+        starts_at=STARTS_AT,
+        ends_at=STARTS_AT + timedelta(hours=3),
+        is_online=True,
+        capacity=10,
+        volunteer_hours=Decimal("2"),
+        categories=["ecology"],
+    )
+    published = client.post(f"/api/projects/{project_id}/publish")
+    assert published.status_code == 200
+    assert published.json()["accepted_count"] == 0
+
+
 def test_admin_can_edit(client: TestClient, published) -> None:
     sign_in(client, published["admin"])
 
@@ -424,6 +455,8 @@ def test_offline_published_project_cannot_lose_address(client: TestClient, publi
         {"status": "cancelled"},
         {"organization_id": 1},
         {"published_at": "2026-01-01T00:00:00Z"},
+        # numeric(5, 2) зберіг би 2.00, а волонтери отримали б сповіщення про зміну годин
+        {"volunteer_hours": "2.001"},
     ],
 )
 def test_invalid_values_422(client: TestClient, db, published, body: dict) -> None:
@@ -622,6 +655,33 @@ def test_started_project_is_not_editable_409(client: TestClient, org, make_proje
     assert response.json()["detail"] == "Project has already started"
 
 
+def test_published_start_cannot_move_to_past_422(client: TestClient, db, published) -> None:
+    sign_in(client, published["owner"])
+    past = datetime.now(UTC).replace(microsecond=0) - timedelta(hours=1)
+
+    response = patch(client, published["project"], starts_at=past.isoformat())
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == [
+        {
+            "type": "start_in_past",
+            "loc": ["body", "starts_at"],
+            "msg": "Published project cannot be moved to a start in the past",
+        }
+    ]
+    assert load_project(db, published["project"]).starts_at == STARTS_AT
+    assert update_notifications(db) == {}
+
+
+def test_draft_start_may_be_set_in_past(client: TestClient, org, make_project) -> None:
+    # Як і при створенні: чернетку бачить лише організація, а опублікувати її ніщо не змушує
+    project_id = make_project(org["org"])
+    sign_in(client, org["owner"])
+    past = datetime.now(UTC) - timedelta(days=1)
+
+    assert patch(client, project_id, starts_at=past.isoformat()).status_code == 200
+
+
 def test_draft_with_past_date_is_editable(client: TestClient, org, make_project) -> None:
     project_id = make_project(org["org"], starts_at=datetime.now(UTC) - timedelta(days=1))
     sign_in(client, org["owner"])
@@ -690,6 +750,45 @@ def test_city_change_notifies_accepted_only(client: TestClient, db, published, m
     assert patch(client, published["project"], city_id=make_city("Київ")).status_code == 200
 
     assert set(update_notifications(db)) == {published["accepted"]}
+
+
+@pytest.fixture
+def online(org, make_project, make_user, db, city_id: int) -> dict[str, int]:
+    """Опублікована онлайн-подія з містом для фільтра каталогу та схваленим волонтером."""
+    ids = dict(org)
+    ids["project"] = make_project(
+        org["org"], status=ProjectStatusEnum.published, is_online=True, city_id=city_id
+    )
+    ids["accepted"] = make_user()
+    add_request(db, org["org"], ids["project"], ids["accepted"], JoinRequestStatusEnum.accepted)
+    return ids
+
+
+@pytest.mark.parametrize("field", ["city_id", "address"])
+def test_online_project_city_or_address_is_not_a_place_change(
+    client: TestClient, db, online, make_city, field: str
+) -> None:
+    value = make_city("Київ") if field == "city_id" else "вул. Лісова, 2"
+    sign_in(client, online["owner"])
+
+    assert patch(client, online["project"], **{field: value}).status_code == 200
+
+    assert update_notifications(db) == {}
+
+
+def test_online_project_going_offline_is_a_place_change(
+    client: TestClient, db, online, city_id: int
+) -> None:
+    sign_in(client, online["owner"])
+
+    response = patch(
+        client, online["project"], is_online=False, city_id=city_id, address="вул. Лісова, 2"
+    )
+
+    assert response.status_code == 200
+    notifications = update_notifications(db)
+    assert set(notifications) == {online["accepted"]}
+    assert "Змінено: місце." in notifications[online["accepted"]][0].message
 
 
 def test_hours_change_notifies_accepted_only(client: TestClient, db, published) -> None:
@@ -786,11 +885,19 @@ def test_draft_changes_create_no_notifications(client: TestClient, db, org, make
     assert update_notifications(db) == {}
 
 
-def test_rejected_update_creates_no_notifications(client: TestClient, db, published) -> None:
-    # Сповіщення зберігаються в одній транзакції зі зміною: відхилена зміна їх не лишає
+def test_rejected_update_creates_no_notifications(
+    client: TestClient, db, published, make_user
+) -> None:
+    # Сповіщення зберігаються в одній транзакції зі зміною: зміна, яку відхилив сервіс
+    # (схема запиту її пропустила), не лишає ні нового часу, ні сповіщень
+    add_request(
+        db, published["org"], published["project"], make_user(), JoinRequestStatusEnum.accepted
+    )
     sign_in(client, published["owner"])
 
-    response = patch(client, published["project"], starts_at=NEW_STARTS_AT.isoformat(), capacity=0)
+    response = patch(client, published["project"], starts_at=NEW_STARTS_AT.isoformat(), capacity=1)
 
     assert response.status_code == 422
+    assert response.json()["detail"][0]["type"] == "capacity_below_accepted"
+    assert load_project(db, published["project"]).starts_at == STARTS_AT
     assert update_notifications(db) == {}

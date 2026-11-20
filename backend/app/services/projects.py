@@ -50,6 +50,9 @@ NOTIFIED_CHANGES: tuple[tuple[frozenset[str], str, frozenset[JoinRequestStatusEn
         frozenset({JoinRequestStatusEnum.accepted}),
     ),
 )
+# Місто онлайн-події потрібне лише фільтру каталогу, а адреса — нікому: їх зміна для
+# волонтерів не є зміною місця, поки подія лишається онлайн
+ONLINE_IRRELEVANT_FIELDS = frozenset({"city_id", "address"})
 # Завершений чи скасований проєкт уже не змінюється: від нього залежать нараховані години
 # й відгуки
 NOT_EDITABLE_STATUSES = frozenset({ProjectStatusEnum.completed, ProjectStatusEnum.cancelled})
@@ -138,6 +141,14 @@ async def get_visible_project(
     return project
 
 
+async def read_project(
+    db_session: AsyncSession, project_id: int, user_id: int | None
+) -> tuple[Project, int]:
+    """Проєкт для сторінки й форми редагування разом із кількістю схвалених заявок."""
+    project = await get_visible_project(db_session, project_id, user_id)
+    return project, await count_accepted(db_session, project.id)
+
+
 async def list_organization_projects(
     db_session: AsyncSession,
     organization_id: int,
@@ -161,7 +172,9 @@ async def list_organization_projects(
     return list(projects), total
 
 
-async def create_project(db_session: AsyncSession, user_id: int, data: ProjectCreate) -> Project:
+async def create_project(
+    db_session: AsyncSession, user_id: int, data: ProjectCreate
+) -> tuple[Project, int]:
     # Повноту полів одразу опублікованого проєкту вже перевірив ProjectCreate
     publish = data.status == ProjectStatusEnum.published
     fields = data.project_fields()
@@ -195,10 +208,13 @@ async def create_project(db_session: AsyncSession, user_id: int, data: ProjectCr
     await db_session.commit()
     # created_at і published_at заповнює БД
     await db_session.refresh(project)
-    return project
+    # Новий проєкт: заявок на нього ще немає
+    return project, 0
 
 
-async def publish_project(db_session: AsyncSession, user_id: int, project_id: int) -> Project:
+async def publish_project(
+    db_session: AsyncSession, user_id: int, project_id: int
+) -> tuple[Project, int]:
     project = await db_session.get(Project, project_id)
     if project is None:
         raise errors.project_not_found()
@@ -229,7 +245,8 @@ async def publish_project(db_session: AsyncSession, user_id: int, project_id: in
     await db_session.commit()
     # published_at і updated_at обчислює БД
     await db_session.refresh(project)
-    return project
+    # Заявки подають лише на опублікований проєкт, тож у щойно опублікованої чернетки їх немає
+    return project, 0
 
 
 async def _notify_about_changes(
@@ -241,8 +258,13 @@ async def _notify_about_changes(
     значень у тексті немає: точні час і місце показує сторінка проєкту тим, кому їх можна
     бачити (R-22).
     """
+    notified = set(changed)
+    # Місто й адреса онлайн-події волонтерів не стосуються: місце змінилося, лише якщо подія
+    # стала офлайн чи онлайн або змінилися місто чи адреса офлайн-події
+    if project.is_online and "is_online" not in changed:
+        notified -= ONLINE_IRRELEVANT_FIELDS
     relevant = [
-        (label, statuses) for fields, label, statuses in NOTIFIED_CHANGES if fields & changed
+        (label, statuses) for fields, label, statuses in NOTIFIED_CHANGES if fields & notified
     ]
     if not relevant:
         return
@@ -268,7 +290,7 @@ async def _notify_about_changes(
 
 async def update_project(
     db_session: AsyncSession, user_id: int, project_id: int, data: ProjectUpdate
-) -> Project:
+) -> tuple[Project, int]:
     project = await db_session.get(Project, project_id)
     if project is None:
         raise errors.project_not_found()
@@ -291,8 +313,9 @@ async def update_project(
     if project.status in NOT_EDITABLE_STATUSES:
         raise errors.project_not_editable()
     published = project.status == ProjectStatusEnum.published
+    now = datetime.now(UTC)
     # Учасники вже на події: змінювати її пізно. Чернетку з минулою датою виправити можна
-    if published and project.starts_at <= datetime.now(UTC):
+    if published and project.starts_at <= now:
         raise errors.project_already_started()
 
     changes = data.project_changes()
@@ -301,15 +324,19 @@ async def update_project(
     result = {field: getattr(project, field) for field in ProjectDraft.model_fields} | changes
     if published:
         _check_publication(result)
+        # Перенесений у минуле проєкт уже «почався»: ні виправити помилку в даті, ні скасувати
+        # заявку волонтер не зміг би. Повторно надісланий збережений початок — у майбутньому
+        if "starts_at" in changes and changes["starts_at"] <= now:
+            raise errors.project_start_in_past()
     else:
         _check_draft(result)
 
     if changes.get("city_id") is not None:
         await ensure_city_exists(db_session, changes["city_id"])
-    if changes.get("capacity") is not None:
-        accepted = await count_accepted(db_session, project.id)
-        if changes["capacity"] < accepted:
-            raise errors.capacity_below_accepted(accepted)
+    # Під блокуванням проєкту: паралельне прийняття заявки цього числа не змінить
+    accepted = await count_accepted(db_session, project.id)
+    if changes.get("capacity") is not None and changes["capacity"] < accepted:
+        raise errors.capacity_below_accepted(accepted)
 
     if "categories" in changes:
         changes["categories"] = [category.value for category in changes["categories"]]
@@ -325,4 +352,4 @@ async def update_project(
     await db_session.commit()
     # updated_at обчислює БД
     await db_session.refresh(project)
-    return project
+    return project, accepted

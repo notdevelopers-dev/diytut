@@ -17,7 +17,12 @@ from pydantic import (
 )
 
 from app.models.experience import ExperienceLevelEnum
-from app.models.project import MAX_PROJECT_CATEGORIES, ProjectCategoryEnum, ProjectStatusEnum
+from app.models.project import (
+    MAX_PROJECT_CATEGORIES,
+    Project,
+    ProjectCategoryEnum,
+    ProjectStatusEnum,
+)
 from app.schemas.users import MAX_BIGINT, MAX_INT32
 
 ProjectTitle = Annotated[
@@ -89,6 +94,9 @@ ProjectTag = Annotated[str, AfterValidator(_validate_tag)]
 # відхилила б, і запит упав би з 500 замість 422
 MAX_CAPACITY = MAX_INT32
 MAX_VOLUNTEER_HOURS = Decimal("999.99")
+# Більше знаків після коми numeric(5, 2) не зберігає: «2.001» стало б 2.00, а «0.001» — нулем,
+# який порушує ck_projects_volunteer_hours_positive (500 замість 422)
+VOLUNTEER_HOURS_DECIMAL_PLACES = 2
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -141,7 +149,9 @@ class ProjectDraft(BaseModel):
     city_id: int | None = Field(default=None, gt=0, le=MAX_INT32)
     address: str | None = None
     capacity: int | None = Field(default=None, gt=0, le=MAX_CAPACITY)
-    volunteer_hours: Decimal | None = Field(default=None, gt=0, le=MAX_VOLUNTEER_HOURS)
+    volunteer_hours: Decimal | None = Field(
+        default=None, gt=0, le=MAX_VOLUNTEER_HOURS, decimal_places=VOLUNTEER_HOURS_DECIMAL_PLACES
+    )
     is_adult_only: bool = False
     experience_level: ExperienceLevelEnum = ExperienceLevelEnum.novice
     # Сфера зі сталого набору: основний фільтр каталогу (R-14)
@@ -179,7 +189,9 @@ class ProjectPublication(ProjectDraft):
     starts_at: datetime
     ends_at: datetime
     capacity: int = Field(gt=0, le=MAX_CAPACITY)
-    volunteer_hours: Decimal = Field(gt=0, le=MAX_VOLUNTEER_HOURS)
+    volunteer_hours: Decimal = Field(
+        gt=0, le=MAX_VOLUNTEER_HOURS, decimal_places=VOLUNTEER_HOURS_DECIMAL_PLACES
+    )
     categories: list[ProjectCategoryEnum] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -353,7 +365,9 @@ class ProjectUpdate(BaseModel):
     city_id: int | None = Field(default=None, gt=0, le=MAX_INT32)
     address: str | None = None
     capacity: int | None = Field(default=None, gt=0, le=MAX_CAPACITY)
-    volunteer_hours: Decimal | None = Field(default=None, gt=0, le=MAX_VOLUNTEER_HOURS)
+    volunteer_hours: Decimal | None = Field(
+        default=None, gt=0, le=MAX_VOLUNTEER_HOURS, decimal_places=VOLUNTEER_HOURS_DECIMAL_PLACES
+    )
     is_adult_only: bool | None = None
     experience_level: ExperienceLevelEnum | None = None
     categories: list[ProjectCategoryEnum] | None = None
@@ -417,6 +431,17 @@ class ProjectListItem(BaseModel):
 
 class ProjectRead(ProjectListItem):
     updated_at: datetime
+    # Скільки місць уже зайнято схваленими заявками: вільних — capacity - accepted_count.
+    # Форма редагування не дає зменшити capacity нижче цього числа (R-24)
+    accepted_count: int
+
+    @classmethod
+    def from_project(cls, project: Project, accepted_count: int) -> ProjectRead:
+        return cls(
+            **ProjectListItem.model_validate(project).model_dump(),
+            updated_at=project.updated_at,
+            accepted_count=accepted_count,
+        )
 
 
 class ProjectPage(BaseModel):

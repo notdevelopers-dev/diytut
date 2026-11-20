@@ -352,11 +352,17 @@ def test_cross_field_check_skips_invalid_fields(client: TestClient, org) -> None
 
 @pytest.mark.parametrize("status", ["draft", "published"])
 @pytest.mark.parametrize(
-    ("field", "value"),
-    [("capacity", 2**31), ("volunteer_hours", "1000"), ("volunteer_hours", "999.995")],
+    ("field", "value", "error_type"),
+    [
+        ("capacity", 2**31, "less_than_equal"),
+        ("volunteer_hours", "1000", "less_than_equal"),
+        # numeric(5, 2) округлив би їх до 1000.00 і до 0.00, а обидва порушують обмеження БД
+        ("volunteer_hours", "999.995", "decimal_max_places"),
+        ("volunteer_hours", "0.001", "decimal_max_places"),
+    ],
 )
 def test_values_beyond_column_limits_422(
-    client: TestClient, org, status: str, field: str, value
+    client: TestClient, org, status: str, field: str, value, error_type: str
 ) -> None:
     # Раніше БД відхиляла їх, і запит падав з 500
     sign_in(client, org["owner"])
@@ -365,7 +371,7 @@ def test_values_beyond_column_limits_422(
     response = client.post("/api/projects", json=payload)
 
     assert response.status_code == 422
-    assert field_errors(response.json()["detail"]) == {field: "less_than_equal"}
+    assert field_errors(response.json()["detail"]) == {field: error_type}
 
 
 def test_values_at_column_limits_are_saved(client: TestClient, org) -> None:
