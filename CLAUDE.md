@@ -88,6 +88,7 @@ CI (`.github/workflows/ci.yml`) runs these backend checks, and all of them must 
 
 - **Routers** are mounted once in `app/routers/__init__.py` under the `/api` prefix, so each router uses paths relative to its group.
   - A router function depends on `DbSessionDep` (`app/db.py`) and, if login is required, `CurrentUserId` (`app/auth.py`, read from the JWT `session` cookie).
+  - A public endpoint that shows more to signed-in users, such as drafts to members of their organization, depends on `OptionalUserId` instead: a missing or invalid session counts as a guest, not a 401, because the frontend would redirect a 401 to `/login`.
   - It calls a single service function and returns `Schema.model_validate(result)`.
   - Integer path params use `Path(gt=0, le=MAX_BIGINT)`.
 - **Services** hold all queries and business rules and own the transaction: they call `commit()` themselves.
