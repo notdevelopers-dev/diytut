@@ -221,6 +221,15 @@ async def _check_project_decision(
     if data.status == JoinRequestStatusEnum.accepted:
         if not project_join_requests.is_open(project):
             raise errors.project_not_open()
+        # Вимоги чи дату могли змінити вже після подання заявки: приймаємо лише тих, хто
+        # відповідає поточним. Рядок проєкту заблоковано, тож вимоги не зміняться до запису
+        unmet = await project_join_requests.check_applicant_requirements(
+            db_session, project, join_request.user_id
+        )
+        if unmet == "adult_only":
+            raise errors.applicant_not_adult()
+        if unmet == "experience_level":
+            raise errors.applicant_level_too_low()
         accepted = await project_join_requests.count_accepted(db_session, project.id)
         if accepted >= project.capacity:
             raise errors.project_full()

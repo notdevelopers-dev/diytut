@@ -275,6 +275,25 @@ def experience_level_too_low() -> HTTPException:
     return HTTPException(status.HTTP_403_FORBIDDEN, "Experience level is too low for this project")
 
 
+def applicant_not_adult() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Volunteer will be under 18 on the day the project starts"
+    )
+
+
+def applicant_level_too_low() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Volunteer's experience level is too low for this project"
+    )
+
+
+def participants_miss_requirements(count: int) -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT,
+        f"Accepted participants would not meet the new requirements ({count})",
+    )
+
+
 def applicant_already_member() -> HTTPException:
     return HTTPException(
         status.HTTP_409_CONFLICT, "Volunteer is already a member of this organization"

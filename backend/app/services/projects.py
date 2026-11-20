@@ -16,6 +16,7 @@ from app.models import (
     Project,
     ProjectCategoryEnum,
     ProjectStatusEnum,
+    User,
 )
 from app.notifications import create_notification, project_page_link
 from app.schemas.projects import (
@@ -27,7 +28,12 @@ from app.schemas.projects import (
 )
 from app.services.cities import ensure_city_exists
 from app.services.organizations import EDITOR_ROLES, get_user_membership
-from app.services.project_join_requests import count_accepted, lock_project
+from app.services.project_join_requests import (
+    count_accepted,
+    get_confirmed_hours,
+    lock_project,
+    unmet_requirement,
+)
 
 # Зміни опублікованого проєкту, про які сповіщаємо (рішення 18.11): поля, назва зміни для
 # тексту сповіщення і чиїх заявок вона стосується. Дата чи час — усіх, хто збирається
@@ -53,6 +59,9 @@ NOTIFIED_CHANGES: tuple[tuple[frozenset[str], str, frozenset[JoinRequestStatusEn
 # Місто онлайн-події потрібне лише фільтру каталогу, а адреса — нікому: їх зміна для
 # волонтерів не є зміною місця, поки подія лишається онлайн
 ONLINE_IRRELEVANT_FIELDS = frozenset({"city_id", "address"})
+# Поля, від яких залежить, чи підходить волонтер проєкту (R-12): вік рахується на день
+# початку події, тож ранніша дата теж може зробити учасника неповнолітнім
+REQUIREMENT_FIELDS = frozenset({"is_adult_only", "experience_level", "starts_at"})
 # Завершений чи скасований проєкт уже не змінюється: від нього залежать нараховані години
 # й відгуки
 NOT_EDITABLE_STATUSES = frozenset({ProjectStatusEnum.completed, ProjectStatusEnum.cancelled})
@@ -288,6 +297,36 @@ async def _notify_about_changes(
         )
 
 
+async def _count_participants_missing_requirements(
+    db_session: AsyncSession, project_id: int, fields: dict[str, Any]
+) -> int:
+    """Скільки схвалених учасників не відповідали б вимогам проєкту з полями fields."""
+    participants = (
+        await db_session.execute(
+            select(JoinRequest.user_id, User.birth_date)
+            .join(User, User.id == JoinRequest.user_id)
+            .where(
+                JoinRequest.target == JoinRequestTargetEnum.project,
+                JoinRequest.project_id == project_id,
+                JoinRequest.status == JoinRequestStatusEnum.accepted,
+            )
+        )
+    ).all()
+    hours = await get_confirmed_hours(db_session, [user_id for user_id, _ in participants])
+    return sum(
+        1
+        for user_id, birth_date in participants
+        if unmet_requirement(
+            birth_date,
+            hours[user_id],
+            starts_at=fields["starts_at"],
+            is_adult_only=fields["is_adult_only"],
+            experience_level=fields["experience_level"],
+        )
+        is not None
+    )
+
+
 async def update_project(
     db_session: AsyncSession, user_id: int, project_id: int, data: ProjectUpdate
 ) -> tuple[Project, int]:
@@ -342,6 +381,13 @@ async def update_project(
         changes["categories"] = [category.value for category in changes["categories"]]
     # Те саме значення, надіслане повторно (форма шле всі поля), зміною не вважається
     changed = {field for field, value in changes.items() if getattr(project, field) != value}
+    # Схвалений учасник, якому нові вимоги чи ранніша дата вже не підходять (вік, рівень),
+    # не має лишитися на події, а вилучити його організатор не може: зміну відхиляємо.
+    # Заявки на розгляді не заважають: прийняти тих, хто не підходить, не дасть розгляд
+    if published and changed & REQUIREMENT_FIELDS:
+        missing = await _count_participants_missing_requirements(db_session, project.id, result)
+        if missing:
+            raise errors.participants_miss_requirements(missing)
     for field in changed:
         setattr(project, field, changes[field])
     # У чернетки немає заявок, а її публікація зміною для волонтерів не є

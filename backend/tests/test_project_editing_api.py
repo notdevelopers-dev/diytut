@@ -2,6 +2,7 @@
 
 from datetime import UTC, date, datetime, timedelta, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,6 +12,7 @@ from app import auth
 from app.db import engine
 from app.main import app
 from app.models import (
+    Attendance,
     City,
     JoinRequest,
     JoinRequestStatusEnum,
@@ -29,6 +31,16 @@ from app.models import (
 STARTS_AT = datetime.now(UTC).replace(microsecond=0) + timedelta(days=30)
 # Пізніше на годину: кінець події (STARTS_AT + 3 год) лишається після початку
 NEW_STARTS_AT = STARTS_AT + timedelta(hours=1)
+# Вік для проєктів 18+ рахується на день початку події за київським часом
+KYIV = ZoneInfo("Europe/Kyiv")
+
+
+def years_before(day: date, years: int) -> date:
+    """Та сама дата на years років раніше; 29 лютого в невисокосний рік — 28 лютого."""
+    try:
+        return day.replace(year=day.year - years)
+    except ValueError:
+        return day.replace(year=day.year - years, day=28)
 
 
 def sign_in(client: TestClient, user_id: int) -> None:
@@ -63,7 +75,7 @@ def city_id(make_city) -> int:
 def make_user(db, city_id: int):
     counter = iter(range(1, 1000))
 
-    def make() -> int:
+    def make(birth_date: date = date(1990, 3, 9)) -> int:
         n = next(counter)
 
         async def create(session) -> int:
@@ -74,7 +86,7 @@ def make_user(db, city_id: int):
                 last_name="Шевченко",
                 nickname=f"user_{n}",
                 phone="+380671234567",
-                birth_date=date(1990, 3, 9),
+                birth_date=birth_date,
                 city_id=city_id,
             )
             session.add(user)
@@ -841,7 +853,6 @@ def test_several_changes_give_one_notification_per_volunteer(
         {"categories": ["ecology", "animals"]},
         {"capacity": 20},
         {"is_adult_only": True},
-        {"experience_level": "pro"},
     ],
 )
 def test_other_changes_create_no_notifications(
@@ -901,3 +912,161 @@ def test_rejected_update_creates_no_notifications(
     assert response.json()["detail"][0]["type"] == "capacity_below_accepted"
     assert load_project(db, published["project"]).starts_at == STARTS_AT
     assert update_notifications(db) == {}
+
+
+# =====================================================================
+# Вимоги до учасників: вік і рівень (R-12)
+# =====================================================================
+
+
+def add_hours(db, make_project, organization_id: int, user_id: int, hours: str) -> None:
+    """Підтверджені години волонтера за участь в іншому, вже завершеному проєкті."""
+    finished_id = make_project(organization_id, status=ProjectStatusEnum.completed)
+
+    async def create(session) -> None:
+        session.add(Attendance(project_id=finished_id, user_id=user_id, hours=Decimal(hours)))
+
+    db(create)
+
+
+def underage_birth_date() -> date:
+    return years_before(datetime.now(KYIV).date(), 16)
+
+
+def test_adult_only_is_rejected_while_participant_is_underage(
+    client: TestClient, db, published, make_user
+) -> None:
+    add_request(
+        db,
+        published["org"],
+        published["project"],
+        make_user(underage_birth_date()),
+        JoinRequestStatusEnum.accepted,
+    )
+    sign_in(client, published["owner"])
+
+    response = patch(client, published["project"], is_adult_only=True)
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "Accepted participants would not meet the new requirements (1)"
+    )
+    assert load_project(db, published["project"]).is_adult_only is False
+    assert update_notifications(db) == {}
+
+
+def test_adult_only_is_allowed_when_participants_are_adults(
+    client: TestClient, db, published, make_user
+) -> None:
+    # Неповнолітній із заявкою на розгляді зміні не заважає: прийняти його не дасть розгляд
+    add_request(
+        db,
+        published["org"],
+        published["project"],
+        make_user(underage_birth_date()),
+        JoinRequestStatusEnum.pending,
+    )
+    sign_in(client, published["owner"])
+
+    assert patch(client, published["project"], is_adult_only=True).status_code == 200
+    assert update_notifications(db) == {}
+
+
+def test_level_raise_is_rejected_while_participant_has_too_few_hours(
+    client: TestClient, db, published
+) -> None:
+    sign_in(client, published["owner"])
+
+    response = patch(client, published["project"], experience_level="interested")
+
+    assert response.status_code == 409
+    assert load_project(db, published["project"]).experience_level == "novice"
+
+
+def test_level_raise_is_allowed_when_participants_have_enough_hours(
+    client: TestClient, db, published, make_project
+) -> None:
+    # Понад 50 підтверджених годин — рівень «interested» (R-27)
+    add_hours(db, make_project, published["org"], published["accepted"], "60")
+    sign_in(client, published["owner"])
+
+    response = patch(client, published["project"], experience_level="interested")
+
+    assert response.status_code == 200
+    assert update_notifications(db) == {}
+
+
+def test_earlier_start_is_rejected_when_participant_would_be_underage(
+    client: TestClient, db, org, make_project, make_user
+) -> None:
+    # Волонтеру виповнюється 18 за п'ять днів до події: на неї він дорослий, а на подію,
+    # перенесену на десять днів раніше, — ще ні
+    eighteenth_birthday = (STARTS_AT - timedelta(days=5)).astimezone(KYIV).date()
+    volunteer = make_user(years_before(eighteenth_birthday, 18))
+    project_id = make_project(org["org"], status=ProjectStatusEnum.published, is_adult_only=True)
+    add_request(db, org["org"], project_id, volunteer, JoinRequestStatusEnum.accepted)
+    sign_in(client, org["owner"])
+
+    earlier = patch(client, project_id, starts_at=(STARTS_AT - timedelta(days=10)).isoformat())
+    assert earlier.status_code == 409
+    assert load_project(db, project_id).starts_at == STARTS_AT
+    assert update_notifications(db) == {}
+
+    assert patch(client, project_id, starts_at=NEW_STARTS_AT.isoformat()).status_code == 200
+
+
+def review(client: TestClient, db, user_id: int, status: str):
+    async def request_id(session) -> int:
+        return await session.scalar(select(JoinRequest.id).where(JoinRequest.user_id == user_id))
+
+    return client.patch(f"/api/join-requests/{db(request_id)}", json={"status": status})
+
+
+def test_underage_applicant_cannot_be_accepted_after_adult_only(
+    client: TestClient, db, org, make_project, make_user
+) -> None:
+    # Заявку подали, коли обмеження ще не було, а потім проєкт став 18+
+    applicant = make_user(underage_birth_date())
+    project_id = make_project(org["org"], status=ProjectStatusEnum.published, is_adult_only=True)
+    add_request(db, org["org"], project_id, applicant, JoinRequestStatusEnum.pending)
+    sign_in(client, org["owner"])
+
+    response = review(client, db, applicant, "accepted")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Volunteer will be under 18 on the day the project starts"
+    # Відхилити таку заявку можна
+    assert review(client, db, applicant, "rejected").status_code == 200
+
+
+def test_applicant_below_level_cannot_be_accepted(
+    client: TestClient, db, org, make_project, make_user
+) -> None:
+    applicant = make_user()
+    project_id = make_project(
+        org["org"], status=ProjectStatusEnum.published, experience_level="interested"
+    )
+    add_request(db, org["org"], project_id, applicant, JoinRequestStatusEnum.pending)
+    sign_in(client, org["owner"])
+
+    response = review(client, db, applicant, "accepted")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Volunteer's experience level is too low for this project"
+
+
+def test_applicant_who_meets_requirements_is_accepted(
+    client: TestClient, db, org, make_project, make_user
+) -> None:
+    applicant = make_user()
+    add_hours(db, make_project, org["org"], applicant, "60")
+    project_id = make_project(
+        org["org"],
+        status=ProjectStatusEnum.published,
+        is_adult_only=True,
+        experience_level="interested",
+    )
+    add_request(db, org["org"], project_id, applicant, JoinRequestStatusEnum.pending)
+    sign_in(client, org["owner"])
+
+    assert review(client, db, applicant, "accepted").status_code == 200

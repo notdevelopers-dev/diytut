@@ -8,6 +8,7 @@ import math
 from collections.abc import Iterable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, func, select
@@ -32,12 +33,14 @@ from app.models import (
     ProjectStatusEnum,
     User,
 )
-from app.models.experience import level_for_hours, meets_level
+from app.models.experience import ExperienceLevelEnum, level_for_hours, meets_level
 from app.notifications import create_notification, project_join_requests_link
 from app.schemas.join_requests import JoinRequestCreate
 from app.services.organizations import EDITOR_ROLES, get_user_membership
 
 ACTIVE_PROJECT_REQUEST_INDEX = "uq_join_requests_active_user_project"
+# Вимога проєкту, якої волонтер не виконує (R-12)
+UnmetRequirement = Literal["adult_only", "experience_level"]
 ACTIVE_STATUSES = (JoinRequestStatusEnum.pending, JoinRequestStatusEnum.accepted)
 ADULT_AGE = 18
 # Вік на день події рахуємо за київським часом: подія о 00:30 за Києвом у UTC ще «вчора»
@@ -57,6 +60,43 @@ def _project_requests():
 def _age_on(birth_date: date, day: date) -> int:
     had_birthday = (day.month, day.day) >= (birth_date.month, birth_date.day)
     return day.year - birth_date.year - (0 if had_birthday else 1)
+
+
+def unmet_requirement(
+    birth_date: date,
+    confirmed_hours: Decimal,
+    *,
+    starts_at: datetime,
+    is_adult_only: bool,
+    experience_level: ExperienceLevelEnum,
+) -> UnmetRequirement | None:
+    """Яку вимогу проєкту (R-12) волонтер не виконує: вік на день початку події чи рівень.
+
+    Вимоги передаються окремо, а не проєктом: редагування перевіряє їх до того, як
+    змінити проєкт. Перевіряють подання заявки, її прийняття й редагування проєкту:
+    вимоги чи дату могли змінити вже після подання.
+    """
+    event_day = starts_at.astimezone(EVENT_TIMEZONE).date()
+    if is_adult_only and _age_on(birth_date, event_day) < ADULT_AGE:
+        return "adult_only"
+    if not meets_level(level_for_hours(confirmed_hours), experience_level):
+        return "experience_level"
+    return None
+
+
+async def check_applicant_requirements(
+    db_session: AsyncSession, project: Project, user_id: int
+) -> UnmetRequirement | None:
+    """unmet_requirement для волонтера й поточних вимог проєкту."""
+    birth_date = await db_session.scalar(select(User.birth_date).where(User.id == user_id))
+    hours = (await get_confirmed_hours(db_session, [user_id]))[user_id]
+    return unmet_requirement(
+        birth_date,
+        hours,
+        starts_at=project.starts_at,
+        is_adult_only=project.is_adult_only,
+        experience_level=project.experience_level,
+    )
 
 
 async def get_confirmed_hours(
@@ -270,11 +310,10 @@ async def create_project_join_request(
     await _check_reapply_delay(db_session, user_id, project.id)
 
     # Вимоги проєкту (R-12): вік на день початку події й мінімальний рівень досвіду
-    event_day = project.starts_at.astimezone(EVENT_TIMEZONE).date()
-    if project.is_adult_only and _age_on(user.birth_date, event_day) < ADULT_AGE:
+    unmet = await check_applicant_requirements(db_session, project, user_id)
+    if unmet == "adult_only":
         raise errors.project_adult_only()
-    hours = (await get_confirmed_hours(db_session, [user_id]))[user_id]
-    if not meets_level(level_for_hours(hours), project.experience_level):
+    if unmet == "experience_level":
         raise errors.experience_level_too_low()
 
     # Попередня перевірка: остаточно місця рахуються під час розгляду під блокуванням
