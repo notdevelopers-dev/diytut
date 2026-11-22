@@ -176,4 +176,5 @@ npm run typecheck
 
 - LF line endings everywhere. Indent is 2 spaces, or 4 for Python (`.editorconfig`). Python line length is 100.
 - PR title: the Jira task with its key, for example `SCRUM-<n> [BE] ...` or `SCRUM-<n> [FE] ...`. One PR per task, filled in from `.github/pull_request_template.md`.
+- In the PR description, refer to the Jira task as its key in square brackets, for example `[SCRUM-172]`, instead of a URL: the Jira integration turns it into a link.
 - Dependency manifests and lock files are committed together: `pyproject.toml` with `uv.lock`, and `package.json` with `package-lock.json`. Never edit lock files by hand.
