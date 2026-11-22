@@ -5,6 +5,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { AUTH_ME_QUERY_KEY } from '@/features/auth/hooks'
+import { USER_SCOPED_META } from '@/lib/query-client'
 import type {
   JoinRequestDecision,
   OrganizationJoinRequest,
@@ -57,6 +58,7 @@ export const useMyOrganization = (enabled = true) =>
     queryKey: MY_ORGANIZATION_QUERY_KEY,
     queryFn: fetchMyOrganization,
     enabled,
+    meta: USER_SCOPED_META,
   })
 
 /** Після створення чи зміни організація приходить у /auth/me: скидаємо його кеш. */
@@ -104,6 +106,7 @@ export const useMyOrganizations = (enabled: boolean) =>
     queryKey: MY_ORGANIZATIONS_QUERY_KEY,
     queryFn: fetchMyOrganizations,
     enabled,
+    meta: USER_SCOPED_META,
   })
 
 const myJoinRequestKey = (organizationId: number) =>
@@ -115,6 +118,7 @@ export const useMyJoinRequest = (organizationId: number, enabled: boolean) =>
     queryKey: myJoinRequestKey(organizationId),
     queryFn: () => fetchMyJoinRequest(organizationId),
     enabled,
+    meta: USER_SCOPED_META,
   })
 
 /** Подати заявку: після успіху кнопка одразу переходить у «Запит очікує» */

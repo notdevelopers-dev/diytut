@@ -126,6 +126,8 @@ def _project(organization_id: int, **changes) -> Project:
         "volunteer_hours": Decimal("2.5"),
         "status": ProjectStatusEnum.published,
     } | changes
+    if fields["status"] != ProjectStatusEnum.draft:
+        fields.setdefault("published_at", datetime.now(UTC))
     return Project(**fields)
 
 
@@ -206,7 +208,7 @@ def test_create_project_rejected_organization_403(
         json=project_payload(),
     )
     assert response.status_code == 403
-    assert response.json()["detail"] == "Only approved organizations can create projects"
+    assert response.json()["detail"] == "Only approved organizations can publish projects"
 
 
 def test_create_project_pending_organization_403(
@@ -224,7 +226,7 @@ def test_create_project_pending_organization_403(
 
     response = client.post("/api/projects", json=project_payload())
     assert response.status_code == 403
-    assert response.json()["detail"] == "Only approved organizations can create projects"
+    assert response.json()["detail"] == "Only approved organizations can publish projects"
 
 
 def _add_organization(db, owner_id: int, city_id: int, status: OrgStatusEnum) -> int:
@@ -273,7 +275,7 @@ def test_create_project_checks_status_of_chosen_organization_403(
     response = client.post("/api/projects", json=project_payload(organization_id=pending_org_id))
 
     assert response.status_code == 403
-    assert response.json()["detail"] == "Only approved organizations can create projects"
+    assert response.json()["detail"] == "Only approved organizations can publish projects"
 
 
 def test_create_project_for_foreign_organization_403(
@@ -417,8 +419,10 @@ def test_create_project_nonexistent_city_422(
         project_payload(categories=[]),
         project_payload(categories=["space"]),
         project_payload(categories=["ecology", "idp", "animals"]),
-        # Статус проєкту задає сервер, а не клієнт
-        project_payload(status="draft"),
+        # Створити можна лише чернетку чи опублікований проєкт: завершує й скасовує сервер
+        project_payload(status="completed"),
+        project_payload(status="cancelled"),
+        project_payload(status="unknown"),
         # Хештеги: не порожні, без спецсимволів, до 30 символів, не більше п'яти
         project_payload(tags=[""]),
         project_payload(tags=["#"]),
