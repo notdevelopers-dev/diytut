@@ -3,6 +3,9 @@
 Створює набір даних в одній транзакції, міряє запити каталогу й підказок хештегів і
 відкочує транзакцію: у БД нічого не лишається, тож запускати можна й на dev-базі.
 
+Оцінка песимістична: свіжовставлені рядки не пройшли VACUUM (його не можна запустити в
+транзакції), тож читання таблиці повільніше, ніж на робочій базі.
+
     docker compose exec api uv run python -m scripts.benchmark_catalog
     docker compose exec api uv run python -m scripts.benchmark_catalog --projects 50000
 
@@ -122,6 +125,10 @@ async def seed(session: AsyncSession, projects: int, organizations: int) -> int:
         ),
         {"user_id": viewer.id},
     )
+    # Нові рядки GIN-індексу лежать у pending list, доки його не розбере autovacuum; з
+    # повним списком планувальник вважає триграмний пошук дорогим і сканує таблицю
+    for index in ("ix_projects_catalog_title_trgm", "ix_projects_catalog_description_trgm"):
+        await session.execute(text(f"SELECT gin_clean_pending_list('{index}'::regclass)"))
     await session.execute(text("ANALYZE projects"))
     await session.execute(text("ANALYZE join_requests"))
     return viewer.id
