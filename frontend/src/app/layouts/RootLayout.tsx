@@ -134,7 +134,8 @@ export const RootLayout = () => {
     // розтягнутися на всю цю висоту (min-h-full) без підрахунку висот шапки й футера.
     // overflow-x-clip, а не hidden: hidden робить обгортку контейнером прокрутки,
     // і sticky всередині сторінок (бічна панель адмінки) перестає працювати.
-    // Футер ховаємо класом обгортки, а не умовою біля самого футера
+    // ТИМЧАСОВО: футер ховаємо класом обгортки, щоб не конфліктувати з #61 (SiteFooter).
+    // Після злиття #61 замінити на {!hideFooter && <SiteFooter />} і прибрати цей клас
     <div
       className={`relative grid min-h-screen grid-rows-[auto_1fr_auto] bg-[#F7FBFF] overflow-x-clip ${
         hideFooter ? '[&>footer]:hidden' : ''
