@@ -173,6 +173,12 @@ def image_too_large(max_pixels: int) -> HTTPException:
     )
 
 
+def storage_full() -> HTTPException:
+    return HTTPException(
+        status.HTTP_507_INSUFFICIENT_STORAGE, "Not enough storage space for new photos"
+    )
+
+
 def unsupported_image() -> HTTPException:
     return field_error(
         status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,

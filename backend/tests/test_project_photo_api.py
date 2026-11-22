@@ -1,5 +1,6 @@
 """Обкладинка проєкту: завантаження, заміна, видалення й cover_url у відповідях (R-13)."""
 
+import errno
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from io import BytesIO
@@ -443,6 +444,40 @@ def test_image_over_pixel_limit_is_rejected(
     assert response.status_code == 413
     assert response.json()["detail"][0]["type"] == "image_too_large"
     assert stored_files(media_root) == []
+
+
+def test_upload_is_rejected_when_disk_is_almost_full(
+    client: TestClient, db, org, make_project, media_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(storage, "MIN_FREE_DISK_BYTES", 10**18)
+    project_id = make_project(org["org"])
+    sign_in(client, org["owner"])
+
+    response = upload(client, project_id, make_image())
+
+    assert response.status_code == 507
+    assert response.json()["detail"] == "Not enough storage space for new photos"
+    assert stored_files(media_root) == []
+    assert load_project(db, project_id).cover_key is None
+
+
+def test_failed_write_leaves_no_partial_file(
+    client: TestClient, db, org, make_project, media_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def write_until_disk_is_full(path: Path, data: bytes) -> int:
+        with path.open("wb") as file:
+            file.write(data[:100])
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(Path, "write_bytes", write_until_disk_is_full)
+    project_id = make_project(org["org"])
+    sign_in(client, org["owner"])
+
+    with pytest.raises(OSError, match="No space left"):
+        upload(client, project_id, make_image())
+
+    assert stored_files(media_root) == ["projects"]
+    assert load_project(db, project_id).cover_key is None
 
 
 def test_new_cover_replaces_old_file(

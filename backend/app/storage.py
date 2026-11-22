@@ -9,6 +9,7 @@
 import asyncio
 import logging
 import os
+import shutil
 import uuid
 from io import BytesIO
 from pathlib import Path
@@ -34,6 +35,10 @@ WEBP_QUALITY = 80
 ALLOWED_FORMATS = ("JPEG", "PNG", "WEBP")
 # Режими, які Pillow зменшує зі згладжуванням без попереднього перетворення
 _RESIZABLE_MODES = ("L", "LA", "RGB", "RGBA", "CMYK")
+# Скільки місця має лишатися вільним на диску з media_root. На тому ж диску лежать БД і логи:
+# переповнений диск зупинив би весь сайт, а так перестають прийматися лише нові фото.
+# Збережене фото займає до ~4 МБ (зазвичай 150–400 КБ), тож запас вимірюється тисячами фото
+MIN_FREE_DISK_BYTES = 5 * 1024**3
 
 # Обробка одного зображення займає до пів гігабайта пам'яті (PNG на 60 Мп з прозорістю;
 # фото з камери — десятки мегабайтів) і до півтори секунди процесора. Фото завантажують
@@ -51,8 +56,10 @@ async def prepare_image(upload: UploadFile) -> bytes:
     """Перевіряє завантажене зображення й повертає його у WebP.
 
     Файл понад MAX_UPLOAD_BYTES чи зображення понад MAX_IMAGE_PIXELS — 413; не JPEG, PNG
-    чи WebP або пошкоджений файл — 415.
+    чи WebP або пошкоджений файл — 415; на диску лишилося менше MIN_FREE_DISK_BYTES — 507.
     """
+    # До обробки: фото, яке нема де зберегти, немає сенсу й обробляти
+    await asyncio.to_thread(_check_free_space)
     async with _processing:
         # Pillow блокує потік, тож працює поза event loop
         return await asyncio.to_thread(_encode_webp, upload.file)
@@ -72,6 +79,14 @@ async def delete(key: str) -> None:
         await asyncio.to_thread((settings.media_root / key).unlink, missing_ok=True)
     except OSError:
         logger.exception("Failed to delete media file %s", key)
+
+
+def _check_free_space() -> None:
+    free = shutil.disk_usage(settings.media_root).free
+    if free < MIN_FREE_DISK_BYTES:
+        # Користувач отримає 507, а адміністратор сервера побачить попередження в логах api
+        logger.warning("Media storage is almost full: %.1f GB free", free / 1024**3)
+        raise errors.storage_full()
 
 
 def _encode_webp(source: BinaryIO) -> bytes:
@@ -132,7 +147,12 @@ def _write(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Спершу тимчасовий файл, потім перейменування: недописаного файлу за адресою не буде
     temporary = path.with_name(f"{path.name}.tmp")
-    temporary.write_bytes(data)
-    # nginx працює від іншого користувача, тож файл має бути доступним для читання всім
-    temporary.chmod(0o644)
-    temporary.replace(path)
+    try:
+        temporary.write_bytes(data)
+        # nginx працює від іншого користувача, тож файл має бути доступним для читання всім
+        temporary.chmod(0o644)
+        temporary.replace(path)
+    except OSError:
+        # Недописаний файл (наприклад, коли скінчилося місце) не має лишатися на диску
+        temporary.unlink(missing_ok=True)
+        raise
