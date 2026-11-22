@@ -135,6 +135,8 @@ export const useIncomingJoinRequests = (
   useQuery({
     queryKey: ['organizations', 'incoming-requests', organizationId],
     queryFn: () => fetchIncomingJoinRequests(organizationId as number),
+    // Заявки бачать лише власник і адміністратори: після виходу прибираємо з кешу
+    meta: USER_SCOPED_META,
     enabled: enabled && Boolean(organizationId),
     // Учаснику без прав бекенд відповідає 403 — повторювати немає сенсу
     retry: false,
