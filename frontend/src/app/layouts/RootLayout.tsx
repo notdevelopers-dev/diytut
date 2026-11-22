@@ -135,14 +135,8 @@ export const RootLayout = () => {
     // Сітка «шапка / вміст / футер»: вміст займає решту екрана, і сторінка може
     // розтягнутися на всю цю висоту (min-h-full) без підрахунку висот шапки й футера.
     // overflow-x-clip, а не hidden: hidden робить обгортку контейнером прокрутки,
-    // і sticky всередині сторінок (бічна панель адмінки) перестає працювати.
-    // ТИМЧАСОВО: футер ховаємо класом обгортки, щоб не конфліктувати з #61 (SiteFooter).
-    // Після злиття #61 замінити на {!hideFooter && <SiteFooter />} і прибрати цей клас
-    <div
-      className={`relative grid min-h-screen grid-rows-[auto_1fr_auto] bg-[#F7FBFF] overflow-x-clip ${
-        hideFooter ? '[&>footer]:hidden' : ''
-      }`}
-    >
+    // і sticky всередині сторінок (бічна панель адмінки) перестає працювати
+    <div className="relative grid min-h-screen grid-rows-[auto_1fr_auto] bg-[#F7FBFF] overflow-x-clip">
       {/* 1. Шапка за макетом із Figma: логотип ДійТут + жовта кнопка ☰ */}
       <header className="w-full bg-[#F7FBFF]">
         <div className="flex items-center justify-between gap-2 px-3 pt-6 pb-4 sm:px-8">
@@ -191,12 +185,12 @@ export const RootLayout = () => {
       </header>
 
       {/* 2. Основний вміст сайту */}
-      <main className="flex-1 w-full">
+      <main className="w-full">
         <Outlet />
       </main>
 
-      {/* 3. Багатоколонковий футер; притиснутий донизу завдяки min-h-screen + flex-1 у main */}
-      <SiteFooter />
+      {/* 3. Багатоколонковий футер; притиснутий донизу сіткою: рядок вмісту займає решту екрана */}
+      {!hideFooter && <SiteFooter />}
 
       {/* 4. Бургер-меню за макетом Figma («burger profile») */}
       {isMenuOpen && (
