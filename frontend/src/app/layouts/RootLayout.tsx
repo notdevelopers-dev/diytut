@@ -10,6 +10,7 @@ import organizationIcon from '@/assets/icons/menu/organization.svg'
 import profileIcon from '@/assets/icons/menu/profile.svg'
 import settingsIcon from '@/assets/icons/menu/settings.svg'
 import { Logo } from '@/components/ui/Logo'
+import { NotificationBell } from '@/features/notifications'
 import { useAuth } from '@/features/auth/hooks'
 import {
   canEditOrganization,
@@ -134,25 +135,27 @@ export const RootLayout = () => {
         <div className="flex items-center justify-between gap-2 px-3 pt-6 pb-4 sm:px-8">
           <Logo />
 
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-1.5 sm:gap-4">
             <Link
               to="/organizations"
-              className="text-xs font-semibold text-main no-underline hover:text-main-hover sm:text-sm"
+              className="text-[11px] font-semibold text-main no-underline hover:text-main-hover min-[400px]:text-xs sm:text-sm"
             >
               Організації
             </Link>
             <Link
               to="/projects"
-              className="text-xs font-semibold text-main no-underline hover:text-main-hover sm:text-sm"
+              className="text-[11px] font-semibold text-main no-underline hover:text-main-hover min-[400px]:text-xs sm:text-sm"
             >
               Проєкти
             </Link>
+            {/* Дзвіночок сповіщень — лише для тих, хто увійшов */}
+            <NotificationBell />
             {/* Жовта кнопка трьох рисочок (☰) */}
             {isAuthenticated ? (
               <button
                 type="button"
                 onClick={() => setIsMenuOpen(true)}
-                className="flex h-10 w-12 cursor-pointer items-center justify-center rounded-xl bg-info shadow-sm transition-transform hover:scale-105 active:scale-95"
+                className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-info shadow-sm sm:w-12 transition-transform hover:scale-105 active:scale-95"
                 aria-label="Відкрити меню"
               >
                 <div className="flex flex-col gap-1">

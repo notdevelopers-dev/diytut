@@ -15,6 +15,7 @@ import {
   OrganizationViewPage,
 } from '@/features/organizations'
 import { ProjectsCatalogPage, ProjectViewPage } from '@/features/projects'
+import { NotificationsPage } from '@/features/notifications'
 import { StaticPage } from '@/features/static-pages'
 import { ProfilePage } from '@/features/users'
 import { STATIC_PAGES } from '@/content/staticPages'
@@ -58,6 +59,14 @@ export const AppRoutes = () => (
           <AdminRoute>
             <AdminPage />
           </AdminRoute>
+        }
+      />
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <NotificationsPage />
+          </ProtectedRoute>
         }
       />
       {/* Статичні інформаційні сторінки з футера (публічні) */}

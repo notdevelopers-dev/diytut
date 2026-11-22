@@ -1,10 +1,14 @@
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Query
 
 from app.auth import CurrentUserId
 from app.db import DbSessionDep
+from app.schemas.join_requests import MyProjectJoinRequestRead
 from app.schemas.organizations import OrganizationMembership
-from app.schemas.users import UserProfileRead, UserUpdate
+from app.schemas.users import MAX_INT32, UserProfileRead, UserUpdate
 from app.services.organizations import get_user_memberships
+from app.services.project_join_requests import list_my_project_requests
 from app.services.users import get_profile, update_profile
 
 router = APIRouter()
@@ -28,3 +32,14 @@ async def read_my_organizations(
 ) -> list[OrganizationMembership]:
     memberships = await get_user_memberships(db_session, user_id)
     return [OrganizationMembership.from_membership(m) for m in memberships]
+
+
+@router.get("/me/project-requests")
+async def read_my_project_requests(
+    db_session: DbSessionDep,
+    user_id: CurrentUserId,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
+) -> list[MyProjectJoinRequestRead]:
+    join_requests = await list_my_project_requests(db_session, user_id, limit=limit, offset=offset)
+    return [MyProjectJoinRequestRead.model_validate(request) for request in join_requests]
