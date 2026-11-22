@@ -34,7 +34,6 @@ The backend, the frontend and nginx form one system. When you add or change an e
   - Existing example to fix, not copy: `useOrganizationNames` in `frontend/src/features/projects/hooks.ts` fetches up to 100 organizations because `GET /api/projects` returns only `organization_id`. Once there are more than 100 organizations, project cards lose the organization name.
 - **Eager loading.** On the backend, load the related rows for a list in the same query, with `joinedload` or `selectinload`, never one query per row.
 - **Server-side pagination and filtering.** Lists are paginated on the server (`limit`/`offset`, with a backend maximum). Filtering and search run in SQL, not by downloading everything to the client.
-  - Catalog-style lists return `{items, total}` (`ProjectPage`, `OrganizationPage`), with `total` counted under the same filters, so the frontend needs no extra request to know whether more pages exist.
 - **Cross-side changes.** If a change on one side requires a change on the other, such as a new or renamed field, a new endpoint, or frontend routes used in `notification.link`, do both. Backend and frontend usually ship as separate `[BE]`/`[FE]` tasks, so if the other side is out of scope, state exactly what it needs to change.
 
 ## Running the stack
@@ -73,7 +72,6 @@ docker compose exec api uv run alembic revision --autogenerate -m "short descrip
 docker compose run --rm migrate                      # apply new migrations
 docker compose exec api uv run alembic upgrade <from_rev>:head --sql   # preview SQL, no DB changes
 docker compose exec api uv add <pkg>                 # deps only via uv; use --dev for dev-only tools
-docker compose exec api uv run python -m scripts.benchmark_catalog   # catalog timings on a generated, rolled-back dataset
 ```
 
 CI (`.github/workflows/ci.yml`) runs these backend checks, and all of them must pass:
@@ -91,7 +89,7 @@ CI (`.github/workflows/ci.yml`) runs these backend checks, and all of them must 
 - **Routers** are mounted once in `app/routers/__init__.py` under the `/api` prefix, so each router uses paths relative to its group.
   - A router function depends on `DbSessionDep` (`app/db.py`) and, if login is required, `CurrentUserId` (`app/auth.py`, read from the JWT `session` cookie).
   - A public endpoint that shows more to signed-in users, such as drafts to members of their organization, depends on `OptionalUserId` instead: a missing or invalid session counts as a guest, not a 401, because the frontend would redirect a 401 to `/login`.
-  - It calls a single service function and returns `Schema.model_validate(result)` (projects: `for_viewer`, see R-22 below).
+  - It calls a single service function and returns `Schema.model_validate(result)`.
   - Integer path params use `Path(gt=0, le=MAX_BIGINT)`.
 - **Services** hold all queries and business rules and own the transaction: they call `commit()` themselves.
   - They raise HTTP errors directly through the factories in `app/errors.py`, so add new errors there.
@@ -104,10 +102,6 @@ CI (`.github/workflows/ci.yml`) runs these backend checks, and all of them must 
 - **Notifications**: `create_notification()` in `app/notifications.py` only adds the row to the session.
   - The caller's `commit()` saves it, so the notification is atomic with the event it reports.
   - The frontend paths stored in `notification.link` come from helper functions in the same file. Change them only together with the matching frontend routes.
-- **Exact event time and address (R-22)** are visible only to members of the project's organization and to volunteers with an accepted request. Schemas built on `EventDetails` (`app/schemas/projects.py`) return `starts_at`, `ends_at` and `address` as `null` unless told otherwise, so a plain `model_validate` hides them.
-  - Serialize projects with `ProjectRead.for_viewer(project, show_details=...)`, or pass `context={SHOW_DETAILS: ...}` for a nested project. Get `show_details` from `projects_with_details` (`app/services/project_visibility.py`), one query per list. Endpoints used only by the organization (create, publish, edit, its cabinet) pass `True`.
-  - FastAPI validates the returned object again (`from_attributes=True`, without a validation context), so a response-schema validator must not rely on the context alone.
-- **Event days** (age on the day of the event, `starts_on`) are computed in `EVENT_TIMEZONE` (Kyiv, `app/models/project.py`), not UTC; timestamps are stored in UTC.
 
 ### Business rules
 
