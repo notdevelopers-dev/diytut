@@ -512,19 +512,34 @@ def test_missing_old_file_does_not_block_replacement(
     assert stored_file_path(media_root, response.json()["cover_url"]).exists()
 
 
-def test_published_project_and_draft_of_pending_org_accept_cover(
-    client: TestClient, db, make_user, make_org, make_project
+def test_published_project_accepts_cover(client: TestClient, org, make_project) -> None:
+    project_id = make_project(org["org"], status=ProjectStatusEnum.published)
+    sign_in(client, org["owner"])
+
+    assert upload(client, project_id, make_image()).status_code == 200
+
+
+@pytest.mark.parametrize("status", [OrgStatusEnum.pending, OrgStatusEnum.rejected])
+def test_unapproved_organization_cannot_upload(
+    client: TestClient,
+    db,
+    make_user,
+    make_org,
+    make_project,
+    media_root: Path,
+    status: OrgStatusEnum,
 ) -> None:
+    """Чернетку можна готувати й до схвалення, але без фото: місце на диску — лише після
+    перевірки ЄДРПОУ. Файл не є зображенням: права перевіряються до обробки."""
     owner_id = make_user()
-    approved_org = make_org({owner_id: OrgMemberRoleEnum.owner})
-    pending_org = make_org({owner_id: OrgMemberRoleEnum.owner}, status=OrgStatusEnum.pending)
-    published_id = make_project(approved_org, status=ProjectStatusEnum.published)
-    # Чернетку можна готувати, поки організація чекає на схвалення, — разом із фото
-    draft_id = make_project(pending_org)
+    draft_id = make_project(make_org({owner_id: OrgMemberRoleEnum.owner}, status=status))
     sign_in(client, owner_id)
 
-    assert upload(client, published_id, make_image()).status_code == 200
-    assert upload(client, draft_id, make_image()).status_code == 200
+    response = upload(client, draft_id, b"not an image")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only approved organizations can upload project photos"
+    assert stored_files(media_root) == []
 
 
 @pytest.mark.parametrize(

@@ -173,6 +173,12 @@ def image_too_large(max_pixels: int) -> HTTPException:
     )
 
 
+def photo_requires_approval() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Only approved organizations can upload project photos"
+    )
+
+
 def storage_full() -> HTTPException:
     return HTTPException(
         status.HTTP_507_INSUFFICIENT_STORAGE, "Not enough storage space for new photos"

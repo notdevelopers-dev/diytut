@@ -22,11 +22,11 @@ async def set_project_photo(
     # навантажувати процесор і пам'ять сервера, надсилаючи фото для чужих і неіснуючих
     # проєктів. Без блокувань, і транзакція одразу завершується: обробка триває до
     # секунди, а з чергою й довше, і весь цей час не варто тримати ні рядки, ні з'єднання з БД
-    await _check_photo_project(db_session, user_id, project_id, lock=False)
+    await _check_photo_project(db_session, user_id, project_id, lock=False, uploading=True)
     await db_session.commit()
     data = await storage.prepare_image(upload)
     # За час обробки роль чи статус могли змінитися, тож тепер — з блокуванням і заново
-    project = await _check_photo_project(db_session, user_id, project_id, lock=True)
+    project = await _check_photo_project(db_session, user_id, project_id, lock=True, uploading=True)
 
     old_key = project.cover_key
     new_key = await storage.save_image(data, COVERS_FOLDER)
@@ -63,7 +63,12 @@ async def delete_project_photo(db_session: AsyncSession, user_id: int, project_i
 
 
 async def _check_photo_project(
-    db_session: AsyncSession, user_id: int, project_id: int, *, lock: bool
+    db_session: AsyncSession,
+    user_id: int,
+    project_id: int,
+    *,
+    lock: bool,
+    uploading: bool = False,
 ) -> Project:
     """Проєкт, обкладинку якого користувач може змінити.
 
@@ -89,6 +94,11 @@ async def _check_photo_project(
         raise errors.not_project_editor()
     if membership.organization.status == OrgStatusEnum.blocked:
         raise errors.organization_blocked()
+    # Нові фото — лише від схваленої організації: перевірку ЄДРПОУ проходять до того, як
+    # займати місце на диску. Видаляти можна й без цього: місця це не займає, а фото є
+    # лише в організацій, які вже були схвалені
+    if uploading and membership.organization.status != OrgStatusEnum.approved:
+        raise errors.photo_requires_approval()
     if project.status not in _PHOTO_STATUSES:
         raise errors.project_not_editable()
     return project
