@@ -126,12 +126,20 @@ export const RootLayout = () => {
   // Організація користувача (для режиму організації та перемикання)
   const org = user?.organization
 
+  // Адмін-панель — робочий інтерфейс: футер сайту там не потрібен, панель іде до низу екрана
+  const hideFooter = location.pathname.startsWith('/admin')
+
   return (
     // Сітка «шапка / вміст / футер»: вміст займає решту екрана, і сторінка може
     // розтягнутися на всю цю висоту (min-h-full) без підрахунку висот шапки й футера.
     // overflow-x-clip, а не hidden: hidden робить обгортку контейнером прокрутки,
-    // і sticky всередині сторінок (бічна панель адмінки) перестає працювати
-    <div className="relative grid min-h-screen grid-rows-[auto_1fr_auto] bg-[#F7FBFF] overflow-x-clip">
+    // і sticky всередині сторінок (бічна панель адмінки) перестає працювати.
+    // Футер ховаємо класом обгортки, а не умовою біля самого футера
+    <div
+      className={`relative grid min-h-screen grid-rows-[auto_1fr_auto] bg-[#F7FBFF] overflow-x-clip ${
+        hideFooter ? '[&>footer]:hidden' : ''
+      }`}
+    >
       {/* 1. Шапка за макетом із Figma: логотип ДійТут + жовта кнопка ☰ */}
       <header className="w-full bg-[#F7FBFF]">
         <div className="flex items-center justify-between gap-2 px-3 pt-6 pb-4 sm:px-8">
