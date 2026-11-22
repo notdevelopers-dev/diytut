@@ -20,14 +20,24 @@ export interface OrganizationDetail extends OrganizationListItem {
   projects: Project[]
 }
 
-/** Статус заявки на вступ (app.models.JoinRequestStatusEnum) */
-export type JoinRequestStatus = 'pending' | 'accepted' | 'rejected'
+/**
+ * Статус заявки (app.models.JoinRequestStatusEnum). `cancelled` буває лише в заявки
+ * на проєкт: волонтер відкликав її до початку події
+ */
+export type JoinRequestStatus =
+  'pending' | 'accepted' | 'rejected' | 'cancelled'
 
-/** Заявка на вступ до організації (app.schemas.join_requests.JoinRequestRead) */
+/** На що подано заявку (app.models.JoinRequestTargetEnum) */
+export type JoinRequestTarget = 'organization' | 'project'
+
+/** Заявка на вступ до організації чи на проєкт (app.schemas.join_requests.JoinRequestRead) */
 export interface JoinRequest {
   id: number
   user_id: number
+  target: JoinRequestTarget
   organization_id: number
+  /** Лише для заявки на проєкт */
+  project_id: number | null
   message: string | null
   status: JoinRequestStatus
   reviewed_at: string | null

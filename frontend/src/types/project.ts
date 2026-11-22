@@ -1,3 +1,5 @@
+import type { JoinRequest } from '@/types/organization'
+
 /** Рівень досвіду (app.models.experience.ExperienceLevelEnum), від нижчого до вищого */
 export type ExperienceLevel =
   'novice' | 'interested' | 'amateur' | 'experienced' | 'pro'
@@ -57,4 +59,13 @@ export interface Project {
   categories: ProjectCategory[]
   /** Хештеги без «#», уже нормалізовані бекендом */
   tags: string[]
+}
+
+/** Стан кнопки на картці (app.schemas.join_requests.ProjectJoinRequestStatusRead) */
+export interface ProjectJoinRequestStatus extends JoinRequest {
+  /**
+   * Лише для відхиленої заявки: коли закінчиться пауза й можна подати нову (ISO).
+   * `null` — повторна заявка неможлива
+   */
+  can_reapply_at: string | null
 }

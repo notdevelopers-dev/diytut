@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import HTTPException, status
 
 
@@ -124,8 +126,35 @@ def not_project_manager() -> HTTPException:
 
 
 def organization_not_approved() -> HTTPException:
+    # Чернетку може зберегти й організація, що чекає на схвалення, а публікувати — лише схвалена
     return HTTPException(
-        status.HTTP_403_FORBIDDEN, "Only approved organizations can create projects"
+        status.HTTP_403_FORBIDDEN, "Only approved organizations can publish projects"
+    )
+
+
+def not_project_publisher() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Only organization owner or admin can publish projects"
+    )
+
+
+def project_not_draft() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "Only a draft project can be published")
+
+
+def project_incomplete(validation_errors: list[dict[str, Any]]) -> HTTPException:
+    """422 з помилками полів проєкту, яких бракує для публікації.
+
+    Формат — як у помилок валідації тіла запиту FastAPI (loc починається з "body"), і для
+    створення опублікованого проєкту, і для публікації збереженої чернетки: форма проєкту
+    на фронтенді розбирає їх однаково.
+    """
+    return HTTPException(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        [
+            {"type": error["type"], "loc": ["body", *error["loc"]], "msg": error["msg"]}
+            for error in validation_errors
+        ],
     )
 
 
@@ -153,10 +182,67 @@ def join_request_already_reviewed() -> HTTPException:
     return HTTPException(status.HTTP_409_CONFLICT, "Join request has already been reviewed")
 
 
-def project_join_request_not_supported() -> HTTPException:
+def join_request_cancelled() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "Join request was cancelled by the volunteer")
+
+
+def project_already_started() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "Project has already started")
+
+
+def project_not_open() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "Project is not open for applications")
+
+
+def project_full() -> HTTPException:
+    return HTTPException(status.HTTP_409_CONFLICT, "Project has no free places")
+
+
+def organizer_cannot_apply() -> HTTPException:
     return HTTPException(
-        status.HTTP_409_CONFLICT, "Project applications cannot be reviewed with this endpoint"
+        status.HTTP_409_CONFLICT, "Organization owner or admin cannot apply to its own project"
     )
+
+
+def project_join_request_already_active() -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT, "Join request to this project is already pending or accepted"
+    )
+
+
+def reapply_too_soon(retry_after: int) -> HTTPException:
+    return HTTPException(
+        status.HTTP_429_TOO_MANY_REQUESTS,
+        "Join request to this project was rejected recently, try again later",
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+def applicant_ignored() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Organization does not accept join requests from this user"
+    )
+
+
+def ignore_requires_project_request() -> HTTPException:
+    return field_error(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "ignore",
+        "ignore_not_supported",
+        "Only volunteers who applied to a project can be ignored",
+    )
+
+
+def ignored_user_not_found() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "Ignored user not found")
+
+
+def project_adult_only() -> HTTPException:
+    return HTTPException(status.HTTP_403_FORBIDDEN, "Project is for adults only")
+
+
+def experience_level_too_low() -> HTTPException:
+    return HTTPException(status.HTTP_403_FORBIDDEN, "Experience level is too low for this project")
 
 
 def applicant_already_member() -> HTTPException:

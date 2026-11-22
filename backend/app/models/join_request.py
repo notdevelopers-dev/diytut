@@ -12,6 +12,8 @@ class JoinRequestStatusEnum(enum.StrEnum):
     pending = enum.auto()
     accepted = enum.auto()
     rejected = enum.auto()
+    # Волонтер відкликав заявку на проєкт до початку події (R-23)
+    cancelled = enum.auto()
 
 
 class JoinRequestTargetEnum(enum.StrEnum):
@@ -38,13 +40,14 @@ class JoinRequest(Base):
             unique=True,
             postgresql_where=text("status = 'pending' AND target = 'organization'"),
         ),
-        # Так само для проєкту: заявки на різні проєкти однієї організації не конфліктують
+        # На проєкт — одна активна заявка (в очікуванні чи схвалена), щоб волонтер не зайняв
+        # кілька місць; заявки на різні проєкти однієї організації не конфліктують
         Index(
-            "uq_join_requests_pending_user_project",
+            "uq_join_requests_active_user_project",
             "user_id",
             "project_id",
             unique=True,
-            postgresql_where=text("status = 'pending' AND target = 'project'"),
+            postgresql_where=text("status IN ('pending', 'accepted') AND target = 'project'"),
         ),
     )
 

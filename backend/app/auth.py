@@ -133,3 +133,17 @@ async def get_current_user_id(
 
 
 CurrentUserId = Annotated[int, Depends(get_current_user_id)]
+
+
+async def get_optional_user_id(
+    session_token: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None,
+) -> int | None:
+    """id користувача, що увійшов, або None для гостя.
+
+    Для відкритих усім ендпоінтів, що показують учасникам більше: недійсна сесія тут не
+    дає 401, бо фронтенд перенаправив би гостя на вхід.
+    """
+    return read_session_user_id(session_token)
+
+
+OptionalUserId = Annotated[int | None, Depends(get_optional_user_id)]
