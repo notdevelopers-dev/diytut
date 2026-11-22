@@ -106,7 +106,7 @@ ADMIN_ENDPOINTS = [
     ("get", "/api/admin/organizations/1"),
     ("post", "/api/admin/organizations/1/review"),
     ("get", "/api/admin/stats/logins"),
-    ("get", "/api/admin/logins"),
+    ("get", "/api/admin/stats/logins/recent"),
 ]
 
 
@@ -409,7 +409,7 @@ def test_recent_logins_newest_first_with_user(
 
     db(create)
 
-    response = client.get("/api/admin/logins")
+    response = client.get("/api/admin/stats/logins/recent")
 
     assert response.status_code == 200
     body = response.json()
@@ -432,8 +432,8 @@ def test_recent_logins_are_paginated(client: TestClient, db, make_user) -> None:
     user_id = make_user()
     add_logins(db, *[(user_id, datetime(2026, 3, day, 10, 0, tzinfo=UTC)) for day in range(1, 4)])
 
-    first = client.get("/api/admin/logins", params={"limit": 2}).json()
-    second = client.get("/api/admin/logins", params={"limit": 2, "offset": 2}).json()
+    first = client.get("/api/admin/stats/logins/recent", params={"limit": 2}).json()
+    second = client.get("/api/admin/stats/logins/recent", params={"limit": 2, "offset": 2}).json()
 
     assert first["total"] == second["total"] == 3
     dates = [item["created_at"][:10] for item in first["items"] + second["items"]]
@@ -443,7 +443,7 @@ def test_recent_logins_are_paginated(client: TestClient, db, make_user) -> None:
 @pytest.mark.usefixtures("admin_id")
 @pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 101}, {"offset": -1}])
 def test_invalid_recent_logins_params(client: TestClient, params: dict) -> None:
-    assert client.get("/api/admin/logins", params=params).status_code == 422
+    assert client.get("/api/admin/stats/logins/recent", params=params).status_code == 422
 
 
 @pytest.mark.usefixtures("admin_id")

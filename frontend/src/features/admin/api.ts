@@ -54,8 +54,11 @@ export const fetchRecentLogins = async (params: {
   limit: number
   offset: number
 }): Promise<LoginEventPage> => {
-  const { data } = await apiClient.get<LoginEventPage>('/admin/logins', {
-    params,
-  })
+  const { data } = await apiClient.get<LoginEventPage>(
+    '/admin/stats/logins/recent',
+    {
+      params,
+    },
+  )
   return data
 }

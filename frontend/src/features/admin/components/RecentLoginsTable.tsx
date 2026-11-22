@@ -19,7 +19,7 @@ const formatDateTime = (iso: string) =>
 const userName = (user: NonNullable<LoginEvent['user']>) =>
   [user.first_name, user.last_name].filter(Boolean).join(' ')
 
-/** Останні входи з GET /admin/logins, по сторінці за раз */
+/** Останні входи з GET /admin/stats/logins/recent, по сторінці за раз */
 export const RecentLoginsTable: React.FC = () => {
   const [page, setPage] = useState(1)
   const { data, isPending, isError, isPlaceholderData } = useRecentLogins(

@@ -75,7 +75,7 @@ export interface LoginEvent {
   } | null
 }
 
-/** GET /api/admin/logins (app.schemas.admin.LoginEventPage) */
+/** GET /api/admin/stats/logins/recent (app.schemas.admin.LoginEventPage) */
 export interface LoginEventPage {
   items: LoginEvent[]
   total: number

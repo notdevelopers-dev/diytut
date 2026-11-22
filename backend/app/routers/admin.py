@@ -89,7 +89,7 @@ async def login_stats(
     )
 
 
-@router.get("/logins")
+@router.get("/stats/logins/recent")
 async def list_recent_logins(
     db_session: DbSessionDep,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
