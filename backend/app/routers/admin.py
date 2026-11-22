@@ -12,10 +12,13 @@ from app.schemas.admin import (
     OrganizationRequest,
     OrganizationRequestPage,
     OrganizationReview,
+    PhotoRemoval,
 )
+from app.schemas.projects import ProjectRead
 from app.schemas.users import MAX_BIGINT, MAX_INT32
 from app.services import admin as service
 from app.services import logins as logins_service
+from app.services import project_photos as photos_service
 
 
 async def get_current_admin_id(db_session: DbSessionDep, user_id: CurrentUserId) -> int:
@@ -24,6 +27,7 @@ async def get_current_admin_id(db_session: DbSessionDep, user_id: CurrentUserId)
 
 CurrentAdminId = Annotated[int, Depends(get_current_admin_id)]
 OrganizationId = Annotated[int, Path(gt=0, le=MAX_BIGINT)]
+ProjectId = Annotated[int, Path(gt=0, le=MAX_BIGINT)]
 
 # Кожен ендпоінт адмін-панелі доступний лише адміністраторам платформи
 router = APIRouter(dependencies=[Depends(get_current_admin_id)])
@@ -61,6 +65,14 @@ async def review_organization_request(
 ) -> OrganizationRequest:
     organization = await service.review_organization(db_session, admin_id, organization_id, review)
     return OrganizationRequest.model_validate(organization)
+
+
+@router.post("/projects/{project_id}/remove-photo")
+async def remove_project_photo(
+    removal: PhotoRemoval, db_session: DbSessionDep, project_id: ProjectId
+) -> ProjectRead:
+    project = await photos_service.remove_photo_as_admin(db_session, project_id, removal.reason)
+    return ProjectRead.model_validate(project)
 
 
 @router.get("/stats/logins")

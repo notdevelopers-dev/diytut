@@ -1,10 +1,18 @@
 """Обкладинка проєкту (R-13): одне фото на проєкт, змінюють власник і адміни організації."""
 
 from fastapi import UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import errors, storage
-from app.models import OrgStatusEnum, Project, ProjectStatusEnum
+from app.models import (
+    NotificationTypeEnum,
+    OrganizationMember,
+    OrgStatusEnum,
+    Project,
+    ProjectStatusEnum,
+)
+from app.notifications import create_notification, project_page_link
 from app.services.organizations import EDITOR_ROLES, get_user_membership
 from app.services.project_join_requests import lock_project
 
@@ -56,6 +64,46 @@ async def delete_project_photo(db_session: AsyncSession, user_id: int, project_i
         return project
 
     project.cover_key = None
+    await db_session.commit()
+    await storage.delete(old_key)
+    await db_session.refresh(project)
+    return project
+
+
+async def remove_photo_as_admin(db_session: AsyncSession, project_id: int, reason: str) -> Project:
+    """Адміністратор платформи прибирає обкладинку, наприклад за скаргою.
+
+    Діє для будь-якого статусу проєкту й організації. Власник і адміни організації
+    отримують сповіщення з причиною. Проєкт без обкладинки — не помилка, і тоді
+    сповіщення немає: прибирати нічого.
+    """
+    # Блокування: заміна фото організацією в цей момент виконається до або після, а не разом
+    project = await lock_project(db_session, project_id)
+    if project is None:
+        raise errors.project_not_found()
+    old_key = project.cover_key
+    if old_key is None:
+        await db_session.commit()
+        return project
+
+    project.cover_key = None
+    organizer_ids = await db_session.scalars(
+        select(OrganizationMember.user_id).where(
+            OrganizationMember.organization_id == project.organization_id,
+            OrganizationMember.role.in_(EDITOR_ROLES),
+        )
+    )
+    for organizer_id in organizer_ids:
+        create_notification(
+            db_session,
+            organizer_id,
+            NotificationTypeEnum.project_photo_removed,
+            "Фото проєкту видалено",
+            f"Адміністратор платформи видалив обкладинку проєкту «{project.title}». "
+            f"Причина: {reason}",
+            link=project_page_link(project.id),
+        )
+    # Зміна й сповіщення про неї зберігаються разом
     await db_session.commit()
     await storage.delete(old_key)
     await db_session.refresh(project)

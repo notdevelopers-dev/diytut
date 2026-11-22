@@ -37,6 +37,9 @@ class NotificationTypeEnum(enum.StrEnum):
     # причина відхилення — у message
     organization_approved = enum.auto()
     organization_rejected = enum.auto()
+    # Власнику й адмінам організації: адміністратор платформи видалив обкладинку проєкту
+    # (R-13), наприклад за скаргою; причина — у message
+    project_photo_removed = enum.auto()
 
 
 class Notification(Base):

@@ -54,6 +54,13 @@ class OrganizationReview(BaseModel):
         return self
 
 
+class PhotoRemoval(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Обов'язкова: організація має знати, чому фото прибрали й що не так
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+
+
 class DailyLogins(BaseModel):
     date: date
     logins: int

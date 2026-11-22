@@ -9,16 +9,20 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from sqlalchemy import select
 
 from app import auth, storage
 from app.models import (
     City,
+    Notification,
+    NotificationTypeEnum,
     Organization,
     OrganizationMember,
     OrgMemberRoleEnum,
     OrgStatusEnum,
     Project,
     ProjectStatusEnum,
+    RoleEnum,
     User,
 )
 
@@ -53,7 +57,7 @@ def city_id(db) -> int:
 def make_user(db, city_id: int):
     counter = iter(range(1, 1000))
 
-    def make() -> int:
+    def make(role: RoleEnum = RoleEnum.user) -> int:
         n = next(counter)
 
         async def create(session) -> int:
@@ -66,6 +70,7 @@ def make_user(db, city_id: int):
                 phone="+380671234567",
                 birth_date=date(1990, 3, 9),
                 city_id=city_id,
+                platform_role=role,
             )
             session.add(user)
             await session.flush()
@@ -717,3 +722,131 @@ def test_cover_url_in_organization_cabinet(client: TestClient, org, make_project
     assert response.status_code == 200, response.text
     assert response.json()["items"][0]["id"] == project_id
     assert response.json()["items"][0]["cover_url"] == "/media/projects/draft.webp"
+
+
+# =====================================================================
+# POST /api/admin/projects/{id}/remove-photo
+# =====================================================================
+
+REASON = "Фото дитини без згоди батьків"
+
+
+@pytest.fixture
+def platform_admin(make_user) -> int:
+    return make_user(RoleEnum.admin)
+
+
+def remove_as_admin(client: TestClient, project_id: int, body: dict | None = None):
+    return client.post(
+        f"/api/admin/projects/{project_id}/remove-photo",
+        json={"reason": REASON} if body is None else body,
+    )
+
+
+def photo_notifications(db) -> list[Notification]:
+    async def load(session) -> list[Notification]:
+        query = select(Notification).where(
+            Notification.type == NotificationTypeEnum.project_photo_removed
+        )
+        return list(await session.scalars(query))
+
+    return db(load)
+
+
+def test_platform_admin_removes_photo_and_notifies_organizers(
+    client: TestClient, db, org, make_project, media_root: Path, platform_admin: int
+) -> None:
+    project_id = make_project(org["org"], status=ProjectStatusEnum.published)
+    sign_in(client, org["owner"])
+    cover_url = upload(client, project_id, make_image()).json()["cover_url"]
+    sign_in(client, platform_admin)
+
+    response = remove_as_admin(client, project_id)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["cover_url"] is None
+    assert not stored_file_path(media_root, cover_url).exists()
+    assert load_project(db, project_id).cover_key is None
+    notifications = photo_notifications(db)
+    # Власник і адмін організації, але не звичайний учасник
+    assert {n.user_id for n in notifications} == {org["owner"], org["admin"]}
+    for notification in notifications:
+        assert notification.title == "Фото проєкту видалено"
+        assert "«Прибирання парку»" in notification.message
+        assert REASON in notification.message
+        assert notification.link == f"/projects/{project_id}"
+
+
+@pytest.mark.parametrize(
+    ("project_status", "org_status"),
+    [
+        (ProjectStatusEnum.completed, OrgStatusEnum.approved),
+        (ProjectStatusEnum.cancelled, OrgStatusEnum.approved),
+        (ProjectStatusEnum.published, OrgStatusEnum.blocked),
+    ],
+)
+def test_admin_removes_photo_regardless_of_status(
+    client: TestClient,
+    db,
+    org,
+    make_project,
+    media_root: Path,
+    platform_admin: int,
+    project_status: ProjectStatusEnum,
+    org_status: OrgStatusEnum,
+) -> None:
+    """Фото, яке треба прибрати за скаргою, може бути де завгодно: організація сама його вже
+    не змінить, а адміністратор має прибрати."""
+    stored = media_root / "projects" / "old.webp"
+    stored.parent.mkdir()
+    stored.write_bytes(b"webp")
+    project_id = make_project(org["org"], status=project_status, cover_key="projects/old.webp")
+    set_org_status(db, org["org"], org_status)
+    sign_in(client, platform_admin)
+
+    response = remove_as_admin(client, project_id)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["cover_url"] is None
+    assert not stored.exists()
+
+
+def test_admin_removal_without_photo_sends_nothing(
+    client: TestClient, db, org, make_project, platform_admin: int
+) -> None:
+    project_id = make_project(org["org"])
+    sign_in(client, platform_admin)
+
+    response = remove_as_admin(client, project_id)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["cover_url"] is None
+    assert photo_notifications(db) == []
+
+
+@pytest.mark.parametrize("body", [{}, {"reason": ""}, {"reason": "   "}])
+def test_admin_removal_requires_reason(
+    client: TestClient, db, org, make_project, platform_admin: int, body: dict
+) -> None:
+    project_id = make_project(org["org"], cover_key="projects/old.webp")
+    sign_in(client, platform_admin)
+
+    response = remove_as_admin(client, project_id, body)
+
+    assert response.status_code == 422
+    assert load_project(db, project_id).cover_key == "projects/old.webp"
+
+
+def test_only_platform_admin_can_remove_photo(client: TestClient, db, org, make_project) -> None:
+    project_id = make_project(org["org"], cover_key="projects/old.webp")
+
+    assert remove_as_admin(client, project_id).status_code == 401
+    sign_in(client, org["owner"])
+    assert remove_as_admin(client, project_id).status_code == 403
+    assert load_project(db, project_id).cover_key == "projects/old.webp"
+
+
+def test_admin_removal_of_unknown_project_gets_404(client: TestClient, platform_admin: int) -> None:
+    sign_in(client, platform_admin)
+
+    assert remove_as_admin(client, 999_999_999).status_code == 404
