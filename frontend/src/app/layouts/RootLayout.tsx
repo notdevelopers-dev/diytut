@@ -9,6 +9,7 @@ import logoutIcon from '@/assets/icons/menu/logout.svg'
 import organizationIcon from '@/assets/icons/menu/organization.svg'
 import profileIcon from '@/assets/icons/menu/profile.svg'
 import settingsIcon from '@/assets/icons/menu/settings.svg'
+import { HeaderSearch } from '@/app/layouts/HeaderSearch'
 import { Logo } from '@/components/ui/Logo'
 import { NotificationBell } from '@/features/notifications'
 import { useAuth } from '@/features/auth/hooks'
@@ -88,8 +89,50 @@ const MenuSection = ({
   </section>
 )
 
+/** Розділи під шапкою: шлях, назва (коротка — для телефона) і колір з Figma (заливка чи рамка) */
+interface Section {
+  to: string | null
+  label: string
+  shortLabel: string
+  tone: string
+}
+
+const SITE_SECTIONS: Section[] = [
+  {
+    to: '/projects',
+    label: 'Актуальні проєкти',
+    shortLabel: 'Актуальні проєкти',
+    tone: 'bg-info',
+  },
+  {
+    to: '/organizations',
+    label: 'Організації',
+    shortLabel: 'Організації',
+    tone: 'bg-main',
+  },
+]
+
+// Режим організації: сторінки з'являться в FE-201 (кабінет організації), поки заглушки
+const ORGANIZATION_SECTIONS: Section[] = [
+  {
+    to: null,
+    label: 'Проєкти організації',
+    shortLabel: 'Наші проєкти',
+    tone: 'border-main',
+  },
+  {
+    to: null,
+    label: 'Учасники організації',
+    shortLabel: 'Учасники',
+    tone: 'border-info',
+  },
+]
+
 export const RootLayout = () => {
-  const { isAuthenticated, user, logout } = useAuth()
+  const { isAuthenticated, isProfileComplete, user, logout } = useAuth()
+  // Увійшов через Google, але анкету ще не заповнив: профіль, меню й сповіщення
+  // йому ще недоступні, тож у шапці лише кнопка завершення реєстрації
+  const isRegistered = isAuthenticated && isProfileComplete
   const navigate = useNavigate()
   const location = useLocation()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -132,38 +175,54 @@ export const RootLayout = () => {
     <div className="relative flex min-h-screen flex-col justify-between bg-[#F7FBFF] overflow-x-hidden">
       {/* 1. Шапка за макетом із Figma: логотип ДійТут + жовта кнопка ☰ */}
       <header className="w-full bg-[#F7FBFF]">
-        <div className="flex items-center justify-between gap-2 px-3 pt-6 pb-4 sm:px-8">
+        {/* Шапка за макетом Figma: логотип, пошук, дзвіночок, аватар, меню.
+            На телефоні пошук переходить на другий рядок */}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3 px-3 pt-5 pb-4 sm:flex-nowrap sm:gap-x-6 sm:px-8">
           <Logo />
 
-          <div className="flex items-center gap-1.5 sm:gap-4">
-            <Link
-              to="/organizations"
-              className="text-[11px] font-semibold text-main no-underline hover:text-main-hover min-[400px]:text-xs sm:text-sm"
-            >
-              Організації
-            </Link>
-            <Link
-              to="/projects"
-              className="text-[11px] font-semibold text-main no-underline hover:text-main-hover min-[400px]:text-xs sm:text-sm"
-            >
-              Проєкти
-            </Link>
+          <HeaderSearch className="order-last w-full sm:order-none sm:mx-auto sm:max-w-[360px] sm:flex-1" />
+
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             {/* Дзвіночок сповіщень — лише для тих, хто увійшов */}
             <NotificationBell />
-            {/* Жовта кнопка трьох рисочок (☰) */}
-            {isAuthenticated ? (
-              <button
-                type="button"
-                onClick={() => setIsMenuOpen(true)}
-                className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-info shadow-sm sm:w-12 transition-transform hover:scale-105 active:scale-95"
-                aria-label="Відкрити меню"
+            {isRegistered ? (
+              <>
+                {/* Іконка профілю з макета: відкриває профіль чи кабінет організації */}
+                <Link
+                  to="/profile"
+                  aria-label={isOrgMode ? 'Кабінет організації' : 'Мій профіль'}
+                  title={isOrgMode ? 'Кабінет організації' : 'Мій профіль'}
+                  className="flex shrink-0 rounded-full transition-transform hover:scale-105 active:scale-95"
+                >
+                  <img
+                    src={avatarIcon}
+                    alt=""
+                    width={54}
+                    height={54}
+                    className="size-11 sm:size-[54px]"
+                  />
+                </Link>
+                {/* Жовта кнопка трьох рисочок (☰) */}
+                <button
+                  type="button"
+                  onClick={() => setIsMenuOpen(true)}
+                  className="flex h-10 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl bg-info shadow-sm transition-transform hover:scale-105 active:scale-95 sm:h-[46px] sm:w-[58px]"
+                  aria-label="Відкрити меню"
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <span className="h-0.5 w-6 rounded-full bg-black" />
+                    <span className="h-0.5 w-6 rounded-full bg-black" />
+                    <span className="h-0.5 w-6 rounded-full bg-black" />
+                  </div>
+                </button>
+              </>
+            ) : isAuthenticated ? (
+              <Link
+                to="/register/complete"
+                className="shrink-0 rounded-lg bg-main px-3 py-2 text-sm font-medium text-white no-underline sm:px-4"
               >
-                <div className="flex flex-col gap-1">
-                  <span className="h-0.5 w-6 bg-black rounded-full" />
-                  <span className="h-0.5 w-6 bg-black rounded-full" />
-                  <span className="h-0.5 w-6 bg-black rounded-full" />
-                </div>
-              </button>
+                Завершити реєстрацію
+              </Link>
             ) : (
               <Link
                 to="/login"
@@ -174,7 +233,51 @@ export const RootLayout = () => {
             )}
           </div>
         </div>
-        <div className="h-[2px] w-full bg-main" />
+
+        {/* Розділи сайту — невеликий список по центру під шапкою (Figma).
+            У режимі організації до каталогів додаються її власні розділи */}
+        <nav
+          aria-label="Розділи"
+          className="mx-auto grid w-full max-w-[480px] grid-cols-2 gap-2 px-3 pt-1 pb-4 sm:gap-3 lg:flex lg:max-w-none lg:justify-center lg:gap-4"
+        >
+          {(isOrgMode && org
+            ? [...SITE_SECTIONS, ...ORGANIZATION_SECTIONS]
+            : SITE_SECTIONS
+          ).map((item) => {
+            const pillClass =
+              'flex h-8 min-w-0 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:text-base lg:w-[220px]'
+            // Сторінок учасників і проєктів організації ще немає (FE-201, SCRUM-131)
+            if (!item.to) {
+              return (
+                <span
+                  key={item.label}
+                  aria-disabled="true"
+                  title="Сторінка з’явиться незабаром"
+                  className={`${pillClass} cursor-default border-2 bg-white ${item.tone}`}
+                >
+                  <span className="sm:hidden">{item.shortLabel}</span>
+                  <span className="hidden sm:inline">{item.label}</span>
+                </span>
+              )
+            }
+            const isActive = location.pathname.startsWith(item.to)
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                aria-current={isActive ? 'page' : undefined}
+                className={`${pillClass} transition hover:brightness-95 ${item.tone} ${
+                  isActive ? 'font-semibold ring-2 ring-black/15' : ''
+                }`}
+              >
+                <span className="sm:hidden">{item.shortLabel}</span>
+                <span className="hidden sm:inline">{item.label}</span>
+              </Link>
+            )
+          })}
+        </nav>
+        {/* Блакитна лінія під розділами: відділяє шапку від вмісту сторінки */}
+        <div className="h-1 w-full bg-main shadow-[0_3px_8px_rgba(121,183,255,0.35)]" />
       </header>
 
       {/* 2. Основний вміст сайту */}

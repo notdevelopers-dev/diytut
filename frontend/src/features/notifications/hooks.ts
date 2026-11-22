@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-query'
 import { useAuth } from '@/features/auth/hooks'
 import { useProfileMode } from '@/features/users/profileMode'
+import { USER_SCOPED_META } from '@/lib/query-client'
 import {
   fetchNotifications,
   markNotificationRead,
@@ -24,18 +25,21 @@ const REFRESH_MS = 30_000
  * Бекенд віддає до 50 за раз; «Показати ще» довантажує наступні.
  */
 export const useNotifications = () => {
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, isProfileComplete, user } = useAuth()
   const mode = useProfileMode()
 
   const query = useInfiniteQuery({
     queryKey: NOTIFICATIONS_QUERY_KEY,
     queryFn: ({ pageParam }) => fetchNotifications(pageParam),
+    // Сповіщення особисті: після виходу прибираємо їх із кешу
+    meta: USER_SCOPED_META,
     initialPageParam: 0,
     getNextPageParam: (lastPage, pages) =>
       lastPage.length === NOTIFICATIONS_PAGE_SIZE
         ? pages.length * NOTIFICATIONS_PAGE_SIZE
         : undefined,
-    enabled: isAuthenticated,
+    // Без заповненої анкети бекенд сповіщень не віддає
+    enabled: isAuthenticated && isProfileComplete,
     refetchInterval: REFRESH_MS,
   })
 
