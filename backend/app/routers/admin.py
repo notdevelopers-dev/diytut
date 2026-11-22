@@ -67,7 +67,7 @@ async def review_organization_request(
 
 @router.get("/stats")
 async def platform_stats(db_session: DbSessionDep) -> AdminStatsRead:
-    return AdminStatsRead.model_validate(await stats_service.get_admin_stats(db_session))
+    return await stats_service.get_admin_stats(db_session)
 
 
 @router.get("/stats/logins")

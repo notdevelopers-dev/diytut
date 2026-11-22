@@ -8,7 +8,8 @@ from app.models import OrgStatusEnum, ProjectStatusEnum
 class PlatformStatsRead(BaseModel):
     """Публічні лічильники для головної сторінки."""
 
-    model_config = ConfigDict(extra="forbid")
+    # frozen: один закешований екземпляр віддається всім запитам (app/services/stats.py)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     # Усі зареєстровані користувачі
     volunteers_count: int

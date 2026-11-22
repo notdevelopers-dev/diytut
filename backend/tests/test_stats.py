@@ -19,14 +19,6 @@ from app.schemas.stats import PlatformStatsRead
 from app.services import stats as stats_service
 
 
-@pytest.fixture(autouse=True)
-def _fresh_public_stats():
-    """Кеш лічильника живе в пам'яті процесу, спільного для всіх тестів: скидаємо його."""
-    stats_service.clear_public_stats_cache()
-    yield
-    stats_service.clear_public_stats_cache()
-
-
 @pytest.fixture
 def city_id(db) -> int:
     async def create(session) -> int:
