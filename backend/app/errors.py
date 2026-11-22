@@ -173,6 +173,15 @@ def image_too_large(max_pixels: int) -> HTTPException:
     )
 
 
+def image_too_small(min_width: int, min_height: int) -> HTTPException:
+    return field_error(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "file",
+        "image_too_small",
+        f"Image must be at least {min_width}×{min_height} px",
+    )
+
+
 def photo_requires_approval() -> HTTPException:
     return HTTPException(
         status.HTTP_403_FORBIDDEN, "Only approved organizations can upload project photos"

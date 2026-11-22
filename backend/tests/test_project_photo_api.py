@@ -270,7 +270,7 @@ def test_small_cover_is_not_upscaled(
 @pytest.mark.parametrize(
     ("size", "expected_size"),
     [
-        ((400, 200), (200, 400)),
+        ((1000, 900), (900, 1000)),
         # Поворот застосовується вже після зменшення
         ((3200, 1600), (800, 1600)),
     ],
@@ -410,6 +410,75 @@ def test_unsupported_file_is_rejected(
     ]
     assert stored_files(media_root) == []
     assert load_project(db, project_id).cover_key is None
+
+
+@pytest.mark.parametrize(
+    ("size", "orientation"),
+    [
+        ((799, 600), 1),
+        ((1000, 399), 1),
+        ((100, 100), 1),
+        # 800×400 «боком»: показуватиметься як 400×800
+        ((800, 400), ROTATE_90_CW),
+    ],
+    ids=["narrow", "low", "icon", "sideways"],
+)
+def test_too_small_image_is_rejected(
+    client: TestClient,
+    db,
+    org,
+    make_project,
+    media_root: Path,
+    size: tuple[int, int],
+    orientation: int,
+) -> None:
+    exif = Image.Exif()
+    exif[EXIF_ORIENTATION] = orientation
+    project_id = make_project(org["org"])
+    sign_in(client, org["owner"])
+
+    response = upload(client, project_id, make_image(size=size, exif=exif))
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == [
+        {
+            "type": "image_too_small",
+            "loc": ["body", "file"],
+            "msg": "Image must be at least 800×400 px",
+        }
+    ]
+    assert stored_files(media_root) == []
+    assert load_project(db, project_id).cover_key is None
+
+
+@pytest.mark.parametrize(
+    ("size", "orientation", "expected_size"),
+    [
+        ((800, 400), 1, (800, 400)),
+        # Вертикальне фото 400×800, збережене «боком» з позначкою повороту
+        ((400, 800), ROTATE_90_CW, (800, 400)),
+    ],
+    ids=["exact", "sideways"],
+)
+def test_minimal_image_is_accepted(
+    client: TestClient,
+    org,
+    make_project,
+    media_root: Path,
+    size: tuple[int, int],
+    orientation: int,
+    expected_size: tuple[int, int],
+) -> None:
+    exif = Image.Exif()
+    exif[EXIF_ORIENTATION] = orientation
+    project_id = make_project(org["org"])
+    sign_in(client, org["owner"])
+
+    response = upload(client, project_id, make_image(size=size, exif=exif))
+
+    assert response.status_code == 200, response.text
+    with Image.open(stored_file_path(media_root, response.json()["cover_url"])) as stored:
+        assert stored.size == expected_size
 
 
 def test_file_over_size_limit_is_rejected(

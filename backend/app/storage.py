@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 from fastapi import UploadFile
-from PIL import Image, ImageOps
+from PIL import ExifTags, Image, ImageOps
 
 from app import errors
 from app.config import settings
@@ -27,6 +27,10 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 # Фото з камери на 50 Мп ще проходить. Декодування більших займає сотні мегабайтів пам'яті,
 # а маленький PNG може розпакуватися в гігабайти
 MAX_IMAGE_PIXELS = 60_000_000
+# Найменше фото для обкладинки: картка в каталозі має пропорції ~2:1, і менше зображення
+# виглядало б на ній розмитим. Розміри — як фото показуватиметься, тобто з урахуванням повороту
+MIN_IMAGE_WIDTH = 800
+MIN_IMAGE_HEIGHT = 400
 # Довша сторона збереженого зображення: досить для обкладинки на всю ширину десктопа
 MAX_IMAGE_SIDE = 1600
 WEBP_QUALITY = 80
@@ -56,7 +60,8 @@ async def prepare_image(upload: UploadFile) -> bytes:
     """Перевіряє завантажене зображення й повертає його у WebP.
 
     Файл понад MAX_UPLOAD_BYTES чи зображення понад MAX_IMAGE_PIXELS — 413; не JPEG, PNG
-    чи WebP або пошкоджений файл — 415; на диску лишилося менше MIN_FREE_DISK_BYTES — 507.
+    чи WebP або пошкоджений файл — 415; менше за MIN_IMAGE_WIDTH × MIN_IMAGE_HEIGHT — 422;
+    на диску лишилося менше MIN_FREE_DISK_BYTES — 507.
     """
     # До обробки: фото, яке нема де зберегти, немає сенсу й обробляти
     await asyncio.to_thread(_check_free_space)
@@ -100,6 +105,9 @@ def _encode_webp(source: BinaryIO) -> bytes:
             # Розміри відомі з заголовка ще до декодування пікселів
             if image.width * image.height > MAX_IMAGE_PIXELS:
                 raise errors.image_too_large(MAX_IMAGE_PIXELS)
+            width, height = _displayed_size(image)
+            if width < MIN_IMAGE_WIDTH or height < MIN_IMAGE_HEIGHT:
+                raise errors.image_too_small(MIN_IMAGE_WIDTH, MIN_IMAGE_HEIGHT)
             return _to_webp(image)
     except Image.DecompressionBombError:
         # Pillow сам відмовляється відкривати зображення понад ~179 Мп
@@ -107,6 +115,18 @@ def _encode_webp(source: BinaryIO) -> bytes:
     except OSError, SyntaxError, ValueError, EOFError:
         # Не зображення, непідтримуваний формат або пошкоджений файл
         raise errors.unsupported_image() from None
+
+
+# Значення повороту в EXIF, за яких фото показується «боком»: ширина й висота міняються місцями
+_SIDEWAYS_ORIENTATIONS = frozenset({5, 6, 7, 8})
+
+
+def _displayed_size(image: Image.Image) -> tuple[int, int]:
+    """Розміри фото з урахуванням позначки повороту в EXIF, ще до декодування пікселів."""
+    orientation = image.getexif().get(ExifTags.Base.Orientation, 1)
+    if orientation in _SIDEWAYS_ORIENTATIONS:
+        return image.height, image.width
+    return image.size
 
 
 def _to_webp(image: Image.Image) -> bytes:
