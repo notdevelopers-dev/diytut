@@ -32,9 +32,12 @@ WEBP_QUALITY = 80
 # Формат Pillow визначає за вмістом файлу, а Content-Type і розширення від клієнта не
 # враховуються. SVG серед них немає: він може містити скрипт, що виконався б на нашому домені
 ALLOWED_FORMATS = ("JPEG", "PNG", "WEBP")
+# Режими, які Pillow зменшує зі згладжуванням без попереднього перетворення
+_RESIZABLE_MODES = ("L", "LA", "RGB", "RGBA", "CMYK")
 
-# Обробка одного зображення займає до сотень мегабайтів пам'яті й до секунди процесора,
-# тож одночасно обробляються лише два
+# Обробка одного зображення займає до пів гігабайта пам'яті (PNG на 60 Мп з прозорістю;
+# фото з камери — десятки мегабайтів) і до півтори секунди процесора, тож одночасно
+# обробляються лише два
 _processing = asyncio.Semaphore(2)
 
 
@@ -91,18 +94,32 @@ def _encode_webp(source: BinaryIO) -> bytes:
 
 
 def _to_webp(image: Image.Image) -> bytes:
-    # JPEG декодується одразу зменшеним у 2–8 разів, але не дрібніше за подвійний розмір
-    # результату: менше пам'яті й часу без втрати якості
-    image.draft(None, (MAX_IMAGE_SIDE * 2, MAX_IMAGE_SIDE * 2))
     # Колірний профіль (наприклад, Display P3 з iPhone) лишаємо, якщо колірна модель
     # не зміниться; профіль CMYK чи відтінків сірого до RGB не підходить
     icc_profile = image.info.get("icc_profile") if image.mode in ("RGB", "RGBA") else None
+    has_alpha = image.mode in ("RGBA", "LA", "PA") or "transparency" in image.info
+    target_mode = "RGBA" if has_alpha else "RGB"
+
+    # Кожна копія великого зображення займає сотні мегабайтів, тож спершу воно зменшується,
+    # а решта перетворень працює вже з невеликим.
+    # JPEG декодується одразу зменшеним у 2–8 разів, але не дрібніше за подвійний розмір
+    # результату. Розмір запитується в пропорціях фото: draft зменшує, лише якщо обидві
+    # сторони лишаються не меншими за запитані (thumbnail запитує квадрат, і для фото 4:3
+    # це не спрацьовує)
+    scale = 2 * MAX_IMAGE_SIDE / max(image.size)
+    if scale < 1:
+        image.draft(None, (round(image.width * scale), round(image.height * scale)))
+    # Палітру Pillow зменшує лише «найближчим сусідом», без згладжування, а прозорий колір
+    # після згладжування вже не збігся б із заданим. Такі зображення, як і рідкісні режими
+    # на кшталт 16-бітного, переводяться в RGB(A) до зменшення
+    if image.mode not in _RESIZABLE_MODES or "transparency" in image.info:
+        image = image.convert(target_mode)
+    image.thumbnail((MAX_IMAGE_SIDE, MAX_IMAGE_SIDE), Image.Resampling.LANCZOS)
+    if image.mode != target_mode:
+        image = image.convert(target_mode)
     # Камера телефона часто зберігає фото «боком» з позначкою повороту в EXIF. Метадані не
     # зберігаються, тож поворот застосовується до самих пікселів
-    image = ImageOps.exif_transpose(image)
-    has_alpha = image.mode in ("RGBA", "LA", "PA") or "transparency" in image.info
-    image = image.convert("RGBA" if has_alpha else "RGB")
-    image.thumbnail((MAX_IMAGE_SIDE, MAX_IMAGE_SIDE), Image.Resampling.LANCZOS)
+    ImageOps.exif_transpose(image, in_place=True)
 
     output = BytesIO()
     # exif і xmp порожні явно: exif_transpose лишає в info решту EXIF, зокрема GPS

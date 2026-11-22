@@ -18,10 +18,15 @@ async def set_project_photo(
     db_session: AsyncSession, user_id: int, project_id: int, upload: UploadFile
 ) -> Project:
     """Додає або замінює обкладинку; файл попередньої видаляється."""
-    # Зображення обробляється до блокувань: це може тривати до секунди, і весь цей час
-    # рядки організації та проєкту були б заблоковані для інших дій
+    # Права перевіряються ще до обробки зображення: інакше будь-хто з акаунтом міг би
+    # навантажувати процесор і пам'ять сервера, надсилаючи фото для чужих і неіснуючих
+    # проєктів. Без блокувань, і транзакція одразу завершується: обробка триває до
+    # секунди, а з чергою й довше, і весь цей час не варто тримати ні рядки, ні з'єднання з БД
+    await _check_photo_project(db_session, user_id, project_id, lock=False)
+    await db_session.commit()
     data = await storage.prepare_image(upload)
-    project = await _lock_photo_project(db_session, user_id, project_id)
+    # За час обробки роль чи статус могли змінитися, тож тепер — з блокуванням і заново
+    project = await _check_photo_project(db_session, user_id, project_id, lock=True)
 
     old_key = project.cover_key
     new_key = await storage.save_image(data, COVERS_FOLDER)
@@ -43,7 +48,7 @@ async def set_project_photo(
 
 async def delete_project_photo(db_session: AsyncSession, user_id: int, project_id: int) -> Project:
     """Прибирає обкладинку. Проєкт без обкладинки — не помилка: результат той самий."""
-    project = await _lock_photo_project(db_session, user_id, project_id)
+    project = await _check_photo_project(db_session, user_id, project_id, lock=True)
     old_key = project.cover_key
     if old_key is None:
         # Змін немає; commit лише знімає блокування
@@ -57,25 +62,28 @@ async def delete_project_photo(db_session: AsyncSession, user_id: int, project_i
     return project
 
 
-async def _lock_photo_project(db_session: AsyncSession, user_id: int, project_id: int) -> Project:
+async def _check_photo_project(
+    db_session: AsyncSession, user_id: int, project_id: int, *, lock: bool
+) -> Project:
     """Проєкт, обкладинку якого користувач може змінити.
 
-    Членство, організація й проєкт блокуються до кінця транзакції: роль, статус організації
-    й статус проєкту не зміняться між перевіркою й записом, а дві заміни фото не
-    виконаються одночасно й не видалять файл одна одної.
+    З lock=True членство, організація й проєкт блокуються до кінця транзакції: роль, статус
+    організації й статус проєкту не зміняться між перевіркою й записом, а дві заміни фото
+    не виконаються одночасно й не видалять файл одна одної.
     """
     project = await db_session.get(Project, project_id)
     if project is None:
         raise errors.project_not_found()
     # Спершу членство, потім проєкт — у тому ж порядку, що й публікація та розгляд заявок,
     # тож паралельні запити не заблокують одне одного
-    membership = await get_user_membership(db_session, user_id, project.organization_id, lock=True)
+    membership = await get_user_membership(db_session, user_id, project.organization_id, lock=lock)
     # Для користувача поза організацією керування проєктом не існує
     if membership is None:
         raise errors.project_not_found()
-    project = await lock_project(db_session, project_id)
-    if project is None:
-        raise errors.project_not_found()
+    if lock:
+        project = await lock_project(db_session, project_id)
+        if project is None:
+            raise errors.project_not_found()
 
     if membership.role not in EDITOR_ROLES:
         raise errors.not_project_editor()

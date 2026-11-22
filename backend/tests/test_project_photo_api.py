@@ -261,8 +261,22 @@ def test_small_cover_is_not_upscaled(
         assert stored.size == (800, 600)
 
 
+@pytest.mark.parametrize(
+    ("size", "expected_size"),
+    [
+        ((400, 200), (200, 400)),
+        # Поворот застосовується вже після зменшення
+        ((3200, 1600), (800, 1600)),
+    ],
+    ids=["small", "downscaled"],
+)
 def test_metadata_is_removed_and_orientation_applied(
-    client: TestClient, org, make_project, media_root: Path
+    client: TestClient,
+    org,
+    make_project,
+    media_root: Path,
+    size: tuple[int, int],
+    expected_size: tuple[int, int],
 ) -> None:
     exif = Image.Exif()
     exif[EXIF_ORIENTATION] = ROTATE_90_CW
@@ -270,26 +284,67 @@ def test_metadata_is_removed_and_orientation_applied(
     project_id = make_project(org["org"])
     sign_in(client, org["owner"])
 
-    response = upload(client, project_id, make_image(size=(400, 200), exif=exif))
+    response = upload(client, project_id, make_image(size=size, exif=exif))
 
     assert response.status_code == 200, response.text
     with Image.open(stored_file_path(media_root, response.json()["cover_url"])) as stored:
         # Поворот застосовано до пікселів, бо позначки повороту більше немає
-        assert stored.size == (200, 400)
+        assert stored.size == expected_size
         assert not stored.getexif()
         assert "exif" not in stored.info
         assert "xmp" not in stored.info
 
 
-def test_transparency_is_kept(client: TestClient, org, make_project, media_root: Path) -> None:
+@pytest.mark.parametrize(
+    ("image_format", "mode", "options", "expected_mode"),
+    [
+        ("PNG", "RGBA", {}, "RGBA"),
+        ("PNG", "LA", {}, "RGBA"),
+        # Палітра з прозорим кольором
+        ("PNG", "P", {"transparency": 0}, "RGBA"),
+        ("PNG", "P", {}, "RGB"),
+        # 16-бітні відтінки сірого
+        ("PNG", "I;16", {}, "RGB"),
+        ("JPEG", "L", {}, "RGB"),
+        # Так зберігають файли для друку
+        ("JPEG", "CMYK", {}, "RGB"),
+    ],
+    ids=["rgba", "la", "palette-transparent", "palette", "16-bit", "grayscale", "cmyk"],
+)
+def test_color_mode_is_converted(
+    client: TestClient,
+    org,
+    make_project,
+    media_root: Path,
+    image_format: str,
+    mode: str,
+    options: dict,
+    expected_mode: str,
+) -> None:
     project_id = make_project(org["org"])
     sign_in(client, org["owner"])
 
-    response = upload(client, project_id, make_image("PNG", mode="RGBA"), "logo.png", "image/png")
+    data = make_image(image_format, mode=mode, **options)
+    response = upload(client, project_id, data, "cover", "application/octet-stream")
 
     assert response.status_code == 200, response.text
     with Image.open(stored_file_path(media_root, response.json()["cover_url"])) as stored:
-        assert stored.mode == "RGBA"
+        assert stored.mode == expected_mode
+        assert stored.size == (1600, 1200)
+
+
+def test_large_camera_photo_is_downscaled(
+    client: TestClient, org, make_project, media_root: Path
+) -> None:
+    """Фото на 48 Мп у пропорціях 4:3: JPEG декодується одразу зменшеним."""
+    project_id = make_project(org["org"])
+    sign_in(client, org["owner"])
+
+    response = upload(client, project_id, make_image(size=(8000, 6000), mode="L"))
+
+    assert response.status_code == 200, response.text
+    with Image.open(stored_file_path(media_root, response.json()["cover_url"])) as stored:
+        assert stored.size == (1600, 1200)
 
 
 def test_format_is_detected_from_content(
@@ -317,8 +372,8 @@ def test_format_is_detected_from_content(
             "cover.svg",
             "image/svg+xml",
         ),
-        (make_image("GIF", mode="P"), "cover.gif", "image/gif"),
-        (make_image("BMP"), "cover.bmp", "image/bmp"),
+        (make_image("GIF", size=(200, 150), mode="P"), "cover.gif", "image/gif"),
+        (make_image("BMP", size=(200, 150)), "cover.bmp", "image/bmp"),
         # Обрізаний JPEG: заголовок коректний, а даних бракує
         (make_image()[:300], "broken.jpg", "image/jpeg"),
     ],
@@ -435,6 +490,43 @@ def test_published_project_and_draft_of_pending_org_accept_cover(
 
     assert upload(client, published_id, make_image()).status_code == 200
     assert upload(client, draft_id, make_image()).status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("role", "target", "expected_status"),
+    [
+        ("outsider", "draft", 404),
+        ("outsider", "published", 404),
+        ("member", "draft", 403),
+        ("owner", "unknown", 404),
+        ("owner", "completed", 409),
+    ],
+)
+def test_image_is_not_processed_without_rights(
+    client: TestClient,
+    org,
+    make_project,
+    media_root: Path,
+    role: str,
+    target: str,
+    expected_status: int,
+) -> None:
+    """Права перевіряються до обробки: інакше будь-хто з акаунтом навантажував би сервер.
+
+    Файл не є зображенням, тож якби його обробили, відповідь була б 415.
+    """
+    project_ids = {
+        "draft": make_project(org["org"]),
+        "published": make_project(org["org"], status=ProjectStatusEnum.published),
+        "completed": make_project(org["org"], status=ProjectStatusEnum.completed),
+        "unknown": 999_999_999,
+    }
+    sign_in(client, org[role])
+
+    response = upload(client, project_ids[target], b"not an image")
+
+    assert response.status_code == expected_status
+    assert stored_files(media_root) == []
 
 
 @pytest.mark.parametrize("status", [ProjectStatusEnum.completed, ProjectStatusEnum.cancelled])
