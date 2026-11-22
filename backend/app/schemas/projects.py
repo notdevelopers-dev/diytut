@@ -419,11 +419,12 @@ class ProjectRead(ProjectListItem):
 
     @classmethod
     def from_project(cls, project: Project, accepted_count: int) -> ProjectRead:
-        return cls(
-            **ProjectListItem.model_validate(project).model_dump(),
-            updated_at=project.updated_at,
-            accepted_count=accepted_count,
-        )
+        # Усі поля моделі беремо з проєкту, а не з model_dump(): той пропускає поля з
+        # exclude=True, з яких можуть обчислюватися інші, і нове поле мовчки загубилося б
+        fields = {
+            name: getattr(project, name) for name in cls.model_fields if name != "accepted_count"
+        }
+        return cls.model_validate(fields | {"accepted_count": accepted_count})
 
 
 class ProjectPage(BaseModel):

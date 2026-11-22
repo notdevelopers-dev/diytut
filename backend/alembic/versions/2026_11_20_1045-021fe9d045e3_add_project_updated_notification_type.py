@@ -17,19 +17,7 @@ down_revision: str | Sequence[str] | None = "945f3020468b"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# Зафіксовано тут, а не імпортовано з моделі: міграція не має змінюватися разом із кодом
-OLD_TYPES = (
-    "join_request_received",
-    "join_request_cancelled",
-    "join_request_accepted",
-    "join_request_rejected",
-    "project_cancelled",
-    "hours_credited",
-    "level_up",
-    "review_available",
-    "organization_approved",
-    "organization_rejected",
-)
+NEW_NOTIFICATION_TYPE = "project_updated"
 
 
 def upgrade() -> None:
@@ -38,18 +26,29 @@ def upgrade() -> None:
     # використовується, тож ADD VALUE тут безпечний. Порядок значень у БД — як у моделі
     # (це перевіряє test_db_enum_matches_model): поруч з іншими змінами проєкту
     op.execute(
-        "ALTER TYPE notificationtypeenum ADD VALUE IF NOT EXISTS 'project_updated' "
+        f"ALTER TYPE notificationtypeenum ADD VALUE IF NOT EXISTS '{NEW_NOTIFICATION_TYPE}' "
         "AFTER 'project_cancelled'"
     )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    # Сповіщенням про зміну проєкту в старій схемі немає відповідника
-    op.execute("DELETE FROM notifications WHERE type = 'project_updated'")
-    # Значення з enum Postgres не видаляє: тип перестворюємо
+    # Сповіщенням про зміну проєкту в старій схемі немає відповідника. Порівняння як тексту:
+    # порівняння з enum впало б, якби значення в типі вже не було
+    op.execute(f"DELETE FROM notifications WHERE type::text = '{NEW_NOTIFICATION_TYPE}'")
+    # Значення з enum Postgres не видаляє: тип перестворюємо. Решту значень беремо з БД, а не
+    # фіксуємо тут: паралельні гілки додають свої типи, і після злиття міграцій порядок їх
+    # застосування може бути будь-яким
+    bind = op.get_bind()
+    old_types = [
+        value
+        for value in bind.execute(
+            sa.text("SELECT unnest(enum_range(NULL::notificationtypeenum))::text")
+        ).scalars()
+        if value != NEW_NOTIFICATION_TYPE
+    ]
     op.execute("ALTER TYPE notificationtypeenum RENAME TO notificationtypeenum_old")
-    sa.Enum(*OLD_TYPES, name="notificationtypeenum").create(op.get_bind())
+    sa.Enum(*old_types, name="notificationtypeenum").create(bind)
     op.execute(
         "ALTER TABLE notifications ALTER COLUMN type TYPE notificationtypeenum "
         "USING type::text::notificationtypeenum"
