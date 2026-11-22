@@ -383,7 +383,8 @@ async def update_project(
     changed = {field for field, value in changes.items() if getattr(project, field) != value}
     # Схвалений учасник, якому нові вимоги чи ранніша дата вже не підходять (вік, рівень),
     # не має лишитися на події, а вилучити його організатор не може: зміну відхиляємо.
-    # Заявки на розгляді не заважають: прийняти тих, хто не підходить, не дасть розгляд
+    # Заявки на розгляді не заважають: прийняти тих, хто не підходить, не дасть перевірка
+    # вимог у розгляді заявки (_check_project_decision в app/services/join_requests.py)
     if published and changed & REQUIREMENT_FIELDS:
         missing = await _count_participants_missing_requirements(db_session, project.id, result)
         if missing:

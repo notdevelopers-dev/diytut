@@ -222,7 +222,10 @@ async def _check_project_decision(
         if not project_join_requests.is_open(project):
             raise errors.project_not_open()
         # Вимоги чи дату могли змінити вже після подання заявки: приймаємо лише тих, хто
-        # відповідає поточним. Рядок проєкту заблоковано, тож вимоги не зміняться до запису
+        # відповідає поточним. Рядок проєкту заблоковано, тож вимоги не зміняться до запису.
+        # На цю перевірку покладається update_project (app/services/projects.py): посилити
+        # вимоги він не дає лише через схвалених учасників, а заявки на розгляді пропускає,
+        # бо невідповідних волонтерів не дасть прийняти саме вона. Не прибирати
         unmet = await project_join_requests.check_applicant_requirements(
             db_session, project, join_request.user_id
         )
