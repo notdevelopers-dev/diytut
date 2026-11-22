@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, NamedTuple
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -10,8 +11,8 @@ from app import errors
 from app.models import (
     JoinRequest,
     JoinRequestStatusEnum,
-    JoinRequestTargetEnum,
     NotificationTypeEnum,
+    OrganizationMember,
     OrgStatusEnum,
     Project,
     ProjectCategoryEnum,
@@ -32,33 +33,45 @@ from app.services.project_join_requests import (
     count_accepted,
     get_confirmed_hours,
     lock_project,
+    project_requests,
     unmet_requirement,
 )
 
-# Зміни опублікованого проєкту, про які сповіщаємо (рішення 18.11): поля, назва зміни для
-# тексту сповіщення і чиїх заявок вона стосується. Дата чи час — усіх, хто збирається
-# прийти, зокрема тих, чия заявка ще на розгляді; місце й кількість годин — лише схвалених.
-# Назва, опис, сфери, хештеги та інші поля сповіщень не дають
-NOTIFIED_CHANGES: tuple[tuple[frozenset[str], str, frozenset[JoinRequestStatusEnum]], ...] = (
-    (
-        frozenset({"starts_at", "ends_at"}),
-        "дата або час",
-        frozenset({JoinRequestStatusEnum.accepted, JoinRequestStatusEnum.pending}),
+
+class NotifiedChange(NamedTuple):
+    """Зміна опублікованого проєкту, про яку сповіщаємо волонтерів (рішення 18.11)."""
+
+    # Поля проєкту, зміна будь-якого з яких і є цією зміною
+    fields: frozenset[str]
+    # Як зміна називається в тексті сповіщення
+    label: str
+    # Статуси заявок, власники яких отримують сповіщення
+    recipients: frozenset[JoinRequestStatusEnum]
+
+
+# Дата чи час — усіх, хто збирається прийти, зокрема тих, чия заявка ще на розгляді; місце
+# й кількість годин — лише схвалених. Назва, опис, сфери, хештеги та інші поля сповіщень
+# не дають
+NOTIFIED_CHANGES = (
+    NotifiedChange(
+        fields=frozenset({"starts_at", "ends_at"}),
+        label="дата або час",
+        recipients=frozenset({JoinRequestStatusEnum.accepted, JoinRequestStatusEnum.pending}),
     ),
-    (
-        frozenset({"is_online", "city_id", "address"}),
-        "місце",
-        frozenset({JoinRequestStatusEnum.accepted}),
+    NotifiedChange(
+        fields=frozenset({"is_online", "city_id", "address"}),
+        label="місце",
+        recipients=frozenset({JoinRequestStatusEnum.accepted}),
     ),
-    (
-        frozenset({"volunteer_hours"}),
-        "кількість волонтерських годин",
-        frozenset({JoinRequestStatusEnum.accepted}),
+    NotifiedChange(
+        fields=frozenset({"volunteer_hours"}),
+        label="кількість волонтерських годин",
+        recipients=frozenset({JoinRequestStatusEnum.accepted}),
     ),
 )
-# Місто онлайн-події потрібне лише фільтру каталогу, а адреса — нікому: їх зміна для
-# волонтерів не є зміною місця, поки подія лишається онлайн
-ONLINE_IRRELEVANT_FIELDS = frozenset({"city_id", "address"})
+# Місто й адреса офлайн-події. Місто онлайн-події потрібне лише фільтру каталогу, а адреса —
+# нікому: їх зміна для волонтерів не є зміною місця, поки подія лишається онлайн
+OFFLINE_LOCATION_FIELDS = frozenset({"city_id", "address"})
 # Поля, від яких залежить, чи підходить волонтер проєкту (R-12): вік рахується на день
 # початку події, тож ранніша дата теж може зробити учасника неповнолітнім
 REQUIREMENT_FIELDS = frozenset({"is_adult_only", "experience_level", "starts_at"})
@@ -221,16 +234,24 @@ async def create_project(
     return project, 0
 
 
-async def publish_project(
-    db_session: AsyncSession, user_id: int, project_id: int
-) -> tuple[Project, int]:
+async def _lock_managed_project(
+    db_session: AsyncSession,
+    user_id: int,
+    project_id: int,
+    not_manager: Callable[[], HTTPException],
+) -> tuple[OrganizationMember, Project]:
+    """Проєкт, яким користувач може керувати: owner чи admin незаблокованої організації.
+
+    Членство, організація й проєкт заблоковані до кінця транзакції: роль, статус організації
+    й сам проєкт не зміняться між перевірками й записом. Спершу членство, потім проєкт — у
+    тому ж порядку блокує й розгляд заявок, тож паралельні запити не заблокують одне одного.
+    Проєкт чужої організації, зокрема чернетку, не видно: 404, щоб не видно було й того,
+    які id зайняті. Учаснику без прав — not_manager().
+    """
     project = await db_session.get(Project, project_id)
     if project is None:
         raise errors.project_not_found()
-    # Спершу членство, потім проєкт — у тому ж порядку блокує й розгляд заявок, тож
-    # паралельні запити не заблокують одне одного
     membership = await get_user_membership(db_session, user_id, project.organization_id, lock=True)
-    # Чернетку чужої організації не видно: так не видно й того, які id зайняті
     if membership is None:
         raise errors.project_not_found()
     project = await lock_project(db_session, project_id)
@@ -238,9 +259,18 @@ async def publish_project(
         raise errors.project_not_found()
 
     if membership.role not in EDITOR_ROLES:
-        raise errors.not_project_publisher()
+        raise not_manager()
     if membership.organization.status == OrgStatusEnum.blocked:
         raise errors.organization_blocked()
+    return membership, project
+
+
+async def publish_project(
+    db_session: AsyncSession, user_id: int, project_id: int
+) -> tuple[Project, int]:
+    membership, project = await _lock_managed_project(
+        db_session, user_id, project_id, errors.not_project_publisher
+    )
     if membership.organization.status != OrgStatusEnum.approved:
         raise errors.organization_not_approved()
     if project.status != ProjectStatusEnum.draft:
@@ -271,21 +301,20 @@ async def _notify_about_changes(
     # Місто й адреса онлайн-події волонтерів не стосуються: місце змінилося, лише якщо подія
     # стала офлайн чи онлайн або змінилися місто чи адреса офлайн-події
     if project.is_online and "is_online" not in changed:
-        notified -= ONLINE_IRRELEVANT_FIELDS
-    relevant = [
-        (label, statuses) for fields, label, statuses in NOTIFIED_CHANGES if fields & notified
-    ]
+        notified -= OFFLINE_LOCATION_FIELDS
+    relevant = [change for change in NOTIFIED_CHANGES if change.fields & notified]
     if not relevant:
         return
     requests = await db_session.execute(
-        select(JoinRequest.user_id, JoinRequest.status).where(
-            JoinRequest.target == JoinRequestTargetEnum.project,
+        project_requests()
+        .with_only_columns(JoinRequest.user_id, JoinRequest.status)
+        .where(
             JoinRequest.project_id == project.id,
-            JoinRequest.status.in_(set().union(*(statuses for _, statuses in relevant))),
+            JoinRequest.status.in_(set().union(*(change.recipients for change in relevant))),
         )
     )
     for user_id, status in requests:
-        labels = [label for label, statuses in relevant if status in statuses]
+        labels = [change.label for change in relevant if status in change.recipients]
         create_notification(
             db_session,
             user_id,
@@ -303,10 +332,10 @@ async def _count_participants_missing_requirements(
     """Скільки схвалених учасників не відповідали б вимогам проєкту з полями fields."""
     participants = (
         await db_session.execute(
-            select(JoinRequest.user_id, User.birth_date)
+            project_requests()
+            .with_only_columns(JoinRequest.user_id, User.birth_date)
             .join(User, User.id == JoinRequest.user_id)
             .where(
-                JoinRequest.target == JoinRequestTargetEnum.project,
                 JoinRequest.project_id == project_id,
                 JoinRequest.status == JoinRequestStatusEnum.accepted,
             )
@@ -330,25 +359,11 @@ async def _count_participants_missing_requirements(
 async def update_project(
     db_session: AsyncSession, user_id: int, project_id: int, data: ProjectUpdate
 ) -> tuple[Project, int]:
-    project = await db_session.get(Project, project_id)
-    if project is None:
-        raise errors.project_not_found()
-    # Спершу членство, потім проєкт — у тому ж порядку, що й публікація та розгляд заявок,
-    # тож паралельні запити не заблокують одне одного
-    membership = await get_user_membership(db_session, user_id, project.organization_id, lock=True)
-    # Проєкт чужої організації, зокрема чернетку, не видно: так не видно й того, які id зайняті
-    if membership is None:
-        raise errors.project_not_found()
     # Блокування рядка проєкту: паралельне прийняття заявки чекає, доки зміну збережено, і
     # рахує місця вже з новою capacity, а ця зміна — з усіма вже прийнятими заявками
-    project = await lock_project(db_session, project_id)
-    if project is None:
-        raise errors.project_not_found()
-
-    if membership.role not in EDITOR_ROLES:
-        raise errors.not_project_editor()
-    if membership.organization.status == OrgStatusEnum.blocked:
-        raise errors.organization_blocked()
+    membership, project = await _lock_managed_project(
+        db_session, user_id, project_id, errors.not_project_editor
+    )
     if project.status in NOT_EDITABLE_STATUSES:
         raise errors.project_not_editable()
     published = project.status == ProjectStatusEnum.published

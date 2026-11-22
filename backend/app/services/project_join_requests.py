@@ -53,7 +53,8 @@ REAPPLY_GROWTH = 5
 REAPPLY_MAX_DELAY = timedelta(weeks=1)
 
 
-def _project_requests():
+def project_requests():
+    """Заявки на участь у проєктах, а не на вступ до організації: основа запитів до них."""
     return select(JoinRequest).where(JoinRequest.target == JoinRequestTargetEnum.project)
 
 
@@ -119,7 +120,7 @@ async def get_confirmed_hours(
 async def count_accepted(db_session: AsyncSession, project_id: int) -> int:
     """Скільки місць проєкту вже зайнято схваленими заявками."""
     return await db_session.scalar(
-        _project_requests()
+        project_requests()
         .with_only_columns(func.count())
         .where(
             JoinRequest.project_id == project_id,
@@ -164,7 +165,7 @@ async def _latest_request(
     db_session: AsyncSession, user_id: int, project_id: int
 ) -> JoinRequest | None:
     return await db_session.scalar(
-        _project_requests()
+        project_requests()
         .where(JoinRequest.user_id == user_id, JoinRequest.project_id == project_id)
         .order_by(JoinRequest.created_at.desc(), JoinRequest.id.desc())
         .limit(1)
@@ -187,7 +188,7 @@ async def _reapply_times(
 ) -> dict[int, datetime]:
     """Коли закінчиться пауза після відмов: для кожного проєкту, де вони були."""
     rows = await db_session.execute(
-        _project_requests()
+        project_requests()
         .with_only_columns(JoinRequest.project_id, func.count(), func.max(JoinRequest.reviewed_at))
         .where(
             JoinRequest.user_id == user_id,
@@ -361,7 +362,7 @@ async def get_my_request_statuses(
     ids = set(project_ids)
     latest = list(
         await db_session.scalars(
-            _project_requests()
+            project_requests()
             .options(joinedload(JoinRequest.project, innerjoin=True))
             .where(JoinRequest.user_id == user_id, JoinRequest.project_id.in_(ids))
             .ext(distinct_on(JoinRequest.project_id))
@@ -412,7 +413,7 @@ async def cancel_my_project_request(
     """Скасування заявки волонтером до початку події; схвалена заявка звільняє місце (R-23)."""
     # Блокування: скасування не перетнеться з рішенням організації щодо цієї ж заявки
     join_request = await db_session.scalar(
-        _project_requests()
+        project_requests()
         .options(joinedload(JoinRequest.project, innerjoin=True))
         .where(
             JoinRequest.user_id == user_id,
@@ -448,7 +449,7 @@ async def list_my_project_requests(
 ) -> list[JoinRequest]:
     """Заявки волонтера на проєкти, свіжіші спершу."""
     query = (
-        _project_requests()
+        project_requests()
         .options(joinedload(JoinRequest.project, innerjoin=True))
         .where(JoinRequest.user_id == user_id)
         .order_by(JoinRequest.created_at.desc(), JoinRequest.id.desc())
@@ -482,7 +483,7 @@ async def list_project_requests(
         raise errors.not_join_request_reviewer()
 
     query = (
-        _project_requests()
+        project_requests()
         .options(joinedload(JoinRequest.user, innerjoin=True))
         .where(JoinRequest.project_id == project.id, JoinRequest.status == status)
         .order_by(JoinRequest.created_at, JoinRequest.id)

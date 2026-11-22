@@ -23,7 +23,7 @@ from app.models.project import (
     ProjectCategoryEnum,
     ProjectStatusEnum,
 )
-from app.schemas.users import MAX_BIGINT, MAX_INT32
+from app.schemas.users import MAX_BIGINT, MAX_INT32, CityId
 
 ProjectTitle = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=2, max_length=200)
@@ -131,6 +131,18 @@ def _unique_tags(value: list[str]) -> list[str]:
     return unique
 
 
+# Обмеження полів, спільні для чернетки, публікації й редагування
+ProjectCapacity = Annotated[int, Field(gt=0, le=MAX_CAPACITY)]
+VolunteerHours = Annotated[
+    Decimal,
+    Field(gt=0, le=MAX_VOLUNTEER_HOURS, decimal_places=VOLUNTEER_HOURS_DECIMAL_PLACES),
+]
+# Сфери зі сталого набору — основний фільтр каталогу (R-14); дублікати відкидаються
+ProjectCategories = Annotated[list[ProjectCategoryEnum], AfterValidator(_unique_categories)]
+# Вільні хештеги організації; дублікати після нормалізації відкидаються
+ProjectTags = Annotated[list[ProjectTag], AfterValidator(_unique_tags)]
+
+
 class ProjectDraft(BaseModel):
     """Поля проєкту, з якими його можна зберегти як чернетку (R-12, рішення 18.11).
 
@@ -146,28 +158,14 @@ class ProjectDraft(BaseModel):
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     is_online: bool = False
-    city_id: int | None = Field(default=None, gt=0, le=MAX_INT32)
+    city_id: CityId | None = None
     address: str | None = None
-    capacity: int | None = Field(default=None, gt=0, le=MAX_CAPACITY)
-    volunteer_hours: Decimal | None = Field(
-        default=None, gt=0, le=MAX_VOLUNTEER_HOURS, decimal_places=VOLUNTEER_HOURS_DECIMAL_PLACES
-    )
+    capacity: ProjectCapacity | None = None
+    volunteer_hours: VolunteerHours | None = None
     is_adult_only: bool = False
     experience_level: ExperienceLevelEnum = ExperienceLevelEnum.novice
-    # Сфера зі сталого набору: основний фільтр каталогу (R-14)
-    categories: list[ProjectCategoryEnum] = Field(default_factory=list)
-    # Вільні хештеги організації; дублікати після нормалізації відкидаються
-    tags: list[ProjectTag] = Field(default_factory=list)
-
-    @field_validator("categories")
-    @classmethod
-    def validate_categories(cls, value: list[ProjectCategoryEnum]) -> list[ProjectCategoryEnum]:
-        return _unique_categories(value)
-
-    @field_validator("tags")
-    @classmethod
-    def validate_tags(cls, value: list[str]) -> list[str]:
-        return _unique_tags(value)
+    categories: ProjectCategories = Field(default_factory=list)
+    tags: ProjectTags = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_times(self) -> ProjectDraft:
@@ -188,11 +186,9 @@ class ProjectPublication(ProjectDraft):
     description: ProjectDescription
     starts_at: datetime
     ends_at: datetime
-    capacity: int = Field(gt=0, le=MAX_CAPACITY)
-    volunteer_hours: Decimal = Field(
-        gt=0, le=MAX_VOLUNTEER_HOURS, decimal_places=VOLUNTEER_HOURS_DECIMAL_PLACES
-    )
-    categories: list[ProjectCategoryEnum] = Field(min_length=1)
+    capacity: ProjectCapacity
+    volunteer_hours: VolunteerHours
+    categories: ProjectCategories = Field(min_length=1)
 
     @model_validator(mode="after")
     def validate_location(self) -> ProjectPublication:
@@ -362,16 +358,14 @@ class ProjectUpdate(BaseModel):
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     is_online: bool | None = None
-    city_id: int | None = Field(default=None, gt=0, le=MAX_INT32)
+    city_id: CityId | None = None
     address: str | None = None
-    capacity: int | None = Field(default=None, gt=0, le=MAX_CAPACITY)
-    volunteer_hours: Decimal | None = Field(
-        default=None, gt=0, le=MAX_VOLUNTEER_HOURS, decimal_places=VOLUNTEER_HOURS_DECIMAL_PLACES
-    )
+    capacity: ProjectCapacity | None = None
+    volunteer_hours: VolunteerHours | None = None
     is_adult_only: bool | None = None
     experience_level: ExperienceLevelEnum | None = None
-    categories: list[ProjectCategoryEnum] | None = None
-    tags: list[ProjectTag] | None = None
+    categories: ProjectCategories | None = None
+    tags: ProjectTags | None = None
 
     @field_validator(*_NOT_NULL_ON_UPDATE)
     @classmethod
@@ -380,18 +374,6 @@ class ProjectUpdate(BaseModel):
         if value is None:
             raise ValueError("Field cannot be null")
         return value
-
-    @field_validator("categories")
-    @classmethod
-    def validate_categories(
-        cls, value: list[ProjectCategoryEnum] | None
-    ) -> list[ProjectCategoryEnum] | None:
-        return None if value is None else _unique_categories(value)
-
-    @field_validator("tags")
-    @classmethod
-    def validate_tags(cls, value: list[str] | None) -> list[str] | None:
-        return None if value is None else _unique_tags(value)
 
     @field_validator("starts_at", "ends_at")
     @classmethod
