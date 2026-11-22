@@ -32,7 +32,7 @@ async def set_project_photo(
     # секунди, а з чергою й довше, і весь цей час не варто тримати ні рядки, ні з'єднання з БД
     await _check_photo_project(db_session, user_id, project_id, lock=False, uploading=True)
     await db_session.commit()
-    data = await storage.prepare_image(upload)
+    data = await _prepare_image(upload)
     # За час обробки роль чи статус могли змінитися, тож тепер — з блокуванням і заново
     project = await _check_photo_project(db_session, user_id, project_id, lock=True, uploading=True)
 
@@ -68,6 +68,22 @@ async def delete_project_photo(db_session: AsyncSession, user_id: int, project_i
     await storage.delete(old_key)
     await db_session.refresh(project)
     return project
+
+
+async def _prepare_image(upload: UploadFile) -> bytes:
+    """Обробка зображення з відмовами сховища, перетвореними на помилки API."""
+    try:
+        return await storage.prepare_image(upload.file)
+    except storage.FileTooLarge:
+        raise errors.file_too_large(storage.MAX_UPLOAD_BYTES) from None
+    except storage.ImageTooLarge:
+        raise errors.image_too_large(storage.MAX_IMAGE_PIXELS) from None
+    except storage.ImageTooSmall:
+        raise errors.image_too_small(storage.MIN_IMAGE_WIDTH, storage.MIN_IMAGE_HEIGHT) from None
+    except storage.UnsupportedImage:
+        raise errors.unsupported_image() from None
+    except storage.StorageFull:
+        raise errors.storage_full() from None
 
 
 async def remove_photo_as_admin(db_session: AsyncSession, project_id: int, reason: str) -> Project:

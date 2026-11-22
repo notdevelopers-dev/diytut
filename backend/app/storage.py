@@ -4,6 +4,9 @@
 у WebP: зменшується до MAX_IMAGE_SIDE і втрачає метадані, зокрема EXIF з GPS-координатами,
 які додає камера телефона (NF-04). Ім'я файлу випадкове, а заміна фото створює новий файл,
 тож nginx і Cloudflare можуть кешувати файли назавжди.
+
+Модуль не знає про HTTP і про те, чиє це фото: про відмову він повідомляє власними винятками,
+а сервіс перетворює їх на відповіді API. Тож його можна використати й для аватарок (R-29).
 """
 
 import asyncio
@@ -15,10 +18,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO
 
-from fastapi import UploadFile
 from PIL import ExifTags, Image, ImageOps
 
-from app import errors
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -51,23 +52,45 @@ MIN_FREE_DISK_BYTES = 5 * 1024**3
 _processing = asyncio.Semaphore(1)
 
 
+class ImageRejected(Exception):
+    """Завантажений файл не можна прийняти як зображення."""
+
+
+class FileTooLarge(ImageRejected):
+    """Файл більший за MAX_UPLOAD_BYTES."""
+
+
+class ImageTooLarge(ImageRejected):
+    """Зображення більше за MAX_IMAGE_PIXELS."""
+
+
+class ImageTooSmall(ImageRejected):
+    """Зображення менше за MIN_IMAGE_WIDTH × MIN_IMAGE_HEIGHT з урахуванням повороту."""
+
+
+class UnsupportedImage(ImageRejected):
+    """Не JPEG, PNG чи WebP або пошкоджений файл."""
+
+
+class StorageFull(Exception):
+    """На диску з media_root лишилося менше MIN_FREE_DISK_BYTES."""
+
+
 def public_url(key: str) -> str:
     """Адреса, за якою nginx роздає збережений файл."""
     return f"{settings.media_url}/{key}"
 
 
-async def prepare_image(upload: UploadFile) -> bytes:
+async def prepare_image(source: BinaryIO) -> bytes:
     """Перевіряє завантажене зображення й повертає його у WebP.
 
-    Файл понад MAX_UPLOAD_BYTES чи зображення понад MAX_IMAGE_PIXELS — 413; не JPEG, PNG
-    чи WebP або пошкоджений файл — 415; менше за MIN_IMAGE_WIDTH × MIN_IMAGE_HEIGHT — 422;
-    на диску лишилося менше MIN_FREE_DISK_BYTES — 507.
+    Відмову повідомляє винятком ImageRejected (з підкласами) чи StorageFull.
     """
     # До обробки: фото, яке нема де зберегти, немає сенсу й обробляти
     await asyncio.to_thread(_check_free_space)
     async with _processing:
         # Pillow блокує потік, тож працює поза event loop
-        return await asyncio.to_thread(_encode_webp, upload.file)
+        return await asyncio.to_thread(_encode_webp, source)
 
 
 async def save_image(data: bytes, folder: str) -> str:
@@ -89,32 +112,32 @@ async def delete(key: str) -> None:
 def _check_free_space() -> None:
     free = shutil.disk_usage(settings.media_root).free
     if free < MIN_FREE_DISK_BYTES:
-        # Користувач отримає 507, а адміністратор сервера побачить попередження в логах api
+        # Адміністратор сервера побачить попередження в логах api
         logger.warning("Media storage is almost full: %.1f GB free", free / 1024**3)
-        raise errors.storage_full()
+        raise StorageFull
 
 
 def _encode_webp(source: BinaryIO) -> bytes:
     # Starlette уже зберіг завантаження в тимчасовий файл, тож розмір відомий без читання
     source.seek(0, os.SEEK_END)
     if source.tell() > MAX_UPLOAD_BYTES:
-        raise errors.file_too_large(MAX_UPLOAD_BYTES)
+        raise FileTooLarge
     source.seek(0)
     try:
         with Image.open(source, formats=ALLOWED_FORMATS) as image:
             # Розміри відомі з заголовка ще до декодування пікселів
             if image.width * image.height > MAX_IMAGE_PIXELS:
-                raise errors.image_too_large(MAX_IMAGE_PIXELS)
+                raise ImageTooLarge
             width, height = _displayed_size(image)
             if width < MIN_IMAGE_WIDTH or height < MIN_IMAGE_HEIGHT:
-                raise errors.image_too_small(MIN_IMAGE_WIDTH, MIN_IMAGE_HEIGHT)
+                raise ImageTooSmall
             return _to_webp(image)
     except Image.DecompressionBombError:
         # Pillow сам відмовляється відкривати зображення понад ~179 Мп
-        raise errors.image_too_large(MAX_IMAGE_PIXELS) from None
+        raise ImageTooLarge from None
     except OSError, SyntaxError, ValueError, EOFError:
         # Не зображення, непідтримуваний формат або пошкоджений файл
-        raise errors.unsupported_image() from None
+        raise UnsupportedImage from None
 
 
 # Значення повороту в EXIF, за яких фото показується «боком»: ширина й висота міняються місцями
