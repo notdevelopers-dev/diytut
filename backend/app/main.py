@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
@@ -21,3 +22,11 @@ app.add_middleware(
     https_only=settings.cookie_secure,
 )
 app.include_router(api_router)
+
+# Лише для локальної розробки (SERVE_MEDIA): на сервері завантажені файли роздає nginx
+if settings.serve_media:
+    app.mount(
+        settings.media_url,
+        StaticFiles(directory=settings.media_root, check_dir=False),
+        name="media",
+    )

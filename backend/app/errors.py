@@ -142,6 +142,46 @@ def project_not_draft() -> HTTPException:
     return HTTPException(status.HTTP_409_CONFLICT, "Only a draft project can be published")
 
 
+def not_project_editor() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Only organization owner or admin can edit projects"
+    )
+
+
+def project_not_editable() -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT, "Completed or cancelled project cannot be edited"
+    )
+
+
+# Помилки завантажених файлів — у форматі помилки поля file, як і решта помилок форм
+def file_too_large(max_bytes: int) -> HTTPException:
+    return field_error(
+        status.HTTP_413_CONTENT_TOO_LARGE,
+        "file",
+        "file_too_large",
+        f"File must be at most {max_bytes // (1024 * 1024)} MB",
+    )
+
+
+def image_too_large(max_pixels: int) -> HTTPException:
+    return field_error(
+        status.HTTP_413_CONTENT_TOO_LARGE,
+        "file",
+        "image_too_large",
+        f"Image must be at most {max_pixels // 1_000_000} megapixels",
+    )
+
+
+def unsupported_image() -> HTTPException:
+    return field_error(
+        status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+        "file",
+        "unsupported_image",
+        "File must be a JPEG, PNG or WebP image",
+    )
+
+
 def project_incomplete(validation_errors: list[dict[str, Any]]) -> HTTPException:
     """422 з помилками полів проєкту, яких бракує для публікації.
 

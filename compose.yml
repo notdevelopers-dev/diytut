@@ -50,6 +50,9 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    # Завантажені фото (MEDIA_ROOT): переживають перезапуск і перезбирання контейнерів
+    volumes:
+      - media:/data/media
     networks: [proxy, data]
 
   nginx:
@@ -59,6 +62,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      # Ті самі фото, лише для читання: nginx роздає їх за адресою /media/
+      - media:/srv/media:ro
     depends_on: [api]
     networks: [proxy]
     logging: *logging
@@ -83,3 +88,4 @@ networks:
 
 volumes:
   pgdata:
+  media:

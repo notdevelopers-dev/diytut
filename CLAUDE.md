@@ -32,6 +32,7 @@ The backend, the frontend and nginx form one system. When you add or change an e
   On the frontend, never call a data-fetching hook inside a component that is rendered once per list item.
 - **No client-side joins over whole collections.** Do not make up for a missing field by fetching an entire other collection and joining it in the browser.
   - Existing example to fix, not copy: `useOrganizationNames` in `frontend/src/features/projects/hooks.ts` fetches up to 100 organizations because `GET /api/projects` returns only `organization_id`. Once there are more than 100 organizations, project cards lose the organization name.
+- **Uploaded files** (project covers) are served by nginx from `/media/` (the `media` volume), outside the `/api/` rate limit, so a page with many images does not spend the API budget. API responses carry only the URL (`cover_url`). In dev the backend serves `/media` itself (`SERVE_MEDIA=true`) and Vite proxies it. See `app/storage.py`.
 - **Eager loading.** On the backend, load the related rows for a list in the same query, with `joinedload` or `selectinload`, never one query per row.
 - **Server-side pagination and filtering.** Lists are paginated on the server (`limit`/`offset`, with a backend maximum). Filtering and search run in SQL, not by downloading everything to the client.
 - **Cross-side changes.** If a change on one side requires a change on the other, such as a new or renamed field, a new endpoint, or frontend routes used in `notification.link`, do both. Backend and frontend usually ship as separate `[BE]`/`[FE]` tasks, so if the other side is out of scope, state exactly what it needs to change.
@@ -122,6 +123,7 @@ CI (`.github/workflows/ci.yml`) runs these backend checks, and all of them must 
   - To seed data or query the DB, use the `db` fixture: `db(async_fn)` runs `async_fn(session)` on the app's loop and then commits.
 - To authenticate, set a `session` cookie signed with `auth._encode({"sub": str(user_id), "typ": "session"}, auth.SESSION_TTL)` on path `/api`; many test files have a `sign_in` helper for this.
 - To mock Google, use the `google_returns` fixture.
+- To test uploads, use the `media_root` fixture: it points `MEDIA_ROOT` at a temp directory.
 - `tests/conftest.py` sets environment variables before importing the app, which is why ruff ignores E402 there.
 
 ## Frontend

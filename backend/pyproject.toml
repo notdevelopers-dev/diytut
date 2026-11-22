@@ -13,6 +13,8 @@ dependencies = [
     "itsdangerous",
     "pyjwt",
     "httpx2",
+    "python-multipart>=0.0.34",
+    "pillow>=13.0.0",
 ]
 
 [dependency-groups]

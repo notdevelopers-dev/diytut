@@ -17,9 +17,11 @@ RUN uv sync --locked --no-dev --no-install-project
 FROM base AS dev
 ARG UID=1000
 ARG GID=1000
+# /data/media — точка монтування volume з фото: новий volume успадковує її власника,
+# інакше він належав би root і застосунок не зміг би в нього писати
 RUN groupadd --gid ${GID} dev \
  && useradd --uid ${UID} --gid ${GID} --create-home dev \
- && mkdir /opt/venv && chown dev:dev /opt/venv
+ && mkdir -p /opt/venv /data/media && chown dev:dev /opt/venv /data/media
 COPY pyproject.toml uv.lock ./
 USER dev
 RUN uv sync --locked --no-install-project
@@ -30,7 +32,9 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload
 FROM python:3.14-slim AS prod
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
-RUN useradd --system --uid 10001 app
+# Власник точки монтування volume з фото — app, як і в dev-етапі
+RUN useradd --system --uid 10001 app \
+ && mkdir -p /data/media && chown app /data/media
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 COPY . .

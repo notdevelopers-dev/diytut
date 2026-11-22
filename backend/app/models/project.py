@@ -136,6 +136,9 @@ class Project(Base):
     )
     # Хештеги організації: вільний текст, нормалізований схемою (нижній регістр, без «#»)
     tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    # Обкладинка (R-13): шлях до файлу відносно MEDIA_ROOT, наприклад projects/<uuid>.webp.
+    # Адресу будує схема з MEDIA_URL, тож зміна префікса не потребує міграції даних
+    cover_key: Mapped[str | None] = mapped_column(Text)
     status: Mapped[ProjectStatusEnum] = mapped_column(default=ProjectStatusEnum.draft)
     # Коли проєкт опубліковано: за цим часом, а не за created_at, каталог ставить нові
     # проєкти першими, тож чернетка, опублікована пізніше, не загубиться серед старих

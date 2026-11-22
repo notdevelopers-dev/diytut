@@ -9,6 +9,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-at-least-32-bytes-long")
 os.environ.setdefault("COOKIE_SECURE", "false")
 
 from collections.abc import AsyncIterator, Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -16,6 +17,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from app import auth
+from app.config import settings
 from app.db import engine, get_db_session
 from app.main import app
 
@@ -85,6 +87,13 @@ def db(client: TestClient, db_session: AsyncSession) -> Callable[..., Any]:
         return client.portal.call(wrapper)
 
     return run
+
+
+@pytest.fixture
+def media_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Тимчасова тека для завантажених файлів замість volume (MEDIA_ROOT)."""
+    monkeypatch.setattr(settings, "media_root", tmp_path)
+    return tmp_path
 
 
 @pytest.fixture

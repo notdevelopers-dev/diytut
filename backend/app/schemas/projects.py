@@ -12,10 +12,12 @@ from pydantic import (
     ModelWrapValidatorHandler,
     StringConstraints,
     ValidationError,
+    computed_field,
     field_validator,
     model_validator,
 )
 
+from app import storage
 from app.models.experience import ExperienceLevelEnum
 from app.models.project import MAX_PROJECT_CATEGORIES, ProjectCategoryEnum, ProjectStatusEnum
 from app.schemas.users import MAX_BIGINT, MAX_INT32
@@ -323,6 +325,14 @@ class ProjectListItem(BaseModel):
     experience_level: ExperienceLevelEnum = ExperienceLevelEnum.novice
     categories: list[ProjectCategoryEnum] = []
     tags: list[str] = []
+    # Шлях до файлу обкладинки в сховищі; назовні віддається лише cover_url
+    cover_key: str | None = Field(default=None, exclude=True)
+
+    @computed_field
+    @property
+    def cover_url(self) -> str | None:
+        """Адреса обкладинки (R-13), яку роздає nginx; null, якщо фото немає."""
+        return storage.public_url(self.cover_key) if self.cover_key else None
 
 
 class ProjectRead(ProjectListItem):

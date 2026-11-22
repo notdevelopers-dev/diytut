@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, status
+from fastapi import APIRouter, File, Path, Query, UploadFile, status
 from pydantic import Field, StringConstraints
 
 from app.auth import CurrentUserId, OptionalUserId
@@ -15,6 +15,7 @@ from app.schemas.join_requests import (
 from app.schemas.projects import ProjectCreate, ProjectListItem, ProjectRead
 from app.schemas.users import MAX_BIGINT, MAX_INT32
 from app.services import project_join_requests as join_requests_service
+from app.services import project_photos as photos_service
 from app.services import projects as service
 
 # Більше карток на сторінці не буває: каталог віддає до 100 проєктів за раз
@@ -96,6 +97,25 @@ async def publish_project(
     project_id: ProjectId, db_session: DbSessionDep, user_id: CurrentUserId
 ) -> ProjectRead:
     project = await service.publish_project(db_session, user_id, project_id)
+    return ProjectRead.model_validate(project)
+
+
+@router.post("/{project_id}/photo")
+async def upload_project_photo(
+    project_id: ProjectId,
+    file: Annotated[UploadFile, File(description="JPEG, PNG або WebP до 10 МБ")],
+    db_session: DbSessionDep,
+    user_id: CurrentUserId,
+) -> ProjectRead:
+    project = await photos_service.set_project_photo(db_session, user_id, project_id, file)
+    return ProjectRead.model_validate(project)
+
+
+@router.delete("/{project_id}/photo")
+async def delete_project_photo(
+    project_id: ProjectId, db_session: DbSessionDep, user_id: CurrentUserId
+) -> ProjectRead:
+    project = await photos_service.delete_project_photo(db_session, user_id, project_id)
     return ProjectRead.model_validate(project)
 
 

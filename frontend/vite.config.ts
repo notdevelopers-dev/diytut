@@ -14,6 +14,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': apiProxyTarget,
+      // Завантажені фото: у dev їх роздає бекенд (SERVE_MEDIA), на сервері — nginx
+      '/media': apiProxyTarget,
     },
   },
 })

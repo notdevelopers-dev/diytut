@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Self
 
 from pydantic import Field, SecretStr, model_validator
@@ -17,6 +18,14 @@ class Settings(BaseSettings):
     cookie_secure: bool = True
     # Лише для локальної розробки: вхід без Google, під будь-яким email
     dev_login: bool = False
+    # Тека для завантажених файлів (фото проєктів, R-13). У Docker це volume, який nginx
+    # роздає за адресою media_url
+    media_root: Path = Path("/data/media")
+    # Префікс адрес файлів з media_root, без «/» у кінці; має збігатися з location у nginx
+    media_url: str = Field(default="/media", pattern=r"^/[a-z0-9_\-/]*[a-z0-9_\-]$")
+    # Лише для локальної розробки: файли роздає сам застосунок, бо Vite dev-сервер
+    # проксіює запити на бекенд, а не на nginx. На сервері їх роздає nginx
+    serve_media: bool = False
 
     @model_validator(mode="after")
     def check_login_settings(self) -> Self:

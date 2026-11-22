@@ -13,6 +13,8 @@ x-dev-backend: &dev-backend
     COOKIE_SECURE: "false"
     # Вхід без Google; для перевірки справжнього входу — DEV_LOGIN=false у .env
     DEV_LOGIN: ${DEV_LOGIN:-true}
+    # Фото роздає й сам застосунок: Vite dev-сервер проксіює /media на бекенд, а не на nginx
+    SERVE_MEDIA: "true"
   # Код змонтовано, тож нові міграції підхоплюються без перезбирання образу
   volumes:
     - ./backend:/app
