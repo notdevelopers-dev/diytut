@@ -13,9 +13,11 @@ from app.schemas.admin import (
     OrganizationRequestPage,
     OrganizationReview,
 )
+from app.schemas.stats import AdminStatsRead
 from app.schemas.users import MAX_BIGINT, MAX_INT32
 from app.services import admin as service
 from app.services import logins as logins_service
+from app.services import stats as stats_service
 
 
 async def get_current_admin_id(db_session: DbSessionDep, user_id: CurrentUserId) -> int:
@@ -61,6 +63,11 @@ async def review_organization_request(
 ) -> OrganizationRequest:
     organization = await service.review_organization(db_session, admin_id, organization_id, review)
     return OrganizationRequest.model_validate(organization)
+
+
+@router.get("/stats")
+async def platform_stats(db_session: DbSessionDep) -> AdminStatsRead:
+    return AdminStatsRead.model_validate(await stats_service.get_admin_stats(db_session))
 
 
 @router.get("/stats/logins")
