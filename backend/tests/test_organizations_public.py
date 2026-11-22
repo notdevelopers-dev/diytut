@@ -100,6 +100,8 @@ def _project(organization_id: int, **changes) -> Project:
         "volunteer_hours": Decimal("2.5"),
         "status": ProjectStatusEnum.published,
     } | changes
+    if fields["status"] != ProjectStatusEnum.draft:
+        fields.setdefault("published_at", datetime.now(UTC))
     return Project(**fields)
 
 

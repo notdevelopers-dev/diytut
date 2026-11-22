@@ -13,7 +13,10 @@ import {
   useOrganization,
 } from '@/features/organizations/hooks'
 import { ProjectCard } from '@/features/projects/components/ProjectCard'
-import { useCategories } from '@/features/projects/hooks'
+import {
+  useCategories,
+  useMyProjectRequestStatuses,
+} from '@/features/projects/hooks'
 import { getErrorStatus } from '@/lib/errors'
 
 /** Публічна сторінка організації за макетом Figma («Public org page»). */
@@ -46,6 +49,9 @@ export const OrganizationViewPage = () => {
   const { data: joinRequest, isLoading: isJoinRequestLoading } =
     useMyJoinRequest(organizationId, canHaveRequests && Boolean(organization))
   const createJoinRequest = useCreateJoinRequest(organizationId)
+  const projectJoinStatuses = useMyProjectRequestStatuses(
+    organization?.projects.map((project) => project.id) ?? [],
+  )
 
   const cityNames = useMemo(
     () => new Map(cities.map((city) => [city.id, city.name])),
@@ -57,6 +63,8 @@ export const OrganizationViewPage = () => {
   )
 
   const joinState: JoinState = (() => {
+    // Кеш попереднього користувача не показуємо тому, хто вийшов
+    if (!canHaveRequests) return 'default'
     if (memberships?.some((m) => m.id === organizationId)) return 'member'
     switch (joinRequest?.status) {
       case 'pending':
@@ -232,6 +240,8 @@ export const OrganizationViewPage = () => {
                   project={project}
                   showOrganization={false}
                   categoryNames={categoryNames}
+                  joinStatus={projectJoinStatuses.statuses.get(project.id)}
+                  isJoinStatusLoading={projectJoinStatuses.isLoading}
                   cityName={
                     project.city_id !== null
                       ? cityNames.get(project.city_id)
@@ -268,7 +278,7 @@ export const OrganizationViewPage = () => {
 
       {isModalOpen && (
         <JoinRequestModal
-          organizationName={organization.name}
+          subtitle={organization.name}
           isSubmitting={createJoinRequest.isPending}
           error={createJoinRequest.error}
           onSubmit={handleSubmit}

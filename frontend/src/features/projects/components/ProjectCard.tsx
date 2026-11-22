@@ -1,10 +1,14 @@
 import { useId, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import cameraIcon from '@/assets/icons/camera.svg'
-import clockIcon from '@/assets/icons/clock.svg'
-import { useAuth } from '@/features/auth/hooks'
+import { ProjectJoinAction } from '@/features/projects/components/ProjectJoinAction'
 import { projectsCatalogUrl } from '@/features/projects/utils'
-import type { ExperienceLevel, Project, ProjectCategory } from '@/types/project'
+import type {
+  ExperienceLevel,
+  Project,
+  ProjectCategory,
+  ProjectJoinRequestStatus,
+} from '@/types/project'
 
 /** Назви рівнів досвіду з документа скоупу (R-27) */
 const EXPERIENCE_LABELS: Record<ExperienceLevel, string> = {
@@ -52,6 +56,9 @@ interface ProjectCardProps {
    */
   onTagClick?: (tag: string) => void
   onCategoryClick?: (category: ProjectCategory) => void
+  /** Остання заявка користувача на проєкт (useMyProjectRequestStatuses на сторінці) */
+  joinStatus?: ProjectJoinRequestStatus | null
+  isJoinStatusLoading?: boolean
 }
 
 /** Картка проєкту за макетом Figma («Projects section») із бейджами з задачі. */
@@ -63,11 +70,10 @@ export const ProjectCard = ({
   categoryNames,
   onTagClick,
   onCategoryClick,
+  joinStatus,
+  isJoinStatusLoading,
 }: ProjectCardProps) => {
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(false)
-  const [isJoinRequested, setIsJoinRequested] = useState(false)
-  const { isAuthenticated } = useAuth()
-  const navigate = useNavigate()
   const descriptionId = useId()
 
   const date = formatDate(project.starts_at)
@@ -173,37 +179,12 @@ export const ProjectCard = ({
         </p>
       </div>
 
-      {/*
-        Заявки на проєкт бекенд ще не приймає: кнопка лише показує «Запит очікує»
-        і нічого не надсилає (стан живе до перезавантаження сторінки).
-        TODO: POST /api/projects/{id}/join-requests, коли з'явиться на бекенді.
-      */}
-      {isJoinRequested ? (
-        <p
-          data-testid="project-join"
-          data-state="pending"
-          className="mx-auto flex items-center gap-1.5 rounded-[5px] bg-[#C2D4EA] px-4 py-1 text-xs text-[#8B99AA]"
-        >
-          <img src={clockIcon} alt="" width={14} height={14} />
-          Запит очікує
-        </p>
-      ) : (
-        <button
-          type="button"
-          data-testid="project-join"
-          data-state="default"
-          onClick={() => {
-            if (!isAuthenticated) {
-              void navigate('/login')
-              return
-            }
-            setIsJoinRequested(true)
-          }}
-          className="mx-auto block cursor-pointer rounded-[5px] bg-[#B5F291] px-5 py-1 text-center text-xs text-black transition-colors hover:bg-[#a3e47c]"
-        >
-          Приєднатись
-        </button>
-      )}
+      <ProjectJoinAction
+        projectId={project.id}
+        projectTitle={project.title}
+        status={joinStatus}
+        isLoading={isJoinStatusLoading}
+      />
     </article>
   )
 }

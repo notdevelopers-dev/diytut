@@ -1,11 +1,15 @@
+from typing import Any
+
+from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import errors
 from app.models import OrgStatusEnum, Project, ProjectCategoryEnum, ProjectStatusEnum
-from app.schemas.projects import ProjectCreate, normalize_tag
+from app.schemas.projects import ProjectCreate, ProjectDraft, check_publication, normalize_tag
 from app.services.cities import ensure_city_exists
 from app.services.organizations import EDITOR_ROLES, get_user_membership
+from app.services.project_join_requests import lock_project
 
 
 def _escape_like(value: str) -> str:
@@ -45,23 +49,68 @@ async def list_active_projects(
     if wanted_tags:
         query = query.where(Project.tags.overlap(wanted_tags))
 
-    query = query.order_by(Project.created_at.desc(), Project.id.desc()).limit(limit).offset(offset)
+    # Нові першими за часом публікації: чернетка, опублікована пізніше, теж потрапить нагору
+    query = (
+        query.order_by(Project.published_at.desc(), Project.id.desc()).limit(limit).offset(offset)
+    )
     return list(await db_session.scalars(query))
 
 
-async def get_published_project(db_session: AsyncSession, project_id: int) -> Project:
-    project = await db_session.scalar(
-        select(Project).where(
-            Project.id == project_id,
-            Project.status == ProjectStatusEnum.published,
-        )
-    )
+def _check_publication(fields: dict[str, Any]) -> None:
+    """Повна перевірка полів перед публікацією; 422 з усіма помилками одразу."""
+    try:
+        check_publication(fields)
+    except ValidationError as error:
+        raise errors.project_incomplete(
+            error.errors(include_url=False, include_context=False, include_input=False)
+        ) from None
+
+
+async def get_visible_project(
+    db_session: AsyncSession, project_id: int, user_id: int | None
+) -> Project:
+    """Опублікований проєкт бачать усі, а чернетку, завершений і скасований — лише учасники
+    його організації (з будь-якою роллю). Для решти такого проєкту не існує: 404, а не 403.
+    """
+    project = await db_session.get(Project, project_id)
     if project is None:
+        raise errors.project_not_found()
+    if project.status != ProjectStatusEnum.published and (
+        user_id is None
+        or await get_user_membership(db_session, user_id, project.organization_id) is None
+    ):
         raise errors.project_not_found()
     return project
 
 
+async def list_organization_projects(
+    db_session: AsyncSession,
+    organization_id: int,
+    *,
+    status: ProjectStatusEnum | None,
+    limit: int,
+    offset: int,
+) -> tuple[list[Project], int]:
+    """Усі проєкти організації для її кабінету, зокрема чернетки; нові спершу."""
+    filters = [Project.organization_id == organization_id]
+    if status is not None:
+        filters.append(Project.status == status)
+    total = await db_session.scalar(select(func.count()).select_from(Project).where(*filters))
+    projects = await db_session.scalars(
+        select(Project)
+        .where(*filters)
+        .order_by(Project.created_at.desc(), Project.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(projects), total
+
+
 async def create_project(db_session: AsyncSession, user_id: int, data: ProjectCreate) -> Project:
+    # Повноту полів одразу опублікованого проєкту вже перевірив ProjectCreate
+    publish = data.status == ProjectStatusEnum.published
+    fields = data.project_fields()
+
     # Блокування: роль і статус організації не зміняться, доки проєкт не збережено
     membership = await get_user_membership(db_session, user_id, data.organization_id, lock=True)
     if membership is None:
@@ -70,33 +119,59 @@ async def create_project(db_session: AsyncSession, user_id: int, data: ProjectCr
         raise errors.project_requires_organization()
     if membership.role not in EDITOR_ROLES:
         raise errors.not_project_manager()
-    # Публікувати можуть лише схвалені організації (R-12, розділ 4.3 scope)
+    if membership.organization.status == OrgStatusEnum.blocked:
+        raise errors.organization_blocked()
+    # Публікувати можуть лише схвалені організації (R-12, розділ 4.3 scope). Чернетку
+    # можна готувати й поки організація чекає на схвалення: її не бачить ніхто поза нею
+    if publish and membership.organization.status != OrgStatusEnum.approved:
+        raise errors.organization_not_approved()
+
+    if fields["city_id"] is not None:
+        await ensure_city_exists(db_session, fields["city_id"])
+
+    fields["categories"] = [category.value for category in fields["categories"]]
+    project = Project(
+        **fields,
+        organization_id=membership.organization_id,
+        status=data.status,
+        published_at=func.now() if publish else None,
+    )
+    db_session.add(project)
+    await db_session.commit()
+    # created_at і published_at заповнює БД
+    await db_session.refresh(project)
+    return project
+
+
+async def publish_project(db_session: AsyncSession, user_id: int, project_id: int) -> Project:
+    project = await db_session.get(Project, project_id)
+    if project is None:
+        raise errors.project_not_found()
+    # Спершу членство, потім проєкт — у тому ж порядку блокує й розгляд заявок, тож
+    # паралельні запити не заблокують одне одного
+    membership = await get_user_membership(db_session, user_id, project.organization_id, lock=True)
+    # Чернетку чужої організації не видно: так не видно й того, які id зайняті
+    if membership is None:
+        raise errors.project_not_found()
+    project = await lock_project(db_session, project_id)
+    if project is None:
+        raise errors.project_not_found()
+
+    if membership.role not in EDITOR_ROLES:
+        raise errors.not_project_publisher()
     if membership.organization.status == OrgStatusEnum.blocked:
         raise errors.organization_blocked()
     if membership.organization.status != OrgStatusEnum.approved:
         raise errors.organization_not_approved()
+    if project.status != ProjectStatusEnum.draft:
+        raise errors.project_not_draft()
 
-    if data.city_id is not None:
-        await ensure_city_exists(db_session, data.city_id)
+    # Чернетку зберігали з будь-якими полями: тепер усі обов'язкові мають бути заповнені
+    _check_publication({field: getattr(project, field) for field in ProjectDraft.model_fields})
 
-    project = Project(
-        organization_id=membership.organization_id,
-        title=data.title,
-        description=data.description,
-        starts_at=data.starts_at,
-        ends_at=data.ends_at,
-        is_online=data.is_online,
-        city_id=data.city_id,
-        address=data.address,
-        capacity=data.capacity,
-        volunteer_hours=data.volunteer_hours,
-        is_adult_only=data.is_adult_only,
-        experience_level=data.experience_level,
-        categories=[category.value for category in data.categories],
-        tags=data.tags,
-        status=ProjectStatusEnum.published,
-    )
-    db_session.add(project)
+    project.status = ProjectStatusEnum.published
+    project.published_at = func.now()
     await db_session.commit()
+    # published_at і updated_at обчислює БД
     await db_session.refresh(project)
     return project

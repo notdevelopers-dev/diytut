@@ -118,12 +118,29 @@ def test_projects_can_be_filtered_by_tag(db, ids: dict[str, int]) -> None:
     assert db(create) == ["Еко"]
 
 
+def _published(organization_id: int, **changes) -> Project:
+    published = {"status": ProjectStatusEnum.published, "published_at": STARTS_AT - timedelta(7)}
+    return _project(organization_id, **published | changes)
+
+
+def _rejection(db, project: Project) -> str:
+    """Текст помилки БД при спробі зберегти проєкт."""
+
+    async def create(session) -> str:
+        with pytest.raises(IntegrityError) as error:
+            async with session.begin_nested():
+                session.add(project)
+                await session.flush()
+        return str(error.value)
+
+    return db(create)
+
+
 @pytest.mark.parametrize(
     ("changes", "constraint"),
     [
         ({"capacity": 0}, "ck_projects_capacity_positive"),
         ({"volunteer_hours": Decimal("0")}, "ck_projects_volunteer_hours_positive"),
-        ({"ends_at": None}, 'column "ends_at"'),
         ({"ends_at": STARTS_AT}, "ck_projects_ends_after_start"),
         ({"ends_at": STARTS_AT - timedelta(hours=1)}, "ck_projects_ends_after_start"),
         ({"is_online": False}, "ck_projects_offline_has_location"),
@@ -131,16 +148,79 @@ def test_projects_can_be_filtered_by_tag(db, ids: dict[str, int]) -> None:
         ({"categories": []}, "ck_projects_categories_count"),
         ({"categories": ["ecology", "idp", "animals"]}, "ck_projects_categories_count"),
         ({"categories": ["space"]}, "ck_projects_categories_known"),
+        # Опублікований проєкт має всі поля, яких у чернетці може й не бути
+        ({"description": None}, "ck_projects_complete_unless_draft"),
+        ({"starts_at": None}, "ck_projects_complete_unless_draft"),
+        ({"ends_at": None}, "ck_projects_complete_unless_draft"),
+        ({"capacity": None}, "ck_projects_complete_unless_draft"),
+        ({"volunteer_hours": None}, "ck_projects_complete_unless_draft"),
+        ({"published_at": None}, "ck_projects_complete_unless_draft"),
     ],
 )
-def test_invalid_project_is_rejected_by_db(
+def test_invalid_published_project_is_rejected_by_db(
     db, ids: dict[str, int], changes: dict, constraint: str
 ) -> None:
-    async def create(session) -> str:
-        with pytest.raises(IntegrityError) as error:
-            async with session.begin_nested():
-                session.add(_project(ids["organization"], **changes))
-                await session.flush()
-        return str(error.value)
+    assert constraint in _rejection(db, _published(ids["organization"], **changes))
 
-    assert constraint in db(create)
+
+@pytest.mark.parametrize(
+    "status",
+    [ProjectStatusEnum.published, ProjectStatusEnum.completed, ProjectStatusEnum.cancelled],
+)
+def test_not_draft_project_requires_all_fields(
+    db, ids: dict[str, int], status: ProjectStatusEnum
+) -> None:
+    project = Project(organization_id=ids["organization"], title="Лише назва", status=status)
+    assert "ck_projects_complete_unless_draft" in _rejection(db, project)
+
+
+def test_draft_with_title_only_is_allowed(db, ids: dict[str, int]) -> None:
+    # Рішення 18.11: чернетку можна зберегти з однією назвою, решту дописати пізніше
+    async def create(session) -> int:
+        project = Project(
+            organization_id=ids["organization"],
+            title="Лише назва",
+            categories=[],
+            status=ProjectStatusEnum.draft,
+        )
+        session.add(project)
+        await session.flush()
+        return project.id
+
+    project_id = db(create)
+
+    async def load(session) -> Project:
+        return await session.get(Project, project_id)
+
+    project = db(load)
+    assert project.description is None
+    assert project.starts_at is None
+    assert project.capacity is None
+    assert project.is_online is False
+    assert project.city_id is None
+    assert project.categories == []
+    assert project.published_at is None
+
+
+@pytest.mark.parametrize(
+    ("changes", "constraint"),
+    [
+        # Порожні поля чернетка дозволяє, а заповнені мають бути коректними
+        ({"capacity": 0}, "ck_projects_capacity_positive"),
+        ({"volunteer_hours": Decimal("0")}, "ck_projects_volunteer_hours_positive"),
+        ({"ends_at": STARTS_AT - timedelta(hours=1)}, "ck_projects_ends_after_start"),
+        ({"categories": ["ecology", "idp", "animals"]}, "ck_projects_categories_count"),
+        ({"categories": ["space"]}, "ck_projects_categories_known"),
+    ],
+)
+def test_invalid_draft_values_are_rejected_by_db(
+    db, ids: dict[str, int], changes: dict, constraint: str
+) -> None:
+    project = Project(
+        organization_id=ids["organization"],
+        title="Чернетка",
+        starts_at=STARTS_AT,
+        status=ProjectStatusEnum.draft,
+        **changes,
+    )
+    assert constraint in _rejection(db, project)
