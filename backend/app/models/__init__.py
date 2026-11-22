@@ -5,6 +5,7 @@ from app.models.base import Base
 from app.models.city import City
 from app.models.experience import ExperienceLevelEnum
 from app.models.feedback import Feedback, FeedbackTargetEnum
+from app.models.ignored_user import OrganizationIgnoredUser
 from app.models.join_request import JoinRequest, JoinRequestStatusEnum, JoinRequestTargetEnum
 from app.models.login_event import LoginEvent, LoginMethodEnum
 from app.models.notification import Notification, NotificationTypeEnum
@@ -35,6 +36,7 @@ __all__ = [
     "OrgMemberRoleEnum",
     "OrgStatusEnum",
     "Organization",
+    "OrganizationIgnoredUser",
     "OrganizationMember",
     "Project",
     "ProjectCategoryEnum",

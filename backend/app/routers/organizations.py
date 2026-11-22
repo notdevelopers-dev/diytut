@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, Path, Query, status
 
 from app.auth import CurrentUserId
 from app.db import DbSessionDep
-from app.models import OrganizationMember
+from app.models import OrganizationMember, ProjectStatusEnum
 from app.schemas.join_requests import (
+    IgnoredUserRead,
     JoinRequestCreate,
     JoinRequestRead,
     OrganizationJoinRequestRead,
@@ -18,10 +19,12 @@ from app.schemas.organizations import (
     OrganizationRead,
     OrganizationUpdate,
 )
-from app.schemas.projects import ProjectListItem
+from app.schemas.projects import ProjectListItem, ProjectPage
 from app.schemas.users import MAX_BIGINT, MAX_INT32
 from app.services import join_requests as join_requests_service
 from app.services import organizations as service
+from app.services import project_join_requests as project_join_requests_service
+from app.services import projects as projects_service
 
 router = APIRouter()
 
@@ -84,6 +87,23 @@ async def update_my_organization(
     return OrganizationProfile.from_membership(membership)
 
 
+@router.get("/me/projects")
+async def list_my_organization_projects(
+    db_session: DbSessionDep,
+    membership: CurrentMembership,
+    # Без статусу — усі: чернетки, опубліковані, завершені й скасовані
+    status: ProjectStatusEnum | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
+) -> ProjectPage:
+    projects, total = await projects_service.list_organization_projects(
+        db_session, membership.organization_id, status=status, limit=limit, offset=offset
+    )
+    return ProjectPage(
+        items=[ProjectListItem.model_validate(project) for project in projects], total=total
+    )
+
+
 @router.get("/me/join-requests")
 async def list_my_organization_join_requests(
     db_session: DbSessionDep,
@@ -99,6 +119,38 @@ async def list_my_organization_join_requests(
         db_session, membership.organization_id, limit=limit, offset=offset
     )
     return [OrganizationJoinRequestRead.model_validate(request) for request in join_requests]
+
+
+@router.get("/me/ignored-users")
+async def list_ignored_users(
+    db_session: DbSessionDep,
+    user_id: CurrentUserId,
+    organization_id: OwnOrganizationId = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
+) -> list[IgnoredUserRead]:
+    membership = await join_requests_service.require_request_reviewer(
+        db_session, user_id, organization_id
+    )
+    ignored = await project_join_requests_service.list_ignored_users(
+        db_session, membership.organization_id, limit=limit, offset=offset
+    )
+    return [IgnoredUserRead.model_validate(item) for item in ignored]
+
+
+@router.delete("/me/ignored-users/{ignored_user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def unignore_user(
+    ignored_user_id: Annotated[int, Path(gt=0, le=MAX_BIGINT)],
+    db_session: DbSessionDep,
+    user_id: CurrentUserId,
+    organization_id: OwnOrganizationId = None,
+) -> None:
+    membership = await join_requests_service.require_request_reviewer(
+        db_session, user_id, organization_id
+    )
+    await project_join_requests_service.unignore_user(
+        db_session, membership.organization_id, ignored_user_id
+    )
 
 
 @router.get("/{organization_id}")

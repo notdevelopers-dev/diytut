@@ -129,14 +129,30 @@ def test_duplicate_pending_organization_request_is_rejected_by_db(db, ids) -> No
 def test_duplicate_pending_project_request_is_rejected_by_db(db, ids) -> None:
     _add_all(db, _project_request(ids))
 
-    assert _violation(db, _project_request(ids)) == "uq_join_requests_pending_user_project"
+    assert _violation(db, _project_request(ids)) == "uq_join_requests_active_user_project"
+
+
+def test_accepted_project_request_blocks_new_one_in_db(db, ids) -> None:
+    # Схвалена заявка вже займає місце: друга активна на той самий проєкт не потрібна
+    _add_all(db, _project_request(ids, status=JoinRequestStatusEnum.accepted))
+
+    assert _violation(db, _project_request(ids)) == "uq_join_requests_active_user_project"
 
 
 @pytest.mark.parametrize("status", [JoinRequestStatusEnum.accepted, JoinRequestStatusEnum.rejected])
-def test_new_request_allowed_after_previous_is_reviewed(db, ids, status) -> None:
-    _add_all(db, _org_request(ids, status=status), _project_request(ids, status=status))
+def test_new_organization_request_allowed_after_previous_is_reviewed(db, ids, status) -> None:
+    _add_all(db, _org_request(ids, status=status))
 
-    _add_all(db, _org_request(ids), _project_request(ids))
+    _add_all(db, _org_request(ids))
+
+
+@pytest.mark.parametrize(
+    "status", [JoinRequestStatusEnum.rejected, JoinRequestStatusEnum.cancelled]
+)
+def test_new_project_request_allowed_after_previous_is_closed(db, ids, status) -> None:
+    _add_all(db, _project_request(ids, status=status))
+
+    _add_all(db, _project_request(ids))
 
 
 def test_pending_requests_to_different_targets_do_not_conflict(db, ids) -> None:

@@ -1,5 +1,11 @@
 import { apiClient } from '@/lib/api-client'
-import type { CategoryItem, Project, ProjectCategory } from '@/types/project'
+import type { JoinRequest } from '@/types/organization'
+import type {
+  CategoryItem,
+  Project,
+  ProjectCategory,
+  ProjectJoinRequestStatus,
+} from '@/types/project'
 
 export interface FetchProjectsParams {
   /** Пошук за назвою й описом (бекенд, ilike) */
@@ -35,5 +41,41 @@ export const fetchProjects = async (
 /** Усі сфери для фільтра: GET /api/categories (список змінюється лише з деплоєм) */
 export const fetchCategories = async (): Promise<CategoryItem[]> => {
   const { data } = await apiClient.get<CategoryItem[]>('/categories')
+  return data
+}
+
+/**
+ * Останні заявки користувача на ці проєкти одним запитом (до 100 id); проєктів без
+ * заявок у відповіді немає
+ */
+export const fetchMyProjectRequestStatuses = async (
+  projectIds: number[],
+): Promise<ProjectJoinRequestStatus[]> => {
+  const { data } = await apiClient.get<ProjectJoinRequestStatus[]>(
+    '/projects/my-request-statuses',
+    { params: { project_id: projectIds } },
+  )
+  return data
+}
+
+/** Заявка на проєкт; супровідний лист необов'язковий (до 1000 символів) */
+export const createProjectJoinRequest = async (
+  projectId: number,
+  message: string,
+): Promise<JoinRequest> => {
+  const { data } = await apiClient.post<JoinRequest>(
+    `/projects/${projectId}/join-requests`,
+    { message: message.trim() || null },
+  )
+  return data
+}
+
+/** Скасувати свою заявку (в очікуванні чи схвалену) до початку події */
+export const cancelProjectJoinRequest = async (
+  projectId: number,
+): Promise<JoinRequest> => {
+  const { data } = await apiClient.delete<JoinRequest>(
+    `/projects/${projectId}/my-request`,
+  )
   return data
 }

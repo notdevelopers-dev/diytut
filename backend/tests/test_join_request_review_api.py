@@ -1,5 +1,4 @@
-from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
+from datetime import date
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,18 +9,14 @@ from app.models import (
     City,
     JoinRequest,
     JoinRequestStatusEnum,
-    JoinRequestTargetEnum,
     Notification,
     NotificationTypeEnum,
     Organization,
     OrganizationMember,
     OrgMemberRoleEnum,
     OrgStatusEnum,
-    Project,
     User,
 )
-
-STARTS_AT = datetime(2026, 12, 1, 10, 0, tzinfo=UTC)
 
 
 def sign_in(client: TestClient, user_id: int) -> None:
@@ -111,33 +106,6 @@ def make_request(db, organization_id: int, user_id: int, **changes) -> int:
     async def create(session) -> int:
         request = JoinRequest(
             user_id=user_id, organization_id=organization_id, message="Хочу допомагати", **changes
-        )
-        session.add(request)
-        await session.flush()
-        return request.id
-
-    return db(create)
-
-
-def make_project_request(db, organization_id: int, user_id: int) -> int:
-    async def create(session) -> int:
-        project = Project(
-            organization_id=organization_id,
-            title="Толока",
-            description="Опис",
-            starts_at=STARTS_AT,
-            ends_at=STARTS_AT + timedelta(hours=3),
-            is_online=True,
-            capacity=10,
-            volunteer_hours=Decimal("2"),
-        )
-        session.add(project)
-        await session.flush()
-        request = JoinRequest(
-            user_id=user_id,
-            organization_id=organization_id,
-            target=JoinRequestTargetEnum.project,
-            project_id=project.id,
         )
         session.add(request)
         await session.flush()
@@ -418,16 +386,3 @@ def test_role_checked_in_request_organization(client, db, make_org, make_user) -
 
     assert response.status_code == 403
     assert get_membership(db, volunteer_id, other_org) is None
-
-
-def test_project_request_not_supported(client, db, make_org, make_user) -> None:
-    org_id, owner_id = make_org()
-    volunteer_id = make_user()
-    request_id = make_project_request(db, org_id, volunteer_id)
-    sign_in(client, owner_id)
-
-    response = client.patch(review_url(request_id), json={"status": "accepted"})
-
-    assert response.status_code == 409
-    assert get_request(db, request_id).status is JoinRequestStatusEnum.pending
-    assert get_membership(db, volunteer_id, org_id) is None

@@ -100,6 +100,7 @@ def make_project(db):
                 capacity=10,
                 volunteer_hours=Decimal("2.0"),
                 status=status,
+                published_at=None if status == ProjectStatusEnum.draft else datetime.now(UTC),
             )
             session.add(project)
             await session.flush()
