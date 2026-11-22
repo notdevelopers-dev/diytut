@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-query'
 import { useAuth } from '@/features/auth/hooks'
 import { useProfileMode } from '@/features/users/profileMode'
+import { USER_SCOPED_META } from '@/lib/query-client'
 import {
   fetchNotifications,
   markNotificationRead,
@@ -30,6 +31,8 @@ export const useNotifications = () => {
   const query = useInfiniteQuery({
     queryKey: NOTIFICATIONS_QUERY_KEY,
     queryFn: ({ pageParam }) => fetchNotifications(pageParam),
+    // Сповіщення особисті: після виходу прибираємо їх із кешу
+    meta: USER_SCOPED_META,
     initialPageParam: 0,
     getNextPageParam: (lastPage, pages) =>
       lastPage.length === NOTIFICATIONS_PAGE_SIZE
