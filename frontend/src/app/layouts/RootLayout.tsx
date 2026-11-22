@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { SiteFooter } from '@/app/layouts/SiteFooter'
 import addOrganizationIcon from '@/assets/icons/menu/add-organization.svg'
 import avatarIcon from '@/assets/icons/menu/avatar.svg'
 import closeIcon from '@/assets/icons/menu/close.svg'
@@ -181,8 +182,8 @@ export const RootLayout = () => {
         <Outlet />
       </main>
 
-      {/* 3. Нижня декоративна смужка */}
-      <footer className="h-14 w-full bg-[#DCECFF] border-t-2 border-info" />
+      {/* 3. Багатоколонковий футер; притиснутий донизу завдяки min-h-screen + flex-1 у main */}
+      <SiteFooter />
 
       {/* 4. Бургер-меню за макетом Figma («burger profile») */}
       {isMenuOpen && (
