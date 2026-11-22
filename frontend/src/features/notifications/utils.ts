@@ -62,13 +62,24 @@ export const getTypeMeta = (type: string) => {
 }
 
 /**
- * Посилання, сторінки для яких уже є. Решта (кабінет організації FE-201,
- * розгляд заявок FE-203) поки не клікабельні: клік лише позначає прочитаним.
+ * Посилання, сторінки для яких уже є; решта лише позначаються прочитаними.
+ * Заявки на вступ ведуть у кабінет організації, доки немає розгляду (FE-203).
  */
-const OPENABLE_LINKS = [/^\/organizations\/\d+$/, /^\/organization\/edit(\?|$)/]
+const OPENABLE_LINKS = [
+  /^\/organizations\/\d+$/,
+  /^\/organization\/edit(\?|$)/,
+  // Кабінет організації (FE-201): /organization?organization_id=… відкриває його
+  /^\/organization(\?|$)/,
+]
 
-export const getOpenableLink = (link: string | null): string | null =>
-  link && OPENABLE_LINKS.some((re) => re.test(link)) ? link : null
+export const getOpenableLink = (link: string | null): string | null => {
+  if (!link) return null
+  // Розгляд заявок (FE-203) поки живе у вкладці кабінету «Вхідні запити»
+  if (/^\/organization\/join-requests(\?|$)/.test(link)) {
+    return '/organization/dashboard?tab=requests'
+  }
+  return OPENABLE_LINKS.some((re) => re.test(link)) ? link : null
+}
 
 /** 2026-11-18T10:42:00Z → «18.11.2026» і «12:42» (час користувача) */
 export const formatNotificationDate = (iso: string) => {

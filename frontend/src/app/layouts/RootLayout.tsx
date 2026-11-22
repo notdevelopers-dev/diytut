@@ -112,16 +112,16 @@ const SITE_SECTIONS: Section[] = [
   },
 ]
 
-// Режим організації: сторінки з'являться в FE-201 (кабінет організації), поки заглушки
+// Режим організації: вкладки панелі організації (FE-201)
 const ORGANIZATION_SECTIONS: Section[] = [
   {
-    to: null,
+    to: '/organization/dashboard',
     label: 'Проєкти організації',
     shortLabel: 'Наші проєкти',
     tone: 'border-main',
   },
   {
-    to: null,
+    to: '/organization/dashboard?tab=members',
     label: 'Учасники організації',
     shortLabel: 'Учасники',
     tone: 'border-info',
@@ -246,7 +246,7 @@ export const RootLayout = () => {
           ).map((item) => {
             const pillClass =
               'flex h-8 min-w-0 items-center justify-center rounded-[5px] px-3 text-sm whitespace-nowrap text-black no-underline sm:text-base lg:w-[220px]'
-            // Сторінок учасників і проєктів організації ще немає (FE-201, SCRUM-131)
+            // Кнопка без сторінки — заглушка
             if (!item.to) {
               return (
                 <span
@@ -260,15 +260,23 @@ export const RootLayout = () => {
                 </span>
               )
             }
-            const isActive = location.pathname.startsWith(item.to)
+            // Шлях разом із ?tab=…: «Учасники» і «Проєкти» — вкладки однієї сторінки
+            const [itemPath, itemQuery = ''] = item.to.split('?')
+            const currentTab = new URLSearchParams(location.search).get('tab')
+            const itemTab = new URLSearchParams(itemQuery).get('tab')
+            // Без ?tab — перша вкладка («Проєкти»): кнопки панелі не світяться разом
+            const isActive =
+              location.pathname.startsWith(itemPath) &&
+              (currentTab ?? 'projects') === (itemTab ?? 'projects')
             return (
               <Link
                 key={item.to}
                 to={item.to}
                 aria-current={isActive ? 'page' : undefined}
                 className={`${pillClass} transition hover:brightness-95 ${item.tone} ${
-                  isActive ? 'font-semibold ring-2 ring-black/15' : ''
-                }`}
+                  // Розділи організації — біла кнопка з кольоровою рамкою
+                  item.tone.startsWith('border') ? 'border-2 bg-white' : ''
+                } ${isActive ? 'font-semibold ring-2 ring-black/15' : ''}`}
               >
                 <span className="sm:hidden">{item.shortLabel}</span>
                 <span className="hidden sm:inline">{item.label}</span>
