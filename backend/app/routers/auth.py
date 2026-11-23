@@ -9,6 +9,7 @@ from app.auth import (
     REGISTRATION_COOKIE,
     SESSION_COOKIE,
     GoogleIdentity,
+    client_ip,
     end_session,
     oauth,
     read_registration_identity,
@@ -59,7 +60,7 @@ async def google_callback(request: Request, db_session: DbSessionDep) -> Redirec
         response = RedirectResponse(REGISTRATION_URL, status.HTTP_302_FOUND)
         start_registration(response, identity)
     else:
-        await record_login(db_session, user_id, LoginMethodEnum.google)
+        await record_login(db_session, user_id, LoginMethodEnum.google, client_ip(request))
         response = RedirectResponse(AFTER_LOGIN_URL, status.HTTP_302_FOUND)
         start_session(response, user_id)
     return response
@@ -68,6 +69,7 @@ async def google_callback(request: Request, db_session: DbSessionDep) -> Redirec
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(
     data: RegistrationRequest,
+    request: Request,
     db_session: DbSessionDep,
     response: Response,
     registration_token: Annotated[str | None, Cookie(alias=REGISTRATION_COOKIE)] = None,
@@ -77,7 +79,7 @@ async def register(
         raise errors.registration_expired()
 
     user = await register_user(db_session, identity, data)
-    await record_login(db_session, user.id, LoginMethodEnum.registration)
+    await record_login(db_session, user.id, LoginMethodEnum.registration, client_ip(request))
     start_session(response, user.id)
     return UserRead.model_validate(user)
 

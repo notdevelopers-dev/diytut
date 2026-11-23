@@ -1,9 +1,10 @@
 from datetime import date, datetime
+from ipaddress import IPv4Address, IPv6Address
 from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints, model_validator
 
-from app.models import OrgStatusEnum
+from app.models import LoginMethodEnum, OrgStatusEnum, RoleEnum
 from app.schemas.organizations import OrganizationRead
 from app.schemas.users import CityRead, _empty_to_none
 
@@ -68,3 +69,34 @@ class LoginStats(BaseModel):
     unique_users: int
     # Кожен день періоду, зокрема дні без входів
     days: list[DailyLogins]
+
+
+class LoginUser(BaseModel):
+    """Хто увійшов: щоб адміністратор бачив, чий це вхід і яка в нього роль на платформі."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    first_name: str | None
+    last_name: str
+    platform_role: RoleEnum
+
+
+class LoginEventRead(BaseModel):
+    """Один успішний вхід. Невдалі спроби не записуються, тож статусу немає."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime
+    method: LoginMethodEnum
+    # Порожній у записах до появи цього поля
+    ip: IPv4Address | IPv6Address | None
+    # None, якщо акаунт уже видалено
+    user: LoginUser | None
+
+
+class LoginEventPage(BaseModel):
+    items: list[LoginEventRead]
+    total: int
