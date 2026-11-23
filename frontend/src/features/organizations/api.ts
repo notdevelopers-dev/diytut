@@ -63,19 +63,37 @@ export interface MyOrganization {
   role: string
 }
 
-export const fetchMyOrganization = async (): Promise<MyOrganization> => {
-  const { data } = await apiClient.get<MyOrganization>('/organizations/me')
+/**
+ * Профіль організації користувача разом з його роллю. organization_id обирає одну
+ * з кількох; без нього бекенд бере організацію за замовчуванням.
+ */
+export const fetchMyOrganization = async (
+  organizationId?: number,
+): Promise<MyOrganization> => {
+  const { data } = await apiClient.get<MyOrganization>('/organizations/me', {
+    params: organizationId ? { organization_id: organizationId } : undefined,
+  })
   return data
 }
 
-export const createOrganization = async (payload: OrganizationPayload) => {
-  await apiClient.post('/organizations', payload)
+/** Нова організація (статус pending); користувач стає її власником */
+export const createOrganization = async (
+  payload: OrganizationPayload,
+): Promise<{ id: number }> => {
+  const { data } = await apiClient.post<{ id: number }>(
+    '/organizations',
+    payload,
+  )
+  return data
 }
 
 export const updateMyOrganization = async (
   payload: OrganizationUpdatePayload,
+  organizationId?: number,
 ) => {
-  await apiClient.patch('/organizations/me', payload)
+  await apiClient.patch('/organizations/me', payload, {
+    params: organizationId ? { organization_id: organizationId } : undefined,
+  })
 }
 
 /** Публічна сторінка схваленої організації разом з її опублікованими проєктами */

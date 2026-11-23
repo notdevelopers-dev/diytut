@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { RootLayout } from '@/app/layouts/RootLayout'
 import { AdminPage } from '@/features/admin'
 import {
@@ -22,6 +22,15 @@ import { NotificationsPage } from '@/features/notifications'
 import { StaticPage } from '@/features/static-pages'
 import { ProfilePage } from '@/features/users'
 import { STATIC_PAGES } from '@/content/staticPages'
+
+/**
+ * Старі посилання сповіщень /organization?organization_id=… ведуть у панель тієї
+ * самої організації: параметр зберігаємо (SCRUM-158, кілька організацій).
+ */
+const OrganizationRedirect = () => {
+  const { search } = useLocation()
+  return <Navigate to={`/organization/dashboard${search}`} replace />
+}
 
 /** Усі маршрути застосунку в одному місці. */
 export const AppRoutes = () => (
@@ -62,10 +71,7 @@ export const AppRoutes = () => (
           </OrgRoute>
         }
       />
-      <Route
-        path="/organization"
-        element={<Navigate to="/organization/dashboard" replace />}
-      />
+      <Route path="/organization" element={<OrganizationRedirect />} />
       <Route path="/organizations" element={<OrganizationsCatalogPage />} />
       <Route path="/organizations/:id" element={<OrganizationViewPage />} />
       <Route path="/projects" element={<ProjectsCatalogPage />} />

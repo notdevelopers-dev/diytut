@@ -23,6 +23,7 @@ import { useMyProfile, useUpdateMyProfile } from '../hooks'
 import {
   changeAccount,
   setProfileMode,
+  useActiveOrganization,
   useProfileMode,
   type ProfileMode,
 } from '../profileMode'
@@ -245,13 +246,14 @@ export const ProfilePage = () => {
   const { mutateAsync: saveProfile, isPending: isSubmitting } =
     useUpdateMyProfile()
 
-  // Профіль організації запитуємо лише якщо вона в користувача є
-  const hasOrganization = Boolean(user?.organization)
+  // Профіль активної організації (їх може бути кілька, SCRUM-158), якщо вона є
+  const { organization: activeOrg } = useActiveOrganization()
+  const hasOrganization = Boolean(activeOrg)
   const {
     data,
     isLoading: isOrgLoading,
     isError: isOrgError,
-  } = useMyOrganization(hasOrganization)
+  } = useMyOrganization(hasOrganization, activeOrg?.id)
   const orgData = hasOrganization ? (data ?? null) : null
   const orgError = isOrgError
     ? 'Не вдалося завантажити дані організації. Оновіть сторінку.'
@@ -578,8 +580,8 @@ export const ProfilePage = () => {
 
   // Режим організації: та сама розмітка, але з даними організації з GET /organizations/me.
   // Списки проєктів і учасників — окрема задача (SCRUM-131)
-  if (isOrgMode && user?.organization) {
-    const org = user.organization
+  if (isOrgMode && activeOrg) {
+    const org = activeOrg
     const city = cities.find((c) => c.id === orgData?.city_id)
     return (
       <div className="flex flex-col">
@@ -769,16 +771,14 @@ export const ProfilePage = () => {
             >
               Редагувати профіль
             </ActionButton>
-            {/* Сторінка організації — у режимі організації («Переключити на організацію») */}
-            {!user?.organization && (
-              <ActionButton
-                onClick={() => void navigate('/organization/create')}
-                iconSrc={addOrganizationIcon}
-              >
-                Створити організацію
-              </ActionButton>
-            )}
-            {user?.organization && (
+            {/* Нову організацію можна створити завжди, навіть якщо вже є (SCRUM-158) */}
+            <ActionButton
+              onClick={() => void navigate('/organization/create')}
+              iconSrc={addOrganizationIcon}
+            >
+              Створити організацію
+            </ActionButton>
+            {activeOrg && (
               <ActionButton
                 onClick={() => switchMode('organization')}
                 iconSrc={profileIcon}
@@ -803,17 +803,15 @@ export const ProfilePage = () => {
         )}
 
         {/* Дані організації, якщо вона є */}
-        {user?.organization && !isEditing && (
+        {activeOrg && !isEditing && (
           <div className="flex flex-col gap-3 rounded-lg border border-[#DCECFF] bg-[#F7FBFF] p-4">
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-lg font-bold">
-                {orgData?.name ?? user.organization.name}
+                {orgData?.name ?? activeOrg.name}
               </span>
-              <Chip tone="role">
-                Роль: {getOrgRoleLabel(user.organization.role)}
-              </Chip>
-              {getOrgStatusLabel(user.organization.status) && (
-                <Chip>{getOrgStatusLabel(user.organization.status)}</Chip>
+              <Chip tone="role">Роль: {getOrgRoleLabel(activeOrg.role)}</Chip>
+              {getOrgStatusLabel(activeOrg.status) && (
+                <Chip>{getOrgStatusLabel(activeOrg.status)}</Chip>
               )}
             </div>
             {isOrgLoading ? (

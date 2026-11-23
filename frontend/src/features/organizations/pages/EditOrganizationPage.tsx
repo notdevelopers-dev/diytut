@@ -16,12 +16,20 @@ import {
   useUpdateOrganization,
 } from '@/features/organizations/hooks'
 import { canEditOrganization } from '@/features/organizations/utils'
+import {
+  useActiveOrganization,
+  useOrganizationFromUrl,
+} from '@/features/users/profileMode'
 import { PHONE_PREFIX, isValidPhone, normalizePhone } from '@/lib/phone'
 
 export const EditOrganizationPage = () => {
   const navigate = useNavigate()
-  const { user, isLoading } = useAuth()
-  const updateMutation = useUpdateOrganization()
+  const { user, isLoading: isAuthLoading } = useAuth()
+  // Редагуємо активну організацію (або названу в посиланні сповіщення)
+  useOrganizationFromUrl()
+  const { organization, isLoading: isOrgsLoading } = useActiveOrganization()
+  const isLoading = isAuthLoading || isOrgsLoading
+  const updateMutation = useUpdateOrganization(organization?.id)
   const { cities, error: citiesError } = useCities()
 
   const [name, setName] = useState('')
@@ -43,7 +51,6 @@ export const EditOrganizationPage = () => {
   }, [])
 
   // Без організації — на створення; без права редагування (учасник, заблокована) — у профіль
-  const organization = user?.organization
   useEffect(() => {
     if (isLoading || !user) return
     if (!organization) {
@@ -58,7 +65,7 @@ export const EditOrganizationPage = () => {
     data: orgData,
     isError: isOrgError,
     error: orgError,
-  } = useMyOrganization()
+  } = useMyOrganization(Boolean(organization), organization?.id)
 
   useEffect(() => {
     if (!orgData) return

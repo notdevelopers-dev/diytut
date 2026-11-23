@@ -78,7 +78,13 @@ export const getOpenableLink = (link: string | null): string | null => {
   if (!link) return null
   // Розгляд заявок (FE-203) поки живе у вкладці кабінету «Вхідні запити»
   if (/^\/organization\/join-requests(\?|$)/.test(link)) {
-    return '/organization/dashboard?tab=requests'
+    // organization_id лишаємо: панель відкриє саме ту організацію (SCRUM-158)
+    const organizationId = new URLSearchParams(link.split('?')[1]).get(
+      'organization_id',
+    )
+    return organizationId
+      ? `/organization/dashboard?tab=requests&organization_id=${organizationId}`
+      : '/organization/dashboard?tab=requests'
   }
   return OPENABLE_LINKS.some((re) => re.test(link)) ? link : null
 }

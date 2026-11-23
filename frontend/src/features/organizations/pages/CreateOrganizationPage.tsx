@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import type { FormEvent, ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getApiErrorMessage, getErrorStatus } from '@/lib/errors'
-import { useAuth } from '@/features/auth/hooks'
 import { CityCombobox } from '@/features/cities/components/CityCombobox'
 import {
   FieldError,
@@ -12,11 +11,11 @@ import {
 import { inputClass, textareaClass } from '@/components/ui/formStyles'
 import { useCities } from '@/features/cities/hooks'
 import { useCreateOrganization } from '@/features/organizations/hooks'
+import { switchToOrganization } from '@/features/users/profileMode'
 import { PHONE_PREFIX, isValidPhone, normalizePhone } from '@/lib/phone'
 
 export const CreateOrganizationPage = () => {
   const navigate = useNavigate()
-  const { user } = useAuth()
   const createMutation = useCreateOrganization()
   const { cities, error: citiesError } = useCities()
 
@@ -36,8 +35,6 @@ export const CreateOrganizationPage = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Організацію щойно створили на цій сторінці: у профіль веде таймер, а не редирект нижче
-  const justCreatedRef = useRef(false)
 
   useEffect(() => {
     return () => {
@@ -45,13 +42,7 @@ export const CreateOrganizationPage = () => {
     }
   }, [])
 
-  // Організація вже є — створювати другу не можна (бекенд поверне 409)
-  const hasOrganization = Boolean(user?.organization)
-  useEffect(() => {
-    if (hasOrganization && !justCreatedRef.current) {
-      void navigate('/profile', { replace: true })
-    }
-  }, [hasOrganization, navigate])
+  // Організацій може бути кілька (SCRUM-158): створювати нову можна завжди
 
   // 2. Валідація телефону
   const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -109,9 +100,9 @@ export const CreateOrganizationPage = () => {
         edrpou: edrpou.trim() || null,
       }
 
-      // Мутація оновлює /auth/me, де з'являється організація: ставимо прапорець до цього
-      justCreatedRef.current = true
-      await createMutation.mutateAsync(payload)
+      const created = await createMutation.mutateAsync(payload)
+      // Одразу працюємо з новою організацією: її кабінет відкриється в профілі
+      switchToOrganization(created.id)
 
       // Якщо бекенд зберіг успішно:
       setSuccessMessage('Організацію успішно створено! Переходимо в кабінет...')
@@ -120,7 +111,6 @@ export const CreateOrganizationPage = () => {
         void navigate('/profile', { replace: true })
       }, 1200)
     } catch (err: unknown) {
-      justCreatedRef.current = false
       setIsSubmitting(false)
       // 401 сюди не доходить: його обробляє interceptor в lib/api-client.ts
       const status = getErrorStatus(err)
@@ -128,10 +118,11 @@ export const CreateOrganizationPage = () => {
 
       // Форма залишається на екрані, а юзер бачить точну причину:
       if (status === 409) {
+        // Кілька організацій бекенд дозволяє, тож 409 — лише зайнятий ЄДРПОУ
         setErrorMessage(
-          message.toLowerCase().includes('already belongs')
-            ? 'Ви вже створили організацію або належите до неї.'
-            : 'Помилка: організація з таким кодом ЄДРПОУ вже зареєстрована.',
+          message.toLowerCase().includes('edrpou') || !message
+            ? 'Помилка: організація з таким кодом ЄДРПОУ вже зареєстрована.'
+            : message,
         )
       } else if (status === 422) {
         setErrorMessage(

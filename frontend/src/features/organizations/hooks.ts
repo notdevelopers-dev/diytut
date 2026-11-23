@@ -54,11 +54,14 @@ export const useOrganizations = (
 
 export const MY_ORGANIZATION_QUERY_KEY = ['organizations', 'me'] as const
 
-/** Профіль власної організації; `enabled=false`, якщо організації в користувача немає. */
-export const useMyOrganization = (enabled = true) =>
+/**
+ * Профіль однієї з організацій користувача (активної, SCRUM-158); `enabled=false`,
+ * якщо організації в користувача немає.
+ */
+export const useMyOrganization = (enabled = true, organizationId?: number) =>
   useQuery({
-    queryKey: MY_ORGANIZATION_QUERY_KEY,
-    queryFn: fetchMyOrganization,
+    queryKey: [...MY_ORGANIZATION_QUERY_KEY, organizationId ?? 'default'],
+    queryFn: () => fetchMyOrganization(organizationId),
     enabled,
     meta: USER_SCOPED_META,
   })
@@ -82,10 +85,11 @@ export const useCreateOrganization = () => {
   })
 }
 
-export const useUpdateOrganization = () => {
+export const useUpdateOrganization = (organizationId?: number) => {
   const invalidate = useInvalidateOrganizationData()
   return useMutation({
-    mutationFn: updateMyOrganization,
+    mutationFn: (payload: Parameters<typeof updateMyOrganization>[0]) =>
+      updateMyOrganization(payload, organizationId),
     onSuccess: invalidate,
   })
 }

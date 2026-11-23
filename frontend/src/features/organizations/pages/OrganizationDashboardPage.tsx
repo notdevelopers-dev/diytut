@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import circlePlusIcon from '@/assets/icons/organization/circle-plus.svg'
-import { useAuth } from '@/features/auth/hooks'
 import { useCities } from '@/features/cities/hooks'
 import { MembersSection } from '@/features/organizations/components/dashboard/MembersSection'
 import { RequestsSection } from '@/features/organizations/components/dashboard/RequestsSection'
@@ -21,6 +20,10 @@ import {
   ProjectCardSkeleton,
 } from '@/features/projects/components/ProjectCard'
 import { useCategories } from '@/features/projects/hooks'
+import {
+  useActiveOrganization,
+  useOrganizationFromUrl,
+} from '@/features/users/profileMode'
 
 export type DashboardTab = 'projects' | 'members' | 'requests'
 
@@ -32,18 +35,22 @@ const TABS: DashboardTab[] = ['projects', 'members', 'requests']
  * розділ — за своїм макетом Figma. Редагування організації — з її профілю.
  */
 export const OrganizationDashboardPage = () => {
-  const { user } = useAuth()
   const [searchParams] = useSearchParams()
   const tabParam = searchParams.get('tab') as DashboardTab | null
   const tab: DashboardTab =
     tabParam && TABS.includes(tabParam) ? tabParam : 'projects'
 
-  const membership = user?.organization
-  const { data: myOrg, isLoading, isError } = useMyOrganization(true)
+  // Активна організація (SCRUM-158); посилання сповіщення може назвати іншу
+  useOrganizationFromUrl()
+  const { organization: membership } = useActiveOrganization()
+  const orgId = membership?.id
+  const {
+    data: myOrg,
+    isLoading,
+    isError,
+  } = useMyOrganization(Boolean(orgId), orgId)
   const status = myOrg?.status ?? membership?.status
   const isApproved = status === 'approved'
-  // У даних входу id може прийти рядком
-  const orgId = myOrg?.id ?? (membership ? Number(membership.id) : undefined)
   // Опубліковані проєкти є лише в публічній картці схваленої організації
   const { data: detail, isLoading: isProjectsLoading } = useOrganization(
     isApproved && orgId ? orgId : 0,
