@@ -1,7 +1,7 @@
 """Add project_updated notification type
 
 Revision ID: 021fe9d045e3
-Revises: 945f3020468b
+Revises: 6b10c96b9769
 Create Date: 2026-11-20 10:45:29.560905
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "021fe9d045e3"
-down_revision: str | Sequence[str] | None = "945f3020468b"
+down_revision: str | Sequence[str] | None = "6b10c96b9769"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
