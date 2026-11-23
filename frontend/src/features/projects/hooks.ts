@@ -84,6 +84,8 @@ export const useProjects = (
         : undefined,
     // Поки йде новий пошук, лишаємо попередні результати замість скелетонів
     placeholderData: keepPreviousData,
+    // Учасникам бекенд віддає точні час і адресу (R-22)
+    meta: USER_SCOPED_META,
     select: (data) => ({
       items: data.pages.flatMap((page) => page.items),
       total: data.pages.at(-1)?.total ?? 0,

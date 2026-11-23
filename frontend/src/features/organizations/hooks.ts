@@ -93,6 +93,8 @@ export const useOrganization = (organizationId: number) =>
     enabled: Number.isInteger(organizationId) && organizationId > 0,
     // 404 (немає або не схвалена) не має сенсу повторювати
     retry: false,
+    // Учасникам бекенд віддає точні час і адресу проєктів (R-22)
+    meta: USER_SCOPED_META,
   })
 
 export const MY_ORGANIZATIONS_QUERY_KEY = ['organizations', 'mine'] as const
