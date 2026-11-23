@@ -8,6 +8,8 @@ from app.db import DbSessionDep
 from app.models import OrgStatusEnum
 from app.schemas.admin import (
     DailyLogins,
+    LoginEventPage,
+    LoginEventRead,
     LoginStats,
     OrganizationRequest,
     OrganizationRequestPage,
@@ -15,10 +17,12 @@ from app.schemas.admin import (
     PhotoRemoval,
 )
 from app.schemas.projects import ProjectRead
+from app.schemas.stats import AdminStatsRead
 from app.schemas.users import MAX_BIGINT, MAX_INT32
 from app.services import admin as service
 from app.services import logins as logins_service
 from app.services import project_photos as photos_service
+from app.services import stats as stats_service
 
 
 async def get_current_admin_id(db_session: DbSessionDep, user_id: CurrentUserId) -> int:
@@ -37,11 +41,12 @@ router = APIRouter(dependencies=[Depends(get_current_admin_id)])
 async def list_organization_requests(
     db_session: DbSessionDep,
     status: OrgStatusEnum | None = None,
+    search: Annotated[str | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
 ) -> OrganizationRequestPage:
     organizations, total = await service.list_organization_requests(
-        db_session, status, limit, offset
+        db_session, status, search, limit, offset
     )
     return OrganizationRequestPage(
         items=[OrganizationRequest.model_validate(o) for o in organizations], total=total
@@ -71,8 +76,15 @@ async def review_organization_request(
 async def remove_project_photo(
     removal: PhotoRemoval, db_session: DbSessionDep, project_id: ProjectId
 ) -> ProjectRead:
-    project = await photos_service.remove_photo_as_admin(db_session, project_id, removal.reason)
-    return ProjectRead.model_validate(project)
+    project, accepted_count = await photos_service.remove_photo_as_admin(
+        db_session, project_id, removal.reason
+    )
+    return ProjectRead.from_project(project, accepted_count)
+
+
+@router.get("/stats")
+async def platform_stats(db_session: DbSessionDep) -> AdminStatsRead:
+    return await stats_service.get_admin_stats(db_session)
 
 
 @router.get("/stats/logins")
@@ -96,3 +108,13 @@ async def login_stats(
         unique_users=unique_users,
         days=days,
     )
+
+
+@router.get("/stats/logins/recent")
+async def list_recent_logins(
+    db_session: DbSessionDep,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
+) -> LoginEventPage:
+    events, total = await logins_service.list_recent_logins(db_session, limit, offset)
+    return LoginEventPage(items=[LoginEventRead.model_validate(e) for e in events], total=total)

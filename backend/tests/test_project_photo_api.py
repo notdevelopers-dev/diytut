@@ -215,6 +215,8 @@ def test_editor_uploads_cover(
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["id"] == project_id
+    # Відповідь — той самий ProjectRead, що й у решти ендпоінтів проєкту
+    assert body["accepted_count"] == 0
     assert body["cover_url"].startswith("/media/projects/")
     assert body["cover_url"].endswith(".webp")
     assert "cover_key" not in body

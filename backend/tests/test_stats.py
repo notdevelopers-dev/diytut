@@ -6,16 +6,17 @@ from fastapi.testclient import TestClient
 
 from app import auth
 from app.models import (
+    Attendance,
     City,
     Organization,
     OrgStatusEnum,
     Project,
     ProjectStatusEnum,
+    RoleEnum,
     User,
 )
 from app.schemas.stats import PlatformStatsRead
-
-STARTS_AT = datetime(2026, 12, 1, 10, 0, tzinfo=UTC)
+from app.services import stats as stats_service
 
 
 @pytest.fixture
@@ -33,7 +34,7 @@ def city_id(db) -> int:
 def make_user(db, city_id: int):
     counter = iter(range(1, 1000))
 
-    def make(first_name="Волонтер", last_name="Тестовий", nickname=None) -> int:
+    def make(first_name="Волонтер", last_name="Тестовий", nickname=None, role=RoleEnum.user) -> int:
         n = next(counter)
         nick = nickname or f"volunteer_{n}"
 
@@ -47,6 +48,7 @@ def make_user(db, city_id: int):
                 phone=f"+38067{n:07d}",
                 birth_date=date(1990, 1, 1),
                 city_id=city_id,
+                platform_role=role,
             )
             session.add(user)
             await session.flush()
@@ -86,16 +88,22 @@ def make_org(db, city_id: int):
 def make_project(db):
     counter = iter(range(1, 1000))
 
-    def make(organization_id: int, status: ProjectStatusEnum = ProjectStatusEnum.published) -> int:
+    def make(
+        organization_id: int,
+        status: ProjectStatusEnum = ProjectStatusEnum.published,
+        starts_at: datetime | None = None,
+    ) -> int:
         n = next(counter)
+        # За замовчуванням подія в майбутньому, тож опублікований проєкт активний
+        start = starts_at or datetime.now(UTC) + timedelta(days=n)
 
         async def create(session) -> int:
             project = Project(
                 organization_id=organization_id,
                 title=f"Проєкт {n}",
                 description=f"Опис проєкту {n}",
-                starts_at=STARTS_AT + timedelta(days=n),
-                ends_at=STARTS_AT + timedelta(days=n, hours=3),
+                starts_at=start,
+                ends_at=start + timedelta(hours=3),
                 is_online=True,
                 capacity=10,
                 volunteer_hours=Decimal("2.0"),
@@ -127,6 +135,8 @@ def test_stats_empty_database_returns_zeros(client: TestClient) -> None:
         "volunteers_count": 0,
         "organizations_count": 0,
         "projects_count": 0,
+        "active_projects_count": 0,
+        "total_hours": "0.00",
     }
     assert isinstance(data["volunteers_count"], int)
     assert isinstance(data["organizations_count"], int)
@@ -278,6 +288,8 @@ def test_stats_accurate_counts_full_scenario(
         "volunteers_count": 4,
         "organizations_count": 2,
         "projects_count": 3,
+        "active_projects_count": 3,
+        "total_hours": "0.00",
     }
 
 
@@ -294,6 +306,8 @@ def test_stats_schema_validation(client: TestClient) -> None:
         "volunteers_count",
         "organizations_count",
         "projects_count",
+        "active_projects_count",
+        "total_hours",
     }
     assert stats.volunteers_count >= 0
     assert stats.organizations_count >= 0
@@ -324,3 +338,162 @@ def test_stats_disallows_mutation_methods(client: TestClient) -> None:
     assert client.post("/api/stats").status_code == 405
     assert client.put("/api/stats").status_code == 405
     assert client.delete("/api/stats").status_code == 405
+
+
+@pytest.fixture
+def make_attendance(db):
+    def make(project_id: int, user_id: int | None, hours: str) -> int:
+        async def create(session) -> int:
+            attendance = Attendance(project_id=project_id, user_id=user_id, hours=Decimal(hours))
+            session.add(attendance)
+            await session.flush()
+            return attendance.id
+
+        return db(create)
+
+    return make
+
+
+def sign_in(client: TestClient, user_id: int) -> None:
+    token = auth._encode({"sub": str(user_id), "typ": "session"}, auth.SESSION_TTL)
+    client.cookies.set("session", token, path="/api")
+
+
+# =====================================================================
+# Tests: GET /api/stats — active projects and hours
+# =====================================================================
+
+
+def test_stats_active_projects_are_published_and_not_finished(
+    client: TestClient, make_user, make_org, make_project
+) -> None:
+    """Active projects are the catalog ones: published and not yet finished."""
+    now = datetime.now(UTC)
+    org_id = make_org(created_by=make_user())
+
+    make_project(org_id)  # ще не почався
+    make_project(org_id, starts_at=now - timedelta(hours=1))  # триває ще 2 години
+    make_project(org_id, starts_at=now - timedelta(days=2))  # уже минув
+    make_project(org_id, status=ProjectStatusEnum.draft)
+    make_project(org_id, status=ProjectStatusEnum.cancelled)
+    make_project(org_id, status=ProjectStatusEnum.completed, starts_at=now - timedelta(days=3))
+
+    data = client.get("/api/stats").json()
+
+    assert data["projects_count"] == 3
+    assert data["active_projects_count"] == 2
+
+
+def test_stats_total_hours_sums_every_attendance(
+    client: TestClient, make_user, make_org, make_project, make_attendance
+) -> None:
+    """Hours of no-shows (0) and of deleted accounts (user_id NULL) are included."""
+    past = datetime.now(UTC) - timedelta(days=7)
+    first_id, second_id = make_user(), make_user()
+    org_id = make_org(created_by=first_id)
+    project_id = make_project(org_id, ProjectStatusEnum.completed, starts_at=past)
+    other_project_id = make_project(org_id, starts_at=past)
+
+    make_attendance(project_id, first_id, "2.50")
+    make_attendance(project_id, second_id, "0")
+    make_attendance(project_id, None, "1.25")
+    make_attendance(other_project_id, first_id, "3")
+
+    assert client.get("/api/stats").json()["total_hours"] == "6.75"
+
+
+# =====================================================================
+# Tests: caching of GET /api/stats
+# =====================================================================
+
+
+def test_stats_are_served_from_cache(client: TestClient, make_user) -> None:
+    make_user()
+    assert client.get("/api/stats").json()["volunteers_count"] == 1
+
+    make_user()
+
+    # Новий користувач з'явиться в лічильнику лише після закінчення строку кешу
+    assert client.get("/api/stats").json()["volunteers_count"] == 1
+
+
+def test_stats_are_recounted_after_cache_expires(
+    client: TestClient, make_user, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    make_user()
+    client.get("/api/stats")
+    make_user()
+
+    monkeypatch.setattr(stats_service, "PUBLIC_STATS_TTL_SECONDS", 0)
+
+    assert client.get("/api/stats").json()["volunteers_count"] == 2
+
+
+# =====================================================================
+# Tests: GET /api/admin/stats
+# =====================================================================
+
+
+def test_admin_stats_require_sign_in(client: TestClient) -> None:
+    assert client.get("/api/admin/stats").status_code == 401
+
+
+def test_admin_stats_reject_regular_users(client: TestClient, make_user) -> None:
+    sign_in(client, make_user())
+
+    response = client.get("/api/admin/stats")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Administrator access required"
+
+
+def test_admin_stats_count_everything_by_status(
+    client: TestClient, make_user, make_org, make_project, make_attendance
+) -> None:
+    now = datetime.now(UTC)
+    sign_in(client, make_user(role=RoleEnum.admin))
+    volunteer_id = make_user()
+
+    approved_id = make_org(created_by=volunteer_id, status=OrgStatusEnum.approved)
+    make_org(created_by=volunteer_id, status=OrgStatusEnum.pending)
+    make_org(created_by=volunteer_id, status=OrgStatusEnum.pending)
+    make_org(created_by=volunteer_id, status=OrgStatusEnum.rejected)
+
+    make_project(approved_id)
+    make_project(approved_id, starts_at=now - timedelta(days=1))
+    make_project(approved_id, status=ProjectStatusEnum.draft)
+    make_project(approved_id, status=ProjectStatusEnum.cancelled)
+    completed_id = make_project(
+        approved_id, status=ProjectStatusEnum.completed, starts_at=now - timedelta(days=5)
+    )
+    make_attendance(completed_id, volunteer_id, "4")
+    make_attendance(completed_id, None, "1.5")
+
+    response = client.get("/api/admin/stats")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "users_count": 2,
+        "organizations": {
+            "total": 4,
+            # Статус без жодної організації теж є в списку
+            "by_status": {"pending": 2, "approved": 1, "rejected": 1, "blocked": 0},
+        },
+        "projects": {
+            "total": 5,
+            "active": 1,
+            "by_status": {"draft": 1, "published": 2, "completed": 1, "cancelled": 1},
+        },
+        "total_hours": "5.50",
+    }
+
+
+def test_admin_stats_are_not_cached(client: TestClient, make_user) -> None:
+    sign_in(client, make_user(role=RoleEnum.admin))
+    client.get("/api/stats")
+    assert client.get("/api/admin/stats").json()["users_count"] == 1
+
+    make_user()
+
+    assert client.get("/api/stats").json()["volunteers_count"] == 1
+    assert client.get("/api/admin/stats").json()["users_count"] == 2

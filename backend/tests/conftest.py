@@ -20,6 +20,7 @@ from app import auth
 from app.config import settings
 from app.db import engine, get_db_session
 from app.main import app
+from app.services import stats as stats_service
 
 GOOGLE_CLAIMS = {
     "sub": "google-123",
@@ -28,6 +29,12 @@ GOOGLE_CLAIMS = {
     "given_name": "Тарас",
     "family_name": "Шевченко",
 }
+
+
+@pytest.fixture(autouse=True)
+def _fresh_public_stats() -> None:
+    """Кеш публічної статистики живе в пам'яті процесу, спільного для всіх тестів."""
+    stats_service.clear_public_stats_cache()
 
 
 @pytest.fixture(scope="session")

@@ -1,28 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
-import { apiClient } from '@/lib/api-client'
-
-type OrgStatus = 'pending' | 'approved' | 'rejected' | 'blocked'
-
-interface OrgRequest {
-  id: number
-  name: string
-  edrpou: string | null
-  status: OrgStatus
-  created_at: string
-  review_comment: string | null
-  creator: {
-    email: string
-    first_name: string | null
-    last_name: string
-    phone: string
-  }
-}
-
-interface OrgRequestPage {
-  items: OrgRequest[]
-  total: number
-}
+import { useDebounce } from '@/hooks/useDebounce'
+import { getApiErrorMessage, getErrorStatus } from '@/lib/errors'
+import type { OrgStatus } from '@/types/common'
+import { useOrganizationRequests, useReviewOrganizationRequest } from '../hooks'
+import type { OrganizationRequest } from '../types'
 
 const PAGE_SIZE = 10
 
@@ -35,78 +17,71 @@ const STATUS_STYLES: Record<OrgStatus, { label: string; className: string }> = {
 
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString('uk-UA')
 
-const contactName = (req: OrgRequest) =>
+const contactName = (req: OrganizationRequest) =>
   [req.creator.first_name, req.creator.last_name].filter(Boolean).join(' ')
 
+/** Тексти для відповідей бекенду на рішення по заявці */
+const reviewErrorText = (error: unknown) => {
+  switch (getErrorStatus(error)) {
+    case 409:
+      return 'Цю заявку вже розглянув інший адміністратор.'
+    case 404:
+      return 'Заявку не знайдено.'
+    default:
+      return getApiErrorMessage(
+        error,
+        'Не вдалося зберегти рішення. Спробуйте ще раз.',
+      )
+  }
+}
+
 export const OrgRequestsSection: React.FC = () => {
-  const [items, setItems] = useState<OrgRequest[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [hasError, setHasError] = useState(false)
-  const [reloadKey, setReloadKey] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
 
-  const [viewing, setViewing] = useState<OrgRequest | null>(null)
-  const [rejecting, setRejecting] = useState<OrgRequest | null>(null)
+  const [viewing, setViewing] = useState<OrganizationRequest | null>(null)
+  const [rejecting, setRejecting] = useState<OrganizationRequest | null>(null)
   const [rejectComment, setRejectComment] = useState('')
 
-  useEffect(() => {
-    let isCancelled = false
-    apiClient
-      .get<OrgRequestPage>('/admin/organizations', { params: { limit: 100 } })
-      .then((response) => {
-        if (isCancelled) return
-        setItems(response.data.items)
-        setHasError(false)
+  const {
+    data,
+    isPending: isLoading,
+    isError: hasError,
+    isPlaceholderData,
+  } = useOrganizationRequests({
+    // Запит іде, коли користувач перестав друкувати, а не на кожну літеру
+    search: useDebounce(searchQuery.trim(), 400) || undefined,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+  })
+  const pageItems = data?.items ?? []
+  const total = data?.total ?? 0
+
+  const review = useReviewOrganizationRequest()
+  const isSaving = review.isPending
+
+  const submitReview = async (
+    id: number,
+    decision: 'approved' | 'rejected',
+    comment?: string,
+  ) => {
+    setActionError(null)
+    try {
+      await review.mutateAsync({
+        id,
+        review: { decision, comment: comment ?? null },
       })
-      .catch((error: unknown) => {
-        console.error('Не вдалося завантажити заявки організацій:', error)
-        if (!isCancelled) setHasError(true)
-      })
-      .finally(() => {
-        if (!isCancelled) setIsLoading(false)
-      })
-    return () => {
-      isCancelled = true
+      setRejecting(null)
+      setRejectComment('')
+    } catch (error: unknown) {
+      setActionError(reviewErrorText(error))
     }
-  }, [reloadKey])
+  }
 
-  const submitReview = useCallback(
-    async (id: number, decision: 'approved' | 'rejected', comment?: string) => {
-      setIsSaving(true)
-      setActionError(null)
-      try {
-        await apiClient.post(`/admin/organizations/${id}/review`, {
-          decision,
-          comment: comment ?? null,
-        })
-        setRejecting(null)
-        setRejectComment('')
-        setReloadKey((key) => key + 1)
-      } catch (error: unknown) {
-        console.error('Не вдалося опрацювати заявку:', error)
-        setActionError('Не вдалося зберегти рішення. Спробуйте ще раз.')
-      } finally {
-        setIsSaving(false)
-      }
-    },
-    [],
-  )
-
-  const query = searchQuery.trim().toLowerCase()
-  const filtered = items.filter(
-    (req) =>
-      query === '' ||
-      req.name.toLowerCase().includes(query) ||
-      (req.edrpou ?? '').includes(query),
-  )
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const currentPage = Math.min(page, totalPages)
-  const startIndex = (currentPage - 1) * PAGE_SIZE
-  const pageItems = filtered.slice(startIndex, startIndex + PAGE_SIZE)
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const currentPage = page
+  const startIndex = (page - 1) * PAGE_SIZE
 
   return (
     <div>
@@ -158,7 +133,7 @@ export const OrgRequestsSection: React.FC = () => {
                 </td>
               </tr>
             )}
-            {!isLoading && hasError && (
+            {hasError && !data && (
               <tr>
                 <td
                   colSpan={5}
@@ -168,7 +143,7 @@ export const OrgRequestsSection: React.FC = () => {
                 </td>
               </tr>
             )}
-            {!isLoading && !hasError && pageItems.length === 0 && (
+            {data && pageItems.length === 0 && (
               <tr>
                 <td
                   colSpan={5}
@@ -239,9 +214,9 @@ export const OrgRequestsSection: React.FC = () => {
         {/* Футер таблиці */}
         <div className="flex items-center justify-between border-t border-[#DCECFF] px-4 py-3 text-xs">
           <span>
-            {filtered.length === 0
+            {total === 0
               ? 'Показано 0 з 0'
-              : `Показано ${startIndex + 1}-${startIndex + pageItems.length} з ${filtered.length}`}
+              : `Показано ${startIndex + 1}-${startIndex + pageItems.length} з ${total}`}
           </span>
           <div className="flex gap-2">
             <button
@@ -254,7 +229,7 @@ export const OrgRequestsSection: React.FC = () => {
             </button>
             <button
               onClick={() => setPage(currentPage + 1)}
-              disabled={currentPage >= totalPages}
+              disabled={currentPage >= totalPages || isPlaceholderData}
               aria-label="Наступна сторінка"
               className="flex h-6 w-9 items-center justify-center rounded bg-[#79B7FF] disabled:cursor-not-allowed disabled:bg-[#C2D4EA]"
             >

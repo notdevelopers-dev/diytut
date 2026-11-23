@@ -203,12 +203,21 @@ def unsupported_image() -> HTTPException:
     )
 
 
+def capacity_below_accepted(accepted: int) -> HTTPException:
+    return field_error(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "capacity",
+        "capacity_below_accepted",
+        f"Capacity cannot be lower than the number of accepted participants ({accepted})",
+    )
+
+
 def project_incomplete(validation_errors: list[dict[str, Any]]) -> HTTPException:
-    """422 з помилками полів проєкту, яких бракує для публікації.
+    """422 з помилками полів проєкту, яких бракує для публікації або які суперечать одне одному.
 
     Формат — як у помилок валідації тіла запиту FastAPI (loc починається з "body"), і для
-    створення опублікованого проєкту, і для публікації збереженої чернетки: форма проєкту
-    на фронтенді розбирає їх однаково.
+    створення опублікованого проєкту, і для публікації збереженої чернетки, і для
+    редагування: форма проєкту на фронтенді розбирає їх однаково.
     """
     return HTTPException(
         status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -304,6 +313,25 @@ def project_adult_only() -> HTTPException:
 
 def experience_level_too_low() -> HTTPException:
     return HTTPException(status.HTTP_403_FORBIDDEN, "Experience level is too low for this project")
+
+
+def applicant_not_adult() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Volunteer will be under 18 on the day the project starts"
+    )
+
+
+def applicant_level_too_low() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Volunteer's experience level is too low for this project"
+    )
+
+
+def participants_miss_requirements(count: int) -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT,
+        f"Accepted participants would not meet the new requirements ({count})",
+    )
 
 
 def applicant_already_member() -> HTTPException:
