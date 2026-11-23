@@ -2,22 +2,16 @@ import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import cameraIcon from '@/assets/icons/camera.svg'
 import { ProjectJoinAction } from '@/features/projects/components/ProjectJoinAction'
-import { projectsCatalogUrl } from '@/features/projects/utils'
+import {
+  EXPERIENCE_LABELS,
+  projectsCatalogUrl,
+} from '@/features/projects/utils'
+import type { ReactNode } from 'react'
 import type {
-  ExperienceLevel,
   Project,
   ProjectCategory,
   ProjectJoinRequestStatus,
 } from '@/types/project'
-
-/** Назви рівнів досвіду з документа скоупу (R-27) */
-const EXPERIENCE_LABELS: Record<ExperienceLevel, string> = {
-  novice: 'Новачок',
-  interested: 'Зацікавлений',
-  amateur: 'Аматор',
-  experienced: 'Досвідчений',
-  pro: 'Профі',
-}
 
 const formatDate = (iso: string | null) => {
   if (!iso) return null
@@ -59,6 +53,11 @@ interface ProjectCardProps {
   /** Остання заявка користувача на проєкт (useMyProjectRequestStatuses на сторінці) */
   joinStatus?: ProjectJoinRequestStatus | null
   isJoinStatusLoading?: boolean
+  /**
+   * Своя дія замість «Приєднатися»: у кабінеті організації організатор не подає
+   * заявок на свій проєкт, а переходить до них («Заявки», SCRUM-164)
+   */
+  action?: ReactNode
 }
 
 /** Картка проєкту за макетом Figma («Projects section») із бейджами з задачі. */
@@ -72,6 +71,7 @@ export const ProjectCard = ({
   onCategoryClick,
   joinStatus,
   isJoinStatusLoading,
+  action,
 }: ProjectCardProps) => {
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(false)
   const descriptionId = useId()
@@ -179,12 +179,14 @@ export const ProjectCard = ({
         </p>
       </div>
 
-      <ProjectJoinAction
-        projectId={project.id}
-        projectTitle={project.title}
-        status={joinStatus}
-        isLoading={isJoinStatusLoading}
-      />
+      {action ?? (
+        <ProjectJoinAction
+          projectId={project.id}
+          projectTitle={project.title}
+          status={joinStatus}
+          isLoading={isJoinStatusLoading}
+        />
+      )}
     </article>
   )
 }

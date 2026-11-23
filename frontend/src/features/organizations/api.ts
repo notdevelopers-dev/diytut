@@ -2,6 +2,7 @@ import { apiClient } from '@/lib/api-client'
 import { getErrorStatus } from '@/lib/errors'
 import type {
   JoinRequest,
+  IgnoredUser,
   JoinRequestDecision,
   OrganizationDetail,
   OrganizationListItem,
@@ -153,10 +154,33 @@ export const fetchIncomingJoinRequests = async (
 export const reviewJoinRequest = async (
   joinRequestId: number,
   status: JoinRequestDecision,
+  /** Лише разом із відхиленням заявки на проєкт: волонтер потрапляє в ігнор */
+  ignore = false,
 ): Promise<JoinRequest> => {
   const { data } = await apiClient.patch<JoinRequest>(
     `/join-requests/${joinRequestId}`,
-    { status },
+    ignore ? { status, ignore } : { status },
   )
   return data
+}
+
+/** Волонтери, яких організація ігнорує: заявок на її проєкти вони не подають */
+export const fetchIgnoredUsers = async (
+  organizationId: number,
+): Promise<IgnoredUser[]> => {
+  const { data } = await apiClient.get<IgnoredUser[]>(
+    '/organizations/me/ignored-users',
+    { params: { organization_id: organizationId, limit: 100 } },
+  )
+  return data
+}
+
+/** Зняти ігнор: волонтер знову може подавати заявки на проєкти організації */
+export const unignoreUser = async (
+  organizationId: number,
+  userId: number,
+): Promise<void> => {
+  await apiClient.delete(`/organizations/me/ignored-users/${userId}`, {
+    params: { organization_id: organizationId },
+  })
 }

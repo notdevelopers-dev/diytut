@@ -15,6 +15,7 @@ import {
   OrganizationDashboardPage,
   OrganizationsCatalogPage,
   OrganizationViewPage,
+  ProjectJoinRequestsPage,
 } from '@/features/organizations'
 import { ProjectsCatalogPage, ProjectViewPage } from '@/features/projects'
 import { NotificationsPage } from '@/features/notifications'
@@ -49,6 +50,15 @@ export const AppRoutes = () => (
         element={
           <OrgRoute>
             <OrganizationDashboardPage />
+          </OrgRoute>
+        }
+      />
+      {/* Заявки на проєкт (SCRUM-164); цей шлях бекенд кладе в сповіщення */}
+      <Route
+        path="/organization/projects/:id/join-requests"
+        element={
+          <OrgRoute>
+            <ProjectJoinRequestsPage />
           </OrgRoute>
         }
       />

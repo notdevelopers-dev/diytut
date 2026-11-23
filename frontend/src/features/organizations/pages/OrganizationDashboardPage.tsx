@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import circlePlusIcon from '@/assets/icons/organization/circle-plus.svg'
 import { useAuth } from '@/features/auth/hooks'
 import { useCities } from '@/features/cities/hooks'
@@ -161,6 +161,19 @@ export const OrganizationDashboardPage = () => {
                         project.city_id !== null
                           ? cityNames.get(project.city_id)
                           : undefined
+                      }
+                      action={
+                        canReview ? (
+                          // Організатор не подає заявок на свій проєкт, а розглядає їх
+                          <Link
+                            to={`/organization/projects/${project.id}/join-requests`}
+                            className="flex h-7 items-center justify-center rounded-[5px] bg-main text-sm text-black no-underline hover:brightness-95"
+                          >
+                            Заявки
+                          </Link>
+                        ) : (
+                          <span />
+                        )
                       }
                     />
                   </li>

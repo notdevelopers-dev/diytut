@@ -70,6 +70,8 @@ const OPENABLE_LINKS = [
   /^\/organization\/edit(\?|$)/,
   // Кабінет організації (FE-201): /organization?organization_id=… відкриває його
   /^\/organization(\?|$)/,
+  // Заявки на проєкт (SCRUM-164): /organization/projects/:id/join-requests?…
+  /^\/organization\/projects\/\d+\/join-requests(\?|$)/,
 ]
 
 export const getOpenableLink = (link: string | null): string | null => {

@@ -65,3 +65,10 @@ export interface OrganizationMembership {
   status: OrgStatus
   role: OrgRole
 }
+
+/** Волонтер у списку ігнору організації (app.schemas.join_requests.IgnoredUserRead) */
+export interface IgnoredUser {
+  user: OrganizationJoinRequest['user']
+  ignored_by: number | null
+  created_at: string
+}

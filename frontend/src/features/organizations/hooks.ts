@@ -19,7 +19,9 @@ import {
   fetchMyOrganizations,
   fetchOrganization,
   fetchOrganizations,
+  fetchIgnoredUsers,
   reviewJoinRequest,
+  unignoreUser,
   updateMyOrganization,
 } from './api'
 
@@ -168,5 +170,34 @@ export const useReviewJoinRequest = (organizationId: number | undefined) => {
     // І після помилки (заявку вже розглянув інший адмін) — свіжий список із бекенду
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: ['organizations'] }),
+  })
+}
+
+const ignoredUsersKey = (organizationId: number | undefined) =>
+  ['organizations', 'ignored-users', organizationId] as const
+
+/** Ігноровані волонтери організації (бачать власник і адміністратори) */
+export const useIgnoredUsers = (
+  organizationId: number | undefined,
+  enabled: boolean,
+) =>
+  useQuery({
+    queryKey: ignoredUsersKey(organizationId),
+    queryFn: () => fetchIgnoredUsers(organizationId as number),
+    enabled: enabled && Boolean(organizationId),
+    meta: USER_SCOPED_META,
+    retry: false,
+  })
+
+/** Зняти ігнор; після успіху волонтер зникає зі списку */
+export const useUnignoreUser = (organizationId: number | undefined) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: number) =>
+      unignoreUser(organizationId as number, userId),
+    onSettled: () =>
+      queryClient.invalidateQueries({
+        queryKey: ignoredUsersKey(organizationId),
+      }),
   })
 }

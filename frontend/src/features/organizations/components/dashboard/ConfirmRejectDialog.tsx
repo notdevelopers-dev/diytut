@@ -3,14 +3,17 @@ import { useEffect, useRef } from 'react'
 /**
  * Підтвердження відхилення заявки (стилі макета: біла картка в блакитній рамці,
  * червона кнопка дії). Закривається Escape, кліком поза вікном і «Скасувати».
+ * `withIgnore` — «Відхилити й ігнорувати» для заявки на проєкт (SCRUM-164).
  */
 export const ConfirmRejectDialog = ({
   applicantName,
+  withIgnore = false,
   isPending,
   onConfirm,
   onCancel,
 }: {
   applicantName: string
+  withIgnore?: boolean
   isPending: boolean
   onConfirm: () => void
   onCancel: () => void
@@ -41,12 +44,14 @@ export const ConfirmRejectDialog = ({
         className="flex w-full max-w-[420px] flex-col gap-4 rounded-[5px] border border-main bg-white p-5 shadow-xl"
       >
         <h2 id="reject-title" className="text-xl font-normal text-black">
-          Відхилити заявку?
+          {withIgnore ? 'Відхилити й ігнорувати?' : 'Відхилити заявку?'}
         </h2>
         <p id="reject-text" className="text-sm text-black">
           Заявку <strong className="font-semibold">{applicantName}</strong> буде
           відхилено, а волонтер отримає сповіщення. Скасувати це рішення не
           можна.
+          {withIgnore &&
+            ' Волонтер також не зможе подавати заявки на проєкти вашої організації, доки ви не знімете ігнор.'}
         </p>
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button
@@ -64,7 +69,11 @@ export const ConfirmRejectDialog = ({
             disabled={isPending}
             className="h-8 cursor-pointer rounded-[5px] bg-[#E14848] px-4 text-sm text-white hover:brightness-95 disabled:cursor-wait disabled:opacity-60"
           >
-            {isPending ? 'Відхилення…' : 'Відхилити'}
+            {isPending
+              ? 'Відхилення…'
+              : withIgnore
+                ? 'Відхилити й ігнорувати'
+                : 'Відхилити'}
           </button>
         </div>
       </div>
