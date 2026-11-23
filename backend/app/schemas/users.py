@@ -1,6 +1,7 @@
 import re
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Any
+from zoneinfo import ZoneInfo
 
 from pydantic import (
     AfterValidator,
@@ -25,6 +26,11 @@ MAX_INT32 = 2**31 - 1
 # Найбільше значення bigint: id користувачів, організацій, проєктів та решти таблиць
 MAX_BIGINT = 2**63 - 1
 PHONE_DIGITS = re.compile(r"^(?:\+?38)?0(\d{9})$")
+KYIV_TIMEZONE = ZoneInfo("Europe/Kyiv")
+
+
+def today_kyiv() -> date:
+    return datetime.now(KYIV_TIMEZONE).date()
 
 
 def _empty_to_none(value: object) -> object:
@@ -49,7 +55,7 @@ def _years_between(born: date, today: date) -> int:
 
 
 def _check_age(value: date) -> date:
-    age = _years_between(value, date.today())
+    age = _years_between(value, today_kyiv())
     if age < MIN_AGE:
         raise ValueError(f"User must be at least {MIN_AGE} years old")
     if age > MAX_AGE:
@@ -95,15 +101,15 @@ class RegistrationRequest(BaseModel):
     city_id: CityId
     bio: Annotated[Bio | None, BeforeValidator(_empty_to_none)] = None
     parental_consent: bool = Field(default=False, validate_default=True)
-    terms_consent: bool = True
-    personal_data_consent: bool = True
+    terms_consent: bool = Field(default=False, validate_default=True)
+    personal_data_consent: bool = Field(default=False, validate_default=True)
 
     @field_validator("parental_consent", mode="after")
     @classmethod
     def _validate_parental_consent(cls, value: bool, info: ValidationInfo) -> bool:
         birth_date = info.data.get("birth_date")
         if birth_date is not None:
-            age = _years_between(birth_date, date.today())
+            age = _years_between(birth_date, today_kyiv())
             if age < ADULT_AGE and not value:
                 raise ValueError("Parental consent is required for users under 18")
         return value
@@ -186,7 +192,7 @@ class UserRead(BaseModel):
     city_id: int
     bio: str | None
     platform_role: RoleEnum
-    parental_consent: bool = False
+    parental_consent: bool
 
 
 class CityRead(BaseModel):

@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.models import City, LoginEvent, LoginMethodEnum, User
+from app.schemas.users import today_kyiv
 from app.services import users as users_service
 from tests.conftest import GOOGLE_CLAIMS
 
@@ -29,6 +30,8 @@ def form(city_id: int) -> dict:
         "phone": "+380671234567",
         "birth_date": "1990-03-09",
         "city_id": city_id,
+        "terms_consent": True,
+        "personal_data_consent": True,
     }
 
 
@@ -93,8 +96,8 @@ def test_registration_creates_user_and_session(
     assert user.google_sub == GOOGLE_CLAIMS["sub"]
     assert user.profile_completed_at is not None
     assert user.parental_consent is False
-    assert user.terms_consent_date == date.today()
-    assert user.personal_data_consent_date == date.today()
+    assert user.terms_consent_date == today_kyiv()
+    assert user.personal_data_consent_date == today_kyiv()
 
 
 @pytest.mark.usefixtures("signed_in_with_google")
@@ -195,7 +198,7 @@ def test_names_with_apostrophes_and_hyphens(client: TestClient, form: dict) -> N
 
 
 def years_ago(years: int) -> date:
-    today = date.today()
+    today = today_kyiv()
     try:
         return today.replace(year=today.year - years)
     except ValueError:  # 29 лютого
@@ -237,8 +240,8 @@ def test_minor_with_parental_consent_is_accepted(client: TestClient, form: dict,
 
     user = db(lambda session: session.get(User, response.json()["id"]))
     assert user.parental_consent is True
-    assert user.terms_consent_date == date.today()
-    assert user.personal_data_consent_date == date.today()
+    assert user.terms_consent_date == today_kyiv()
+    assert user.personal_data_consent_date == today_kyiv()
 
 
 @pytest.mark.usefixtures("signed_in_with_google")
@@ -305,6 +308,26 @@ def test_terms_consent_rejected_when_false(client: TestClient, form: dict) -> No
 @pytest.mark.usefixtures("signed_in_with_google")
 def test_personal_data_consent_rejected_when_false(client: TestClient, form: dict) -> None:
     response = register(client, form, personal_data_consent=False)
+
+    assert response.status_code == 422
+    assert error_fields(response) == {"personal_data_consent"}
+
+
+@pytest.mark.usefixtures("signed_in_with_google")
+def test_registration_omitting_terms_consent_is_rejected(client: TestClient, form: dict) -> None:
+    payload = {k: v for k, v in form.items() if k != "terms_consent"}
+    response = client.post("/api/auth/register", json=payload)
+
+    assert response.status_code == 422
+    assert error_fields(response) == {"terms_consent"}
+
+
+@pytest.mark.usefixtures("signed_in_with_google")
+def test_registration_omitting_personal_data_consent_is_rejected(
+    client: TestClient, form: dict
+) -> None:
+    payload = {k: v for k, v in form.items() if k != "personal_data_consent"}
+    response = client.post("/api/auth/register", json=payload)
 
     assert response.status_code == 422
     assert error_fields(response) == {"personal_data_consent"}

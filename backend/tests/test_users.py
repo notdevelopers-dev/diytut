@@ -230,19 +230,37 @@ def test_patch_profile_forbids_extra_fields(client: TestClient, make_user) -> No
     assert response.status_code == 422
 
 
-def test_patch_profile_birth_date_validation(client: TestClient, make_user) -> None:
+def test_patch_profile_birth_date_validation(client: TestClient, make_user, db) -> None:
     user_id = make_user()
     sign_in(client, user_id)
 
     today = date.today()
     under_14 = today.replace(year=today.year - 13).isoformat()
+    # Вік менше 14 років відхиляється через обмеження мінімального віку
     response = client.patch("/api/users/me", json={"birth_date": under_14})
     assert response.status_code == 422
 
-    allowed_age = today.replace(year=today.year - 15).isoformat()
-    response = client.patch("/api/users/me", json={"birth_date": allowed_age})
+    minor_age = today.replace(year=today.year - 15).isoformat()
+    # Для дорослого користувача без parental_consent зміна на неповнолітній вік заборонена
+    response = client.patch("/api/users/me", json={"birth_date": minor_age})
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["type"] == "parental_consent_required"
+
+    # Якщо користувач має parental_consent=True, неповнолітній вік дозволений
+    async def set_consent(session) -> None:
+        user = await session.get(User, user_id)
+        user.parental_consent = True
+
+    db(set_consent)
+    response = client.patch("/api/users/me", json={"birth_date": minor_age})
     assert response.status_code == 200
-    assert response.json()["birth_date"] == allowed_age
+    assert response.json()["birth_date"] == minor_age
+
+    # Зміна на інший дорослий вік дозволена
+    adult_age = today.replace(year=today.year - 25).isoformat()
+    response = client.patch("/api/users/me", json={"birth_date": adult_age})
+    assert response.status_code == 200
+    assert response.json()["birth_date"] == adult_age
 
 
 def test_patch_profile_empty_body(client: TestClient, make_user) -> None:
