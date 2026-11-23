@@ -28,7 +28,7 @@ const getDropdownStyle = (button: HTMLElement): CSSProperties => {
  * Вигляд — з Figma («Сповіщення — 2 непрочитані»).
  */
 export const NotificationBell = () => {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isProfileComplete } = useAuth()
   const { unreadCount } = useNotifications()
   const [dropdownStyle, setDropdownStyle] = useState<CSSProperties | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -59,7 +59,8 @@ export const NotificationBell = () => {
   }, [isOpen])
 
   // Лише для тих, хто увійшов (критерій приймання)
-  if (!isAuthenticated) return null
+  // (і з заповненою анкетою: без неї бекенд сповіщень не віддає)
+  if (!isAuthenticated || !isProfileComplete) return null
 
   const toggle = () =>
     setDropdownStyle((current) =>
