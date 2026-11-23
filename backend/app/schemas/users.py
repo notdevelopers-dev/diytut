@@ -9,12 +9,14 @@ from pydantic import (
     ConfigDict,
     Field,
     StringConstraints,
+    ValidationInfo,
     field_validator,
 )
 
 from app.models import GenderEnum, RoleEnum
 
-MIN_AGE = 18
+MIN_AGE = 14
+ADULT_AGE = 18
 MAX_AGE = 120
 # Межі id і чисел у запитах мають відповідати типу колонки: значення, більше за неї,
 # asyncpg не зможе передати в БД, і запит упаде з 500 замість 422.
@@ -92,6 +94,33 @@ class RegistrationRequest(BaseModel):
     gender: GenderEnum = GenderEnum.prefer_not_to_say
     city_id: CityId
     bio: Annotated[Bio | None, BeforeValidator(_empty_to_none)] = None
+    parental_consent: bool = Field(default=False, validate_default=True)
+    terms_consent: bool = True
+    personal_data_consent: bool = True
+
+    @field_validator("parental_consent", mode="after")
+    @classmethod
+    def _validate_parental_consent(cls, value: bool, info: ValidationInfo) -> bool:
+        birth_date = info.data.get("birth_date")
+        if birth_date is not None:
+            age = _years_between(birth_date, date.today())
+            if age < ADULT_AGE and not value:
+                raise ValueError("Parental consent is required for users under 18")
+        return value
+
+    @field_validator("terms_consent", mode="after")
+    @classmethod
+    def _validate_terms_consent(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("Consent to terms is required")
+        return value
+
+    @field_validator("personal_data_consent", mode="after")
+    @classmethod
+    def _validate_personal_data_consent(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("Consent to personal data processing is required")
+        return value
 
 
 # Поля, які в оновленні можна пропустити, але не можна передати як null
@@ -157,6 +186,7 @@ class UserRead(BaseModel):
     city_id: int
     bio: str | None
     platform_role: RoleEnum
+    parental_consent: bool = False
 
 
 class CityRead(BaseModel):

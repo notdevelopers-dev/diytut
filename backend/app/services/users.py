@@ -1,5 +1,5 @@
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -74,12 +74,15 @@ async def register_user(
     else:
         nickname = data.nickname
 
+    today = date.today()
     user = User(
-        **data.model_dump(exclude={"nickname"}),
+        **data.model_dump(exclude={"nickname", "terms_consent", "personal_data_consent"}),
         nickname=nickname,
         google_sub=identity.sub,
         email=identity.email.lower(),
         profile_completed_at=datetime.now(UTC),
+        terms_consent_date=today,
+        personal_data_consent_date=today,
     )
     db_session.add(user)
     try:

@@ -93,6 +93,7 @@ def test_get_profile_success(client: TestClient, make_user) -> None:
     assert data["bio"] == "Тестова біографія"
     assert data["city_id"] is not None
     assert data["city"] == {"id": data["city_id"], "name": "Київ", "region": "Київська"}
+    assert data["parental_consent"] is False
 
 
 def test_get_profile_nonexistent_user(client: TestClient) -> None:
@@ -221,6 +222,27 @@ def test_patch_profile_forbids_extra_fields(client: TestClient, make_user) -> No
 
     response = client.patch("/api/users/me", json={"id": 123})
     assert response.status_code == 422
+
+    response = client.patch("/api/users/me", json={"parental_consent": True})
+    assert response.status_code == 422
+
+    response = client.patch("/api/users/me", json={"terms_consent_date": "2026-01-01"})
+    assert response.status_code == 422
+
+
+def test_patch_profile_birth_date_validation(client: TestClient, make_user) -> None:
+    user_id = make_user()
+    sign_in(client, user_id)
+
+    today = date.today()
+    under_14 = today.replace(year=today.year - 13).isoformat()
+    response = client.patch("/api/users/me", json={"birth_date": under_14})
+    assert response.status_code == 422
+
+    allowed_age = today.replace(year=today.year - 15).isoformat()
+    response = client.patch("/api/users/me", json={"birth_date": allowed_age})
+    assert response.status_code == 200
+    assert response.json()["birth_date"] == allowed_age
 
 
 def test_patch_profile_empty_body(client: TestClient, make_user) -> None:
