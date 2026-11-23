@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/api-client'
+import type { Page } from '@/types/common'
 import type { JoinRequest } from '@/types/organization'
 import type {
   CategoryItem,
@@ -19,12 +20,12 @@ export interface FetchProjectsParams {
   offset?: number
 }
 
-/** Каталог: опубліковані проєкти, що ще не завершилися, нові першими. */
+/** Каталог: опубліковані проєкти, що ще не завершилися, нові першими, і їх кількість. */
 export const fetchProjects = async (
   params?: FetchProjectsParams,
-): Promise<Project[]> => {
+): Promise<Page<Project>> => {
   const search = params?.search?.trim()
-  const { data } = await apiClient.get<Project[]>('/projects', {
+  const { data } = await apiClient.get<Page<Project>>('/projects', {
     params: {
       ...(search ? { search } : {}),
       ...(params?.city_id ? { city_id: params.city_id } : {}),

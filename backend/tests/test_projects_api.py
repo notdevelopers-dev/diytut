@@ -465,9 +465,10 @@ def test_list_projects_returns_only_published(
     response = client.get("/api/projects")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1
-    assert data[0]["title"] == "Опублікований проєкт"
-    assert data[0]["status"] == "published"
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["title"] == "Опублікований проєкт"
+    assert data["items"][0]["status"] == "published"
 
 
 def test_list_projects_excludes_ended(
@@ -497,7 +498,7 @@ def test_list_projects_excludes_ended(
 
     db(seed)
 
-    titles = {project["title"] for project in client.get("/api/projects").json()}
+    titles = {project["title"] for project in client.get("/api/projects").json()["items"]}
     assert titles == {"Майбутній проєкт", "Триває зараз"}
 
 
@@ -512,19 +513,21 @@ def test_list_projects_pagination(
 
     db(seed)
 
-    res_all = client.get("/api/projects?limit=10").json()
+    res_all = client.get("/api/projects?limit=10").json()["items"]
     assert len(res_all) == 5
+    # total — уся кількість під фільтром, незалежно від limit і offset
+    assert client.get("/api/projects?limit=2&offset=4").json()["total"] == 5
 
-    res_lim = client.get("/api/projects?limit=2").json()
+    res_lim = client.get("/api/projects?limit=2").json()["items"]
     assert len(res_lim) == 2
     assert res_lim[0]["id"] == res_all[0]["id"]
     assert res_lim[1]["id"] == res_all[1]["id"]
 
-    res_off = client.get("/api/projects?limit=2&offset=2").json()
+    res_off = client.get("/api/projects?limit=2&offset=2").json()["items"]
     assert len(res_off) == 2
     assert res_off[0]["id"] == res_all[2]["id"]
 
-    res_empty = client.get("/api/projects?limit=2&offset=10").json()
+    res_empty = client.get("/api/projects?limit=2&offset=10").json()["items"]
     assert res_empty == []
 
 
@@ -579,27 +582,27 @@ def test_list_projects_search_filter(
     db(seed)
 
     # 1. Пошук у заголовку
-    res1 = client.get("/api/projects?search=толока").json()
+    res1 = client.get("/api/projects?search=толока").json()["items"]
     assert len(res1) == 1
     assert res1[0]["title"] == "Екологічна толока в парку"
 
     # 2. Нечутливість до регістру
-    res2 = client.get("/api/projects?search=ТОЛОКА").json()
+    res2 = client.get("/api/projects?search=ТОЛОКА").json()["items"]
     assert len(res2) == 1
     assert res2[0]["title"] == "Екологічна толока в парку"
 
     # 3. Пошук в описі (пластику)
-    res3 = client.get("/api/projects?search=пластику").json()
+    res3 = client.get("/api/projects?search=пластику").json()["items"]
     assert len(res3) == 1
     assert res3[0]["title"] == "Екологічна толока в парку"
 
     # 4. Пошук в описі (дітей)
-    res4 = client.get("/api/projects?search=дітей").json()
+    res4 = client.get("/api/projects?search=дітей").json()["items"]
     assert len(res4) == 1
     assert res4[0]["title"] == "Допомога сиротинцям"
 
     # 5. Пошук без збігів
-    res5 = client.get("/api/projects?search=неіснуюче").json()
+    res5 = client.get("/api/projects?search=неіснуюче").json()["items"]
     assert res5 == []
 
 
@@ -625,7 +628,7 @@ def test_list_projects_search_escapes_special_characters(
 
     db(seed)
 
-    res = client.get("/api/projects?search=100%").json()
+    res = client.get("/api/projects?search=100%").json()["items"]
     assert len(res) == 1
     assert res[0]["title"] == "Проєкт 100% готовності"
 
@@ -665,15 +668,15 @@ def test_list_projects_filter_by_city(
 
     db(seed)
 
-    res_c1 = client.get(f"/api/projects?city_id={c1}").json()
+    res_c1 = client.get(f"/api/projects?city_id={c1}").json()["items"]
     assert len(res_c1) == 1
     assert res_c1[0]["title"] == "Проєкт у Львові"
 
-    res_c2 = client.get(f"/api/projects?city_id={c2}").json()
+    res_c2 = client.get(f"/api/projects?city_id={c2}").json()["items"]
     assert len(res_c2) == 1
     assert res_c2[0]["title"] == "Проєкт у Києві"
 
-    res_empty = client.get("/api/projects?city_id=999999").json()
+    res_empty = client.get("/api/projects?city_id=999999").json()["items"]
     assert res_empty == []
 
 
@@ -703,7 +706,7 @@ def test_list_projects_filter_by_tags(
     def titles(query: str) -> set[str]:
         res = client.get(f"/api/projects?{query}")
         assert res.status_code == 200
-        return {project["title"] for project in res.json()}
+        return {project["title"] for project in res.json()["items"]}
 
     assert titles("tags=екологія") == {"Екологія"}
     # Кілька тегів: будь-який із них
@@ -733,7 +736,7 @@ def test_list_projects_filter_by_tags_and_city(
 
     db(seed)
 
-    res = client.get(f"/api/projects?tags=діти&city_id={c1}").json()
+    res = client.get(f"/api/projects?tags=діти&city_id={c1}").json()["items"]
     assert [project["title"] for project in res] == ["Львів"]
 
 
@@ -771,7 +774,7 @@ def test_list_projects_filter_by_categories(
     def titles(query: str) -> set[str]:
         res = client.get(f"/api/projects?{query}")
         assert res.status_code == 200
-        return {project["title"] for project in res.json()}
+        return {project["title"] for project in res.json()["items"]}
 
     assert titles("categories=ecology") == {"Толока"}
     assert titles("categories=idp") == {"Уроки"}
@@ -783,7 +786,7 @@ def test_list_projects_filter_by_categories(
     # Повтор сфери не змінює результат
     assert titles("categories=ecology&categories=ecology") == {"Толока"}
 
-    item = client.get("/api/projects?categories=idp").json()[0]
+    item = client.get("/api/projects?categories=idp").json()["items"][0]
     assert item["categories"] == ["education", "idp"]
 
 
@@ -858,7 +861,11 @@ def test_get_project_details_200_published(
     assert data["description"] == "Повний опис для перевірки деталей"
     assert data["status"] == "published"
     assert data["city_id"] == c1
-    assert data["address"] == "вул. Свободи, 1"
+    # Гість не бачить точних адреси й часу (R-22), лише дні події
+    assert data["address"] is None
+    assert data["starts_at"] is None
+    assert data["starts_on"] is not None
+    assert data["details_hidden"] is True
     assert data["is_online"] is False
     assert data["capacity"] == 50
     assert float(data["volunteer_hours"]) == 5.0

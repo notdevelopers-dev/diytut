@@ -6,13 +6,22 @@ from pydantic import Field, StringConstraints
 from app.auth import CurrentUserId, OptionalUserId
 from app.db import DbSessionDep
 from app.models import JoinRequestStatusEnum, ProjectCategoryEnum
+from app.models.experience import ExperienceLevelEnum
 from app.schemas.join_requests import (
     JoinRequestCreate,
     JoinRequestRead,
     ProjectJoinRequestRead,
     ProjectJoinRequestStatusRead,
 )
-from app.schemas.projects import ProjectCreate, ProjectListItem, ProjectRead, ProjectUpdate
+from app.schemas.projects import (
+    ProjectCreate,
+    ProjectListItem,
+    ProjectPage,
+    ProjectRead,
+    ProjectUpdate,
+    TagSuggestion,
+    UtcDatetime,
+)
 from app.schemas.users import MAX_BIGINT, MAX_INT32
 from app.services import project_join_requests as join_requests_service
 from app.services import projects as service
@@ -22,6 +31,8 @@ MAX_STATUS_PROJECTS = 100
 # Більше хештегів у фільтрі каталогу не потрібно, а довгий список лише навантажує запит
 MAX_TAG_FILTERS = 20
 MAX_TAG_FILTER_LENGTH = 100
+# Підказок хештегів за раз: випадний список під полем не довший
+MAX_TAG_SUGGESTIONS = 20
 
 router = APIRouter()
 
@@ -29,6 +40,7 @@ router = APIRouter()
 @router.get("")
 async def list_projects(
     db_session: DbSessionDep,
+    user_id: OptionalUserId,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
     search: Annotated[str | None, Query()] = None,
@@ -43,17 +55,49 @@ async def list_projects(
         list[Annotated[str, StringConstraints(max_length=MAX_TAG_FILTER_LENGTH)]] | None,
         Query(max_length=MAX_TAG_FILTERS),
     ] = None,
-) -> list[ProjectListItem]:
-    projects = await service.list_active_projects(
+    # Проміжок дат і часу (ISO 8601; без поясу — UTC): події, що відбуваються в ньому
+    # хоча б частково
+    date_from: Annotated[UtcDatetime | None, Query()] = None,
+    date_to: Annotated[UtcDatetime | None, Query()] = None,
+    # true — лише 18+, false — лише відкриті для неповнолітніх
+    is_adult_only: Annotated[bool | None, Query()] = None,
+    # Проєкти, доступні волонтеру цього рівня: вимога рівня не вища за нього
+    experience_level: Annotated[ExperienceLevelEnum | None, Query()] = None,
+) -> ProjectPage:
+    projects, total, visible = await service.list_active_projects(
         db_session,
+        user_id,
         limit=limit,
         offset=offset,
         search=search,
         city_id=city_id,
         categories=categories,
         tags=tags,
+        date_from=date_from,
+        date_to=date_to,
+        is_adult_only=is_adult_only,
+        experience_level=experience_level,
     )
-    return [ProjectListItem.model_validate(project) for project in projects]
+    return ProjectPage(
+        items=[
+            ProjectListItem.for_viewer(project, show_details=project.id in visible)
+            for project in projects
+        ],
+        total=total,
+    )
+
+
+# Оголошено до /{project_id}: інакше шлях сприймався б як id проєкту
+@router.get("/tags")
+async def suggest_tags(
+    db_session: DbSessionDep,
+    # Початок хештегу; «#», регістр і варіанти апострофа не важливі. Порожній —
+    # найпопулярніші хештеги
+    q: Annotated[str, Query(max_length=MAX_TAG_FILTER_LENGTH)] = "",
+    limit: Annotated[int, Query(ge=1, le=MAX_TAG_SUGGESTIONS)] = 10,
+) -> list[TagSuggestion]:
+    suggestions = await service.suggest_tags(db_session, q, limit=limit)
+    return [TagSuggestion(tag=tag, projects_count=count) for tag, count in suggestions]
 
 
 ProjectId = Annotated[int, Path(gt=0, le=MAX_BIGINT)]
@@ -79,8 +123,10 @@ async def read_my_request_statuses(
 async def get_project(
     project_id: ProjectId, db_session: DbSessionDep, user_id: OptionalUserId
 ) -> ProjectRead:
-    project, accepted_count = await service.read_project(db_session, project_id, user_id)
-    return ProjectRead.from_project(project, accepted_count)
+    project, accepted_count, show_details = await service.read_project(
+        db_session, project_id, user_id
+    )
+    return ProjectRead.from_project(project, accepted_count, show_details=show_details)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -88,7 +134,8 @@ async def create_project(
     data: ProjectCreate, db_session: DbSessionDep, user_id: CurrentUserId
 ) -> ProjectRead:
     project, accepted_count = await service.create_project(db_session, user_id, data)
-    return ProjectRead.from_project(project, accepted_count)
+    # Створює проєкт учасник його організації: точні час і місце йому видно
+    return ProjectRead.from_project(project, accepted_count, show_details=True)
 
 
 @router.patch("/{project_id}")
@@ -96,7 +143,7 @@ async def update_project(
     project_id: ProjectId, data: ProjectUpdate, db_session: DbSessionDep, user_id: CurrentUserId
 ) -> ProjectRead:
     project, accepted_count = await service.update_project(db_session, user_id, project_id, data)
-    return ProjectRead.from_project(project, accepted_count)
+    return ProjectRead.from_project(project, accepted_count, show_details=True)
 
 
 @router.post("/{project_id}/publish")
@@ -104,7 +151,7 @@ async def publish_project(
     project_id: ProjectId, db_session: DbSessionDep, user_id: CurrentUserId
 ) -> ProjectRead:
     project, accepted_count = await service.publish_project(db_session, user_id, project_id)
-    return ProjectRead.from_project(project, accepted_count)
+    return ProjectRead.from_project(project, accepted_count, show_details=True)
 
 
 @router.post("/{project_id}/join-requests", status_code=status.HTTP_201_CREATED)

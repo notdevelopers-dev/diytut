@@ -9,7 +9,6 @@ from collections.abc import Iterable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import distinct_on, insert
@@ -34,17 +33,17 @@ from app.models import (
     User,
 )
 from app.models.experience import ExperienceLevelEnum, level_for_hours, meets_level
+from app.models.project import EVENT_TIMEZONE
 from app.notifications import create_notification, project_join_requests_link
 from app.schemas.join_requests import JoinRequestCreate
 from app.services.organizations import EDITOR_ROLES, get_user_membership
+from app.services.project_visibility import projects_with_details
 
 ACTIVE_PROJECT_REQUEST_INDEX = "uq_join_requests_active_user_project"
 # Вимога проєкту, якої волонтер не виконує (R-12)
 UnmetRequirement = Literal["adult_only", "experience_level"]
 ACTIVE_STATUSES = (JoinRequestStatusEnum.pending, JoinRequestStatusEnum.accepted)
 ADULT_AGE = 18
-# Вік на день події рахуємо за київським часом: подія о 00:30 за Києвом у UTC ще «вчора»
-EVENT_TIMEZONE = ZoneInfo("Europe/Kyiv")
 # Пауза перед повторною заявкою на проєкт після відмови: 10 с, далі вп'ятеро довше після
 # кожної наступної відмови на той самий проєкт (50 с, ~4 хв, ~21 хв, ~1,7 год, ~8,7 год,
 # ~1,8 доби), але не більше тижня — його досягає восьма відмова
@@ -446,8 +445,9 @@ async def cancel_my_project_request(
 
 async def list_my_project_requests(
     db_session: AsyncSession, user_id: int, *, limit: int, offset: int
-) -> list[JoinRequest]:
-    """Заявки волонтера на проєкти, свіжіші спершу."""
+) -> tuple[list[JoinRequest], set[int]]:
+    """Заявки волонтера на проєкти, свіжіші спершу, та id проєктів, точний час яких він
+    бачить (R-22): зі схваленою заявкою чи як учасник організації."""
     query = (
         project_requests()
         .options(joinedload(JoinRequest.project, innerjoin=True))
@@ -456,7 +456,11 @@ async def list_my_project_requests(
         .limit(limit)
         .offset(offset)
     )
-    return list(await db_session.scalars(query))
+    join_requests = list(await db_session.scalars(query))
+    visible = await projects_with_details(
+        db_session, user_id, [request.project for request in join_requests]
+    )
+    return join_requests, visible
 
 
 async def list_project_requests(

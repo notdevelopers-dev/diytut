@@ -1,6 +1,7 @@
 import enum
 from datetime import datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import (
     BigInteger,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     Text,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -18,6 +20,9 @@ from sqlalchemy.sql import func
 
 from app.models.base import Base
 from app.models.experience import ExperienceLevelEnum
+
+# Дні подій рахуємо за київським часом: подія о 00:30 за Києвом у UTC ще «вчора»
+EVENT_TIMEZONE = ZoneInfo("Europe/Kyiv")
 
 
 class ProjectStatusEnum(enum.StrEnum):
@@ -65,6 +70,10 @@ MAX_PROJECT_CATEGORIES = 2
 
 _KNOWN_CATEGORIES_SQL = ", ".join(f"'{category}'" for category in ProjectCategoryEnum)
 
+# Каталог показує лише опубліковані проєкти, тож його індекси часткові: чернетки й завершені
+# проєкти їх не роздувають
+_PUBLISHED_SQL = "status = 'published'"
+
 
 class Project(Base):
     __tablename__ = "projects"
@@ -101,6 +110,38 @@ class Project(Base):
         # Фільтри каталогу за сферами й хештегами (R-14): GIN індексує окремі елементи масиву
         Index("ix_projects_categories", "categories", postgresql_using="gin"),
         Index("ix_projects_tags", "tags", postgresql_using="gin"),
+        # Порядок каталогу (нові першими): перша сторінка читає 12 рядків індексу, а не всю
+        # таблицю
+        Index(
+            "ix_projects_catalog_order",
+            "published_at",
+            "id",
+            postgresql_where=text(_PUBLISHED_SQL),
+        ),
+        # «Ще не завершився» (ends_at > now()) і фільтр за датами; total рахується
+        # за самим індексом
+        Index(
+            "ix_projects_catalog_dates",
+            "ends_at",
+            "starts_at",
+            postgresql_where=text(_PUBLISHED_SQL),
+        ),
+        Index("ix_projects_catalog_city", "city_id", postgresql_where=text(_PUBLISHED_SQL)),
+        # Пошук за підрядком (ILIKE '%...%'): триграмні індекси розширення pg_trgm
+        Index(
+            "ix_projects_catalog_title_trgm",
+            "title",
+            postgresql_using="gin",
+            postgresql_ops={"title": "gin_trgm_ops"},
+            postgresql_where=text(_PUBLISHED_SQL),
+        ),
+        Index(
+            "ix_projects_catalog_description_trgm",
+            "description",
+            postgresql_using="gin",
+            postgresql_ops={"description": "gin_trgm_ops"},
+            postgresql_where=text(_PUBLISHED_SQL),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

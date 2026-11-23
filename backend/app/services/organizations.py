@@ -1,4 +1,4 @@
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -16,6 +16,7 @@ from app.models import (
 )
 from app.schemas.organizations import OrganizationCreate, OrganizationUpdate
 from app.services.cities import ensure_city_exists
+from app.services.project_visibility import projects_with_details
 
 # Ролі, яким дозволено змінювати профіль організації
 EDITOR_ROLES = frozenset({OrgMemberRoleEnum.owner, OrgMemberRoleEnum.admin})
@@ -140,17 +141,21 @@ async def update_organization(
 
 async def list_approved_organizations(
     db_session: AsyncSession, *, limit: int, offset: int, city_id: int | None = None
-) -> list[Organization]:
-    """Публічний каталог (R-15): лише схвалені організації, нові спершу."""
-    query = select(Organization).where(Organization.status == OrgStatusEnum.approved)
+) -> tuple[list[Organization], int]:
+    """Публічний каталог (R-15): лише схвалені організації, нові спершу, і їх загальна
+    кількість під фільтром."""
+    filters = [Organization.status == OrgStatusEnum.approved]
     if city_id is not None:
-        query = query.where(Organization.city_id == city_id)
-    query = (
-        query.order_by(Organization.created_at.desc(), Organization.id.desc())
+        filters.append(Organization.city_id == city_id)
+    total = await db_session.scalar(select(func.count()).select_from(Organization).where(*filters))
+    organizations = await db_session.scalars(
+        select(Organization)
+        .where(*filters)
+        .order_by(Organization.created_at.desc(), Organization.id.desc())
         .limit(limit)
         .offset(offset)
     )
-    return list(await db_session.scalars(query))
+    return list(organizations), total or 0
 
 
 async def get_approved_organization(db_session: AsyncSession, organization_id: int) -> Organization:
@@ -166,7 +171,11 @@ async def get_approved_organization(db_session: AsyncSession, organization_id: i
     return organization
 
 
-async def list_published_projects(db_session: AsyncSession, organization_id: int) -> list[Project]:
+async def list_published_projects(
+    db_session: AsyncSession, organization_id: int, user_id: int | None
+) -> tuple[list[Project], set[int]]:
+    """Опубліковані проєкти організації та id тих, чиї точні час і місце бачить
+    користувач (R-22)."""
     query = (
         select(Project)
         .where(
@@ -175,4 +184,5 @@ async def list_published_projects(db_session: AsyncSession, organization_id: int
         )
         .order_by(Project.published_at.desc(), Project.id.desc())
     )
-    return list(await db_session.scalars(query))
+    projects = list(await db_session.scalars(query))
+    return projects, await projects_with_details(db_session, user_id, projects)

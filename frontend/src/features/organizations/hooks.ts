@@ -22,8 +22,7 @@ export const ORGANIZATIONS_PAGE_SIZE = 12
 
 /**
  * Каталог із кнопкою «Показати ще»: фільтр за містом і зсув виконує бекенд
- * (city_id, limit, offset). Загальної кількості бекенд не повертає, тому просимо
- * на одну організацію більше, ніж показуємо: якщо вона прийшла, є що довантажувати.
+ * (city_id, limit, offset). Довантажувати є що, поки показано менше, ніж total.
  */
 export const useOrganizations = (
   cityId: number | null,
@@ -35,13 +34,16 @@ export const useOrganizations = (
     queryFn: ({ pageParam }) =>
       fetchOrganizations({
         city_id: cityId,
-        limit: pageSize + 1,
+        limit: pageSize,
         offset: pageParam,
       }),
     getNextPageParam: (lastPage, _pages, lastOffset) =>
-      lastPage.length > pageSize ? lastOffset + pageSize : undefined,
+      lastOffset + pageSize < lastPage.total
+        ? lastOffset + pageSize
+        : undefined,
     select: (data) => ({
-      items: data.pages.flatMap((rows) => rows.slice(0, pageSize)),
+      items: data.pages.flatMap((page) => page.items),
+      total: data.pages.at(-1)?.total ?? 0,
     }),
   })
 
@@ -91,6 +93,8 @@ export const useOrganization = (organizationId: number) =>
     enabled: Number.isInteger(organizationId) && organizationId > 0,
     // 404 (немає або не схвалена) не має сенсу повторювати
     retry: false,
+    // Учасникам бекенд віддає точні час і адресу проєктів (R-22)
+    meta: USER_SCOPED_META,
   })
 
 export const MY_ORGANIZATIONS_QUERY_KEY = ['organizations', 'mine'] as const

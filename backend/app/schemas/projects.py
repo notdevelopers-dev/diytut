@@ -1,8 +1,8 @@
 import re
 from collections.abc import Callable, Mapping
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, ClassVar, Literal, Self
 
 from pydantic import (
     AfterValidator,
@@ -12,12 +12,14 @@ from pydantic import (
     ModelWrapValidatorHandler,
     StringConstraints,
     ValidationError,
+    ValidationInfo,
     field_validator,
     model_validator,
 )
 
 from app.models.experience import ExperienceLevelEnum
 from app.models.project import (
+    EVENT_TIMEZONE,
     MAX_PROJECT_CATEGORIES,
     Project,
     ProjectCategoryEnum,
@@ -399,8 +401,63 @@ class ProjectUpdate(BaseModel):
         return self.model_dump(exclude_unset=True)
 
 
-class ProjectListItem(BaseModel):
+# Ключ контексту валідації EventDetails: чи бачить користувач точні час і місце події
+SHOW_DETAILS = "show_details"
+
+
+def event_day(moment: datetime | None) -> date | None:
+    """День події за київським часом."""
+    return moment.astimezone(EVENT_TIMEZONE).date() if moment is not None else None
+
+
+class EventDetails(BaseModel):
+    """Точні час і місце події (R-22) бачать лише учасники організації проєкту й волонтери
+    зі схваленою заявкою на нього. Решта бачить тільки дні події й місто.
+
+    За замовчуванням деталі приховано: показати їх можна лише явно, через
+    for_viewer(..., show_details=True) або контекст валідації {SHOW_DETAILS: True}, тож
+    новий ендпоінт не розкриє їх через забуту перевірку. Контекст переходить і на вкладені
+    моделі. Без контексту рішення бере з details_hidden вхідного об'єкта: рядок БД такого
+    поля не має (отже, приховано), а вже зібрана схема зберігає своє, коли FastAPI повторно
+    валідує відповідь.
+    """
+
     model_config = ConfigDict(from_attributes=True)
+
+    # Поля, які бачать лише учасники; без доступу вони приходять як null
+    PRIVATE_FIELDS: ClassVar[tuple[str, ...]] = ("starts_at", "ends_at")
+    # Поля схеми, яких немає в моделі проєкту: їх обчислює валідатор нижче
+    DERIVED_FIELDS: ClassVar[frozenset[str]] = frozenset({"starts_on", "ends_on", "details_hidden"})
+
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    # Дні початку й кінця за київським часом: їх бачать усі
+    starts_on: date | None = None
+    ends_on: date | None = None
+    # true — точні час і місце від користувача приховано (а не просто не заповнено)
+    details_hidden: bool = True
+
+    @model_validator(mode="after")
+    def hide_private_details(self, info: ValidationInfo) -> Self:
+        if self.starts_on is None:
+            self.starts_on = event_day(self.starts_at)
+        if self.ends_on is None:
+            self.ends_on = event_day(self.ends_at)
+        show = (info.context or {}).get(SHOW_DETAILS)
+        if show is not None:
+            self.details_hidden = not show
+        if self.details_hidden:
+            for field in self.PRIVATE_FIELDS:
+                setattr(self, field, None)
+        return self
+
+    @classmethod
+    def for_viewer(cls, obj: Any, *, show_details: bool) -> Self:
+        return cls.model_validate(obj, context={SHOW_DETAILS: show_details})
+
+
+class ProjectListItem(EventDetails):
+    PRIVATE_FIELDS: ClassVar[tuple[str, ...]] = ("starts_at", "ends_at", "address")
 
     id: int
     organization_id: int
@@ -411,8 +468,6 @@ class ProjectListItem(BaseModel):
     status: ProjectStatusEnum
     created_at: datetime
     published_at: datetime | None = None
-    starts_at: datetime | None = None
-    ends_at: datetime | None = None
     is_online: bool = False
     address: str | None = None
     capacity: int | None = None
@@ -430,19 +485,33 @@ class ProjectRead(ProjectListItem):
     accepted_count: int
 
     @classmethod
-    def from_project(cls, project: Project, accepted_count: int) -> ProjectRead:
+    def from_project(
+        cls, project: Project, accepted_count: int, *, show_details: bool
+    ) -> ProjectRead:
         # Усі поля моделі беремо з проєкту, а не з model_dump(): той пропускає поля з
         # exclude=True, з яких можуть обчислюватися інші, і нове поле мовчки загубилося б
-        fields = {
-            name: getattr(project, name) for name in cls.model_fields if name != "accepted_count"
-        }
-        return cls.model_validate(fields | {"accepted_count": accepted_count})
+        skipped = cls.DERIVED_FIELDS | {"accepted_count"}
+        fields = {name: getattr(project, name) for name in cls.model_fields if name not in skipped}
+        return cls.model_validate(
+            fields | {"accepted_count": accepted_count}, context={SHOW_DETAILS: show_details}
+        )
+
+
+# Час у параметрах запиту; без поясу вважаємо UTC (NF-08)
+UtcDatetime = Annotated[datetime, AfterValidator(_as_utc)]
 
 
 class ProjectPage(BaseModel):
     items: list[ProjectListItem]
     # Скільки всього проєктів під фільтром, для пагінації
     total: int
+
+
+class TagSuggestion(BaseModel):
+    """Підказка хештегу: скільки проєктів каталогу його мають."""
+
+    tag: str
+    projects_count: int
 
 
 class CategoryRead(BaseModel):

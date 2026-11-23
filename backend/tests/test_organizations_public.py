@@ -120,7 +120,8 @@ def test_list_organizations_excludes_pending_and_other_unapproved(
 
     response = client.get("/api/organizations")
     assert response.status_code == 200
-    data = response.json()
+    assert response.json()["total"] == 1
+    data = response.json()["items"]
     org_ids = [item["id"] for item in data]
 
     assert org_approved in org_ids
@@ -136,19 +137,21 @@ def test_list_organizations_pagination(client: TestClient, make_org) -> None:
     for i in range(5):
         make_org(status=OrgStatusEnum.approved, name=f"Організація {i}")
 
-    res_all = client.get("/api/organizations?limit=10").json()
+    res_all = client.get("/api/organizations?limit=10").json()["items"]
     assert len(res_all) == 5
+    # total — уся кількість під фільтром, незалежно від limit і offset
+    assert client.get("/api/organizations?limit=2&offset=4").json()["total"] == 5
 
-    res_limit = client.get("/api/organizations?limit=2").json()
+    res_limit = client.get("/api/organizations?limit=2").json()["items"]
     assert len(res_limit) == 2
     assert res_limit[0]["id"] == res_all[0]["id"]
     assert res_limit[1]["id"] == res_all[1]["id"]
 
-    res_offset = client.get("/api/organizations?limit=2&offset=2").json()
+    res_offset = client.get("/api/organizations?limit=2&offset=2").json()["items"]
     assert len(res_offset) == 2
     assert res_offset[0]["id"] == res_all[2]["id"]
 
-    res_empty = client.get("/api/organizations?limit=2&offset=10").json()
+    res_empty = client.get("/api/organizations?limit=2&offset=10").json()["items"]
     assert res_empty == []
 
 
@@ -175,13 +178,13 @@ def test_list_organizations_filter_by_city(
     org1 = make_org(status=OrgStatusEnum.approved, city_id=c1)
     org2 = make_org(status=OrgStatusEnum.approved, city_id=c2)
 
-    res_c1 = client.get(f"/api/organizations?city_id={c1}").json()
+    res_c1 = client.get(f"/api/organizations?city_id={c1}").json()["items"]
     assert [o["id"] for o in res_c1] == [org1]
 
-    res_c2 = client.get(f"/api/organizations?city_id={c2}").json()
+    res_c2 = client.get(f"/api/organizations?city_id={c2}").json()["items"]
     assert [o["id"] for o in res_c2] == [org2]
 
-    res_empty = client.get("/api/organizations?city_id=999999").json()
+    res_empty = client.get("/api/organizations?city_id=999999").json()["items"]
     assert res_empty == []
 
 

@@ -160,7 +160,16 @@ class OrganizationListItem(BaseModel):
     created_at: datetime
 
 
+class OrganizationPage(BaseModel):
+    items: list[OrganizationListItem]
+    # Скільки всього схвалених організацій під фільтром, для пагінації
+    total: int
+
+
 class OrganizationDetailRead(OrganizationRead):
-    """Публічна сторінка організації (R-16): профіль і опубліковані проєкти."""
+    """Публічна сторінка організації (R-16): профіль і опубліковані проєкти.
+
+    Точні час і місце проєктів — лише для тих, хто має до них доступ (R-22).
+    """
 
     projects: list[ProjectListItem] = []

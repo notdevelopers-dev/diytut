@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api-client'
 import { getErrorStatus } from '@/lib/errors'
+import type { Page } from '@/types/common'
 import type {
   JoinRequest,
   OrganizationDetail,
@@ -14,10 +15,11 @@ export interface FetchOrganizationsParams {
   offset?: number
 }
 
+/** Каталог: схвалені організації, нові першими, і їх кількість під фільтром. */
 export const fetchOrganizations = async (
   params?: FetchOrganizationsParams,
-): Promise<OrganizationListItem[]> => {
-  const { data } = await apiClient.get<OrganizationListItem[]>(
+): Promise<Page<OrganizationListItem>> => {
+  const { data } = await apiClient.get<Page<OrganizationListItem>>(
     '/organizations',
     {
       params: {
