@@ -1,28 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { Download } from 'lucide-react'
-import { apiClient } from '@/lib/api-client'
-
-interface DailyLogins {
-  date: string
-  logins: number
-  unique_users: number
-}
-
-interface LoginStats {
-  date_from: string
-  date_to: string
-  total_logins: number
-  unique_users: number
-  days: DailyLogins[]
-}
+import { RecentLoginsTable } from '../components/RecentLoginsTable'
+import { useLoginStats } from '../hooks'
+import type { DailyLogins } from '../types'
 
 type Period = 'today' | '7d' | '30d'
-
-interface Result {
-  period: Period
-  current: LoginStats | null
-  previous: LoginStats | null
-}
 
 const PERIODS: { key: Period; label: string; days: number }[] = [
   { key: 'today', label: 'Сьогодні', days: 1 },
@@ -40,31 +22,6 @@ const WEEKDAYS = [
   'Субота',
 ]
 
-// Демо-дані: ендпоінта «останні авторизації» на бекенді поки немає
-const RECENT_LOGINS = [
-  {
-    user: 'user1@example.com',
-    role: 'Користувач',
-    at: '11.11.2026, 12:45',
-    ip: '192.168.1.54',
-    ok: true,
-  },
-  {
-    user: 'user2@example.com',
-    role: 'Представник ГО',
-    at: '10.11.2026, 14:00',
-    ip: '192.168.1.54',
-    ok: true,
-  },
-  {
-    user: 'user3@example.com',
-    role: 'Адміністратор',
-    at: '09.01.2026, 23:59',
-    ip: '192.168.1.54',
-    ok: false,
-  },
-]
-
 const toIso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
@@ -72,6 +29,19 @@ const addDays = (d: Date, n: number) => {
   const result = new Date(d)
   result.setDate(result.getDate() + n)
   return result
+}
+
+/** Обраний період, що закінчується сьогодні, і такий самий період перед ним */
+const getPeriodRanges = (period: Period) => {
+  const days = PERIODS.find((p) => p.key === period)?.days ?? 30
+  const today = new Date()
+  const from = addDays(today, -(days - 1))
+  const prevTo = addDays(from, -1)
+  const prevFrom = addDays(prevTo, -(days - 1))
+  return {
+    current: { from: toIso(from), to: toIso(today) },
+    previous: { from: toIso(prevFrom), to: toIso(prevTo) },
+  }
 }
 
 const getDelta = (current: number, previous: number | undefined) => {
@@ -128,40 +98,15 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, badge }) => (
 
 export const LoginStatsSection: React.FC = () => {
   const [period, setPeriod] = useState<Period>('30d')
-  const [result, setResult] = useState<Result | null>(null)
+  const ranges = getPeriodRanges(period)
+  const currentQuery = useLoginStats(ranges.current.from, ranges.current.to)
+  const previousQuery = useLoginStats(ranges.previous.from, ranges.previous.to)
 
-  useEffect(() => {
-    let isCancelled = false
-    const days = PERIODS.find((p) => p.key === period)?.days ?? 30
-    const today = new Date()
-    const from = addDays(today, -(days - 1))
-    const prevTo = addDays(from, -1)
-    const prevFrom = addDays(prevTo, -(days - 1))
-
-    void Promise.allSettled([
-      apiClient.get<LoginStats>('/admin/stats/logins', {
-        params: { date_from: toIso(from), date_to: toIso(today) },
-      }),
-      apiClient.get<LoginStats>('/admin/stats/logins', {
-        params: { date_from: toIso(prevFrom), date_to: toIso(prevTo) },
-      }),
-    ]).then(([cur, prev]) => {
-      if (isCancelled) return
-      setResult({
-        period,
-        current: cur.status === 'fulfilled' ? cur.value.data : null,
-        previous: prev.status === 'fulfilled' ? prev.value.data : null,
-      })
-    })
-
-    return () => {
-      isCancelled = true
-    }
-  }, [period])
-
-  const isLoading = result?.period !== period
-  const current = isLoading ? null : (result?.current ?? null)
-  const previous = isLoading ? null : (result?.previous ?? null)
+  // Чекаємо обидва періоди, щоб порівняння не з'являлося окремо від цифр.
+  // Без попереднього періоду просто не показуємо порівняння
+  const isLoading = currentQuery.isPending || previousQuery.isPending
+  const current = isLoading ? null : (currentQuery.data ?? null)
+  const previous = isLoading ? null : (previousQuery.data ?? null)
   const hasError = !isLoading && current === null
 
   const maxLogins = current
@@ -265,43 +210,7 @@ export const LoginStatsSection: React.FC = () => {
         </>
       )}
 
-      {/* Останні авторизації */}
-      <div className="rounded-lg border border-[#79B7FF] bg-white p-3">
-        <div className="mb-2 text-sm font-bold">Останні авторизації</div>
-        <table className="w-full border-collapse text-left text-xs">
-          <thead>
-            <tr className="bg-[#F1D387]/60 font-bold">
-              <th className="px-3 py-2">Користувач</th>
-              <th className="px-3 py-2">Роль</th>
-              <th className="px-3 py-2">Дата і Час</th>
-              <th className="px-3 py-2">IP-адреса</th>
-              <th className="px-3 py-2">Статус</th>
-            </tr>
-          </thead>
-          <tbody>
-            {RECENT_LOGINS.map((row) => (
-              <tr key={row.user} className="border-t border-[#DCECFF]">
-                <td className="px-3 py-2">{row.user}</td>
-                <td className="px-3 py-2">{row.role}</td>
-                <td className="px-3 py-2">{row.at}</td>
-                <td className="px-3 py-2">{row.ip}</td>
-                <td className="px-3 py-2">
-                  <span
-                    className={`rounded-full px-3 py-0.5 font-bold ${
-                      row.ok ? 'bg-[#B5F291]' : 'bg-[#E14848] text-white'
-                    }`}
-                  >
-                    {row.ok ? 'Успішно' : 'Помилка'}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="mt-2 text-xs text-[#8B99AA]">
-          Показано 1-{RECENT_LOGINS.length} з {RECENT_LOGINS.length}
-        </div>
-      </div>
+      <RecentLoginsTable />
     </div>
   )
 }

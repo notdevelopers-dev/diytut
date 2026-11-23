@@ -8,6 +8,7 @@ import math
 from collections.abc import Iterable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import Literal
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import distinct_on, insert
@@ -31,7 +32,7 @@ from app.models import (
     ProjectStatusEnum,
     User,
 )
-from app.models.experience import level_for_hours, meets_level
+from app.models.experience import ExperienceLevelEnum, level_for_hours, meets_level
 from app.models.project import EVENT_TIMEZONE
 from app.notifications import create_notification, project_join_requests_link
 from app.schemas.join_requests import JoinRequestCreate
@@ -39,6 +40,8 @@ from app.services.organizations import EDITOR_ROLES, get_user_membership
 from app.services.project_visibility import projects_with_details
 
 ACTIVE_PROJECT_REQUEST_INDEX = "uq_join_requests_active_user_project"
+# Вимога проєкту, якої волонтер не виконує (R-12)
+UnmetRequirement = Literal["adult_only", "experience_level"]
 ACTIVE_STATUSES = (JoinRequestStatusEnum.pending, JoinRequestStatusEnum.accepted)
 ADULT_AGE = 18
 # Пауза перед повторною заявкою на проєкт після відмови: 10 с, далі вп'ятеро довше після
@@ -49,13 +52,51 @@ REAPPLY_GROWTH = 5
 REAPPLY_MAX_DELAY = timedelta(weeks=1)
 
 
-def _project_requests():
+def project_requests():
+    """Заявки на участь у проєктах, а не на вступ до організації: основа запитів до них."""
     return select(JoinRequest).where(JoinRequest.target == JoinRequestTargetEnum.project)
 
 
 def _age_on(birth_date: date, day: date) -> int:
     had_birthday = (day.month, day.day) >= (birth_date.month, birth_date.day)
     return day.year - birth_date.year - (0 if had_birthday else 1)
+
+
+def unmet_requirement(
+    birth_date: date,
+    confirmed_hours: Decimal,
+    *,
+    starts_at: datetime,
+    is_adult_only: bool,
+    experience_level: ExperienceLevelEnum,
+) -> UnmetRequirement | None:
+    """Яку вимогу проєкту (R-12) волонтер не виконує: вік на день початку події чи рівень.
+
+    Вимоги передаються окремо, а не проєктом: редагування перевіряє їх до того, як
+    змінити проєкт. Перевіряють подання заявки, її прийняття й редагування проєкту:
+    вимоги чи дату могли змінити вже після подання.
+    """
+    event_day = starts_at.astimezone(EVENT_TIMEZONE).date()
+    if is_adult_only and _age_on(birth_date, event_day) < ADULT_AGE:
+        return "adult_only"
+    if not meets_level(level_for_hours(confirmed_hours), experience_level):
+        return "experience_level"
+    return None
+
+
+async def check_applicant_requirements(
+    db_session: AsyncSession, project: Project, user_id: int
+) -> UnmetRequirement | None:
+    """unmet_requirement для волонтера й поточних вимог проєкту."""
+    birth_date = await db_session.scalar(select(User.birth_date).where(User.id == user_id))
+    hours = (await get_confirmed_hours(db_session, [user_id]))[user_id]
+    return unmet_requirement(
+        birth_date,
+        hours,
+        starts_at=project.starts_at,
+        is_adult_only=project.is_adult_only,
+        experience_level=project.experience_level,
+    )
 
 
 async def get_confirmed_hours(
@@ -78,7 +119,7 @@ async def get_confirmed_hours(
 async def count_accepted(db_session: AsyncSession, project_id: int) -> int:
     """Скільки місць проєкту вже зайнято схваленими заявками."""
     return await db_session.scalar(
-        _project_requests()
+        project_requests()
         .with_only_columns(func.count())
         .where(
             JoinRequest.project_id == project_id,
@@ -123,7 +164,7 @@ async def _latest_request(
     db_session: AsyncSession, user_id: int, project_id: int
 ) -> JoinRequest | None:
     return await db_session.scalar(
-        _project_requests()
+        project_requests()
         .where(JoinRequest.user_id == user_id, JoinRequest.project_id == project_id)
         .order_by(JoinRequest.created_at.desc(), JoinRequest.id.desc())
         .limit(1)
@@ -146,7 +187,7 @@ async def _reapply_times(
 ) -> dict[int, datetime]:
     """Коли закінчиться пауза після відмов: для кожного проєкту, де вони були."""
     rows = await db_session.execute(
-        _project_requests()
+        project_requests()
         .with_only_columns(JoinRequest.project_id, func.count(), func.max(JoinRequest.reviewed_at))
         .where(
             JoinRequest.user_id == user_id,
@@ -269,11 +310,10 @@ async def create_project_join_request(
     await _check_reapply_delay(db_session, user_id, project.id)
 
     # Вимоги проєкту (R-12): вік на день початку події й мінімальний рівень досвіду
-    event_day = project.starts_at.astimezone(EVENT_TIMEZONE).date()
-    if project.is_adult_only and _age_on(user.birth_date, event_day) < ADULT_AGE:
+    unmet = await check_applicant_requirements(db_session, project, user_id)
+    if unmet == "adult_only":
         raise errors.project_adult_only()
-    hours = (await get_confirmed_hours(db_session, [user_id]))[user_id]
-    if not meets_level(level_for_hours(hours), project.experience_level):
+    if unmet == "experience_level":
         raise errors.experience_level_too_low()
 
     # Попередня перевірка: остаточно місця рахуються під час розгляду під блокуванням
@@ -321,7 +361,7 @@ async def get_my_request_statuses(
     ids = set(project_ids)
     latest = list(
         await db_session.scalars(
-            _project_requests()
+            project_requests()
             .options(joinedload(JoinRequest.project, innerjoin=True))
             .where(JoinRequest.user_id == user_id, JoinRequest.project_id.in_(ids))
             .ext(distinct_on(JoinRequest.project_id))
@@ -372,7 +412,7 @@ async def cancel_my_project_request(
     """Скасування заявки волонтером до початку події; схвалена заявка звільняє місце (R-23)."""
     # Блокування: скасування не перетнеться з рішенням організації щодо цієї ж заявки
     join_request = await db_session.scalar(
-        _project_requests()
+        project_requests()
         .options(joinedload(JoinRequest.project, innerjoin=True))
         .where(
             JoinRequest.user_id == user_id,
@@ -409,7 +449,7 @@ async def list_my_project_requests(
     """Заявки волонтера на проєкти, свіжіші спершу, та id проєктів, точний час яких він
     бачить (R-22): зі схваленою заявкою чи як учасник організації."""
     query = (
-        _project_requests()
+        project_requests()
         .options(joinedload(JoinRequest.project, innerjoin=True))
         .where(JoinRequest.user_id == user_id)
         .order_by(JoinRequest.created_at.desc(), JoinRequest.id.desc())
@@ -447,7 +487,7 @@ async def list_project_requests(
         raise errors.not_join_request_reviewer()
 
     query = (
-        _project_requests()
+        project_requests()
         .options(joinedload(JoinRequest.user, innerjoin=True))
         .where(JoinRequest.project_id == project.id, JoinRequest.status == status)
         .order_by(JoinRequest.created_at, JoinRequest.id)

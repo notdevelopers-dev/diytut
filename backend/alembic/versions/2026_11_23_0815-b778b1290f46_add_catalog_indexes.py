@@ -1,7 +1,7 @@
 """Add project catalog indexes
 
 Revision ID: b778b1290f46
-Revises: 945f3020468b
+Revises: 021fe9d045e3
 Create Date: 2026-11-20 12:27:53.851410
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "b778b1290f46"
-down_revision: str | Sequence[str] | None = "945f3020468b"
+down_revision: str | Sequence[str] | None = "021fe9d045e3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

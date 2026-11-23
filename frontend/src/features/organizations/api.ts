@@ -5,6 +5,7 @@ import type {
   JoinRequest,
   OrganizationDetail,
   OrganizationListItem,
+  OrganizationJoinRequest,
   OrganizationMembership,
 } from '@/types/organization'
 
@@ -120,6 +121,28 @@ export const createJoinRequest = async (
   const { data } = await apiClient.post<JoinRequest>(
     `/organizations/${organizationId}/join-requests`,
     { message: message.trim() || null },
+  )
+  return data
+}
+
+/** Максимум заявок за раз (ліміт бекенду) */
+export const INCOMING_REQUESTS_LIMIT = 100
+
+/**
+ * Заявки на вступ, що чекають розгляду (лише pending; доступно owner і admin).
+ * organization_id — бо користувач може бути в кількох організаціях.
+ */
+export const fetchIncomingJoinRequests = async (
+  organizationId: number,
+): Promise<OrganizationJoinRequest[]> => {
+  const { data } = await apiClient.get<OrganizationJoinRequest[]>(
+    '/organizations/me/join-requests',
+    {
+      params: {
+        organization_id: organizationId,
+        limit: INCOMING_REQUESTS_LIMIT,
+      },
+    },
   )
   return data
 }

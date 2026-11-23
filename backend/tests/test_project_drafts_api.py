@@ -352,11 +352,17 @@ def test_cross_field_check_skips_invalid_fields(client: TestClient, org) -> None
 
 @pytest.mark.parametrize("status", ["draft", "published"])
 @pytest.mark.parametrize(
-    ("field", "value"),
-    [("capacity", 2**31), ("volunteer_hours", "1000"), ("volunteer_hours", "999.995")],
+    ("field", "value", "error_type"),
+    [
+        ("capacity", 2**31, "less_than_equal"),
+        ("volunteer_hours", "1000", "less_than_equal"),
+        # numeric(5, 2) округлив би їх до 1000.00 і до 0.00, а обидва порушують обмеження БД
+        ("volunteer_hours", "999.995", "decimal_max_places"),
+        ("volunteer_hours", "0.001", "decimal_max_places"),
+    ],
 )
 def test_values_beyond_column_limits_422(
-    client: TestClient, org, status: str, field: str, value
+    client: TestClient, org, status: str, field: str, value, error_type: str
 ) -> None:
     # Раніше БД відхиляла їх, і запит падав з 500
     sign_in(client, org["owner"])
@@ -365,7 +371,7 @@ def test_values_beyond_column_limits_422(
     response = client.post("/api/projects", json=payload)
 
     assert response.status_code == 422
-    assert field_errors(response.json()["detail"]) == {field: "less_than_equal"}
+    assert field_errors(response.json()["detail"]) == {field: error_type}
 
 
 def test_values_at_column_limits_are_saved(client: TestClient, org) -> None:
@@ -634,6 +640,56 @@ def test_publish_title_only_draft_422(client: TestClient, db, org, make_project)
     project = load_project(db, project_id)
     assert project.status == ProjectStatusEnum.draft
     assert project.published_at is None
+
+
+def _past_times() -> dict:
+    """Подія, що почалася годину тому й ще триває."""
+    now = datetime.now(UTC).replace(microsecond=0)
+    return {
+        "starts_at": (now - timedelta(hours=1)).isoformat(),
+        "ends_at": (now + timedelta(hours=2)).isoformat(),
+    }
+
+
+def test_create_published_with_past_start_422(client: TestClient, org) -> None:
+    sign_in(client, org["owner"])
+    payload = {"title": "Толока"} | COMPLETE_FIELDS | _past_times()
+    del payload["description"]
+
+    response = client.post("/api/projects", json=payload)
+
+    # Минулий початок — в одному списку з рештою помилок, а не з наступної спроби
+    assert response.status_code == 422
+    assert field_errors(response.json()["detail"]) == {
+        "starts_at": "value_error",
+        "description": "missing",
+    }
+
+
+def test_draft_with_past_start_is_saved(client: TestClient, org) -> None:
+    sign_in(client, org["owner"])
+    payload = {"title": "Толока", "status": "draft"} | COMPLETE_FIELDS | _past_times()
+
+    assert client.post("/api/projects", json=payload).status_code == 201
+
+
+def test_publish_draft_with_past_start_422(client: TestClient, db, org, make_project) -> None:
+    now = datetime.now(UTC)
+    times = {"starts_at": now - timedelta(hours=1), "ends_at": now + timedelta(hours=2)}
+    project_id = make_project(org["org"], **(_complete_draft_fields() | times))
+    sign_in(client, org["owner"])
+
+    response = client.post(f"/api/projects/{project_id}/publish")
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == [
+        {
+            "type": "value_error",
+            "loc": ["body", "starts_at"],
+            "msg": "Value error, starts_at must be in the future",
+        }
+    ]
+    assert load_project(db, project_id).status == ProjectStatusEnum.draft
 
 
 def test_publish_offline_draft_without_address_422(

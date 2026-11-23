@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app import errors
-from app.auth import GoogleIdentity, start_registration, start_session
+from app.auth import GoogleIdentity, client_ip, start_registration, start_session
 from app.config import settings
 from app.db import DbSessionDep
 from app.models import LoginMethodEnum
@@ -85,7 +85,7 @@ async def dev_login(request: Request, db_session: DbSessionDep) -> RedirectRespo
     # Наявного користувача впізнаємо за email, тож працюють і акаунти, створені через Google
     user_id = await get_user_id_by_email(db_session, email)
     if user_id is not None:
-        await record_login(db_session, user_id, LoginMethodEnum.dev)
+        await record_login(db_session, user_id, LoginMethodEnum.dev, client_ip(request))
         response = RedirectResponse(AFTER_LOGIN_URL, status.HTTP_302_FOUND)
         start_session(response, user_id)
         return response
