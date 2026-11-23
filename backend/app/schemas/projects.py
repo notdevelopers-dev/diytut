@@ -235,13 +235,12 @@ def check_publication(data: Mapping[str, Any]) -> None:
     інакше організатор дізнавався б про них лише з наступної спроби.
     """
     provided = {field: value for field, value in data.items() if value is not None}
+    errors: list[Any] = []
     try:
         ProjectPublication.model_validate(provided)
     except ValidationError as error:
         # Помилки валідаторів моделі відкидаємо: нижче ті самі перевірки виконуються всі
-        errors: list[Any] = [detail for detail in error.errors() if detail["loc"]]
-    else:
-        return
+        errors = [detail for detail in error.errors() if detail["loc"]]
 
     failed = {detail["loc"][0] for detail in errors}
     arrangement = _Arrangement.model_validate(
@@ -260,7 +259,20 @@ def check_publication(data: Mapping[str, Any]) -> None:
                 errors.append(
                     {"type": "value_error", "loc": (), "input": data, "ctx": {"error": problem}}
                 )
-    raise ValidationError.from_exception_data(ProjectPublication.__name__, errors)
+    # Подію, що вже почалася, не опублікувати й не перенести в минуле: заявки на неї не
+    # приймаються, а змінити її вже не можна. Чернетку з будь-якою датою зберегти можна
+    starts_at = _as_utc(arrangement.starts_at)
+    if "starts_at" not in failed and starts_at is not None and starts_at <= datetime.now(UTC):
+        errors.append(
+            {
+                "type": "value_error",
+                "loc": ("starts_at",),
+                "input": data.get("starts_at"),
+                "ctx": {"error": ValueError("starts_at must be in the future")},
+            }
+        )
+    if errors:
+        raise ValidationError.from_exception_data(ProjectPublication.__name__, errors)
 
 
 # Поля запиту на створення, що не є полями проєкту

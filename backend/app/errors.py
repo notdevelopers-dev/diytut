@@ -154,15 +154,6 @@ def project_not_editable() -> HTTPException:
     )
 
 
-def project_start_in_past() -> HTTPException:
-    return field_error(
-        status.HTTP_422_UNPROCESSABLE_CONTENT,
-        "starts_at",
-        "start_in_past",
-        "Published project cannot be moved to a start in the past",
-    )
-
-
 def capacity_below_accepted(accepted: int) -> HTTPException:
     return field_error(
         status.HTTP_422_UNPROCESSABLE_CONTENT,

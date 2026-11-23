@@ -367,9 +367,8 @@ async def update_project(
     if project.status in NOT_EDITABLE_STATUSES:
         raise errors.project_not_editable()
     published = project.status == ProjectStatusEnum.published
-    now = datetime.now(UTC)
     # Учасники вже на події: змінювати її пізно. Чернетку з минулою датою виправити можна
-    if published and project.starts_at <= now:
+    if published and project.starts_at <= datetime.now(UTC):
         raise errors.project_already_started()
 
     changes = data.project_changes()
@@ -377,11 +376,9 @@ async def update_project(
     # може суперечити збереженому, наприклад новий кінець — старому початку
     result = {field: getattr(project, field) for field in ProjectDraft.model_fields} | changes
     if published:
+        # Повна перевірка не дасть і перенести початок у минуле: такий проєкт уже «почався»,
+        # і ні виправити дату, ні скасувати заявку вже не вийшло б
         _check_publication(result)
-        # Перенесений у минуле проєкт уже «почався»: ні виправити помилку в даті, ні скасувати
-        # заявку волонтер не зміг би. Повторно надісланий збережений початок — у майбутньому
-        if "starts_at" in changes and changes["starts_at"] <= now:
-            raise errors.project_start_in_past()
     else:
         _check_draft(result)
 

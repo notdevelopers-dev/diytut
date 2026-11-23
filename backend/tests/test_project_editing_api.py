@@ -676,9 +676,9 @@ def test_published_start_cannot_move_to_past_422(client: TestClient, db, publish
     assert response.status_code == 422
     assert response.json()["detail"] == [
         {
-            "type": "start_in_past",
+            "type": "value_error",
             "loc": ["body", "starts_at"],
-            "msg": "Published project cannot be moved to a start in the past",
+            "msg": "Value error, starts_at must be in the future",
         }
     ]
     assert load_project(db, published["project"]).starts_at == STARTS_AT
