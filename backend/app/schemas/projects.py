@@ -17,8 +17,13 @@ from pydantic import (
 )
 
 from app.models.experience import ExperienceLevelEnum
-from app.models.project import MAX_PROJECT_CATEGORIES, ProjectCategoryEnum, ProjectStatusEnum
-from app.schemas.users import MAX_BIGINT, MAX_INT32
+from app.models.project import (
+    MAX_PROJECT_CATEGORIES,
+    Project,
+    ProjectCategoryEnum,
+    ProjectStatusEnum,
+)
+from app.schemas.users import MAX_BIGINT, MAX_INT32, CityId
 
 ProjectTitle = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=2, max_length=200)
@@ -89,6 +94,9 @@ ProjectTag = Annotated[str, AfterValidator(_validate_tag)]
 # відхилила б, і запит упав би з 500 замість 422
 MAX_CAPACITY = MAX_INT32
 MAX_VOLUNTEER_HOURS = Decimal("999.99")
+# Більше знаків після коми numeric(5, 2) не зберігає: «2.001» стало б 2.00, а «0.001» — нулем,
+# який порушує ck_projects_volunteer_hours_positive (500 замість 422)
+VOLUNTEER_HOURS_DECIMAL_PLACES = 2
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -109,6 +117,32 @@ def _check_location(is_online: bool, city_id: int | None, address: str | None) -
         raise ValueError("Offline project requires city_id and address")
 
 
+def _unique_categories(value: list[ProjectCategoryEnum]) -> list[ProjectCategoryEnum]:
+    unique = list(dict.fromkeys(value))
+    if len(unique) > MAX_PROJECT_CATEGORIES:
+        raise ValueError(f"At most {MAX_PROJECT_CATEGORIES} categories are allowed")
+    return unique
+
+
+def _unique_tags(value: list[str]) -> list[str]:
+    unique = list(dict.fromkeys(value))
+    if len(unique) > MAX_TAGS:
+        raise ValueError(f"At most {MAX_TAGS} tags are allowed")
+    return unique
+
+
+# Обмеження полів, спільні для чернетки, публікації й редагування
+ProjectCapacity = Annotated[int, Field(gt=0, le=MAX_CAPACITY)]
+VolunteerHours = Annotated[
+    Decimal,
+    Field(gt=0, le=MAX_VOLUNTEER_HOURS, decimal_places=VOLUNTEER_HOURS_DECIMAL_PLACES),
+]
+# Сфери зі сталого набору — основний фільтр каталогу (R-14); дублікати відкидаються
+ProjectCategories = Annotated[list[ProjectCategoryEnum], AfterValidator(_unique_categories)]
+# Вільні хештеги організації; дублікати після нормалізації відкидаються
+ProjectTags = Annotated[list[ProjectTag], AfterValidator(_unique_tags)]
+
+
 class ProjectDraft(BaseModel):
     """Поля проєкту, з якими його можна зберегти як чернетку (R-12, рішення 18.11).
 
@@ -124,32 +158,14 @@ class ProjectDraft(BaseModel):
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     is_online: bool = False
-    city_id: int | None = Field(default=None, gt=0, le=MAX_INT32)
+    city_id: CityId | None = None
     address: str | None = None
-    capacity: int | None = Field(default=None, gt=0, le=MAX_CAPACITY)
-    volunteer_hours: Decimal | None = Field(default=None, gt=0, le=MAX_VOLUNTEER_HOURS)
+    capacity: ProjectCapacity | None = None
+    volunteer_hours: VolunteerHours | None = None
     is_adult_only: bool = False
     experience_level: ExperienceLevelEnum = ExperienceLevelEnum.novice
-    # Сфера зі сталого набору: основний фільтр каталогу (R-14)
-    categories: list[ProjectCategoryEnum] = Field(default_factory=list)
-    # Вільні хештеги організації; дублікати після нормалізації відкидаються
-    tags: list[ProjectTag] = Field(default_factory=list)
-
-    @field_validator("categories")
-    @classmethod
-    def validate_categories(cls, value: list[ProjectCategoryEnum]) -> list[ProjectCategoryEnum]:
-        unique = list(dict.fromkeys(value))
-        if len(unique) > MAX_PROJECT_CATEGORIES:
-            raise ValueError(f"At most {MAX_PROJECT_CATEGORIES} categories are allowed")
-        return unique
-
-    @field_validator("tags")
-    @classmethod
-    def validate_tags(cls, value: list[str]) -> list[str]:
-        unique = list(dict.fromkeys(value))
-        if len(unique) > MAX_TAGS:
-            raise ValueError(f"At most {MAX_TAGS} tags are allowed")
-        return unique
+    categories: ProjectCategories = Field(default_factory=list)
+    tags: ProjectTags = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_times(self) -> ProjectDraft:
@@ -170,9 +186,9 @@ class ProjectPublication(ProjectDraft):
     description: ProjectDescription
     starts_at: datetime
     ends_at: datetime
-    capacity: int = Field(gt=0, le=MAX_CAPACITY)
-    volunteer_hours: Decimal = Field(gt=0, le=MAX_VOLUNTEER_HOURS)
-    categories: list[ProjectCategoryEnum] = Field(min_length=1)
+    capacity: ProjectCapacity
+    volunteer_hours: VolunteerHours
+    categories: ProjectCategories = Field(min_length=1)
 
     @model_validator(mode="after")
     def validate_location(self) -> ProjectPublication:
@@ -219,13 +235,12 @@ def check_publication(data: Mapping[str, Any]) -> None:
     інакше організатор дізнавався б про них лише з наступної спроби.
     """
     provided = {field: value for field, value in data.items() if value is not None}
+    errors: list[Any] = []
     try:
         ProjectPublication.model_validate(provided)
     except ValidationError as error:
         # Помилки валідаторів моделі відкидаємо: нижче ті самі перевірки виконуються всі
-        errors: list[Any] = [detail for detail in error.errors() if detail["loc"]]
-    else:
-        return
+        errors = [detail for detail in error.errors() if detail["loc"]]
 
     failed = {detail["loc"][0] for detail in errors}
     arrangement = _Arrangement.model_validate(
@@ -244,7 +259,20 @@ def check_publication(data: Mapping[str, Any]) -> None:
                 errors.append(
                     {"type": "value_error", "loc": (), "input": data, "ctx": {"error": problem}}
                 )
-    raise ValidationError.from_exception_data(ProjectPublication.__name__, errors)
+    # Подію, що вже почалася, не опублікувати й не перенести в минуле: заявки на неї не
+    # приймаються, а змінити її вже не можна. Чернетку з будь-якою датою зберегти можна
+    starts_at = _as_utc(arrangement.starts_at)
+    if "starts_at" not in failed and starts_at is not None and starts_at <= datetime.now(UTC):
+        errors.append(
+            {
+                "type": "value_error",
+                "loc": ("starts_at",),
+                "input": data.get("starts_at"),
+                "ctx": {"error": ValueError("starts_at must be in the future")},
+            }
+        )
+    if errors:
+        raise ValidationError.from_exception_data(ProjectPublication.__name__, errors)
 
 
 # Поля запиту на створення, що не є полями проєкту
@@ -301,6 +329,76 @@ class ProjectCreate(ProjectDraft):
         return self.model_dump(exclude=_REQUEST_ONLY_FIELDS)
 
 
+# Поля, які не бувають порожніми ні в чернетці, ні в опублікованому проєкті: у PATCH їх
+# можна пропустити, але не стерти через null
+_NOT_NULL_ON_UPDATE = (
+    "title",
+    "is_online",
+    "is_adult_only",
+    "experience_level",
+    "categories",
+    "tags",
+)
+
+
+def _hide_null_in_schema(schema: dict[str, Any]) -> None:
+    """Прибирає null зі схеми OpenAPI для полів, де null відхиляється.
+
+    Тип X | None потрібен, щоб поле можна було пропустити; SkipJsonSchema[None] тут не
+    підходить, бо змінює формат помилок валідації.
+    """
+    for field in _NOT_NULL_ON_UPDATE:
+        variants = schema["properties"][field].pop("anyOf")
+        schema["properties"][field].update(*(v for v in variants if v != {"type": "null"}))
+
+
+class ProjectUpdate(BaseModel):
+    """Часткове оновлення проєкту (PATCH): змінюються лише передані поля.
+
+    Обмеження значень ті самі, що й у ProjectDraft. Явний null стирає поле, яке в чернетці
+    може бути порожнім; в опублікованому проєкті такі поля обов'язкові, і стерти їх не дасть
+    повна перевірка в сервісі. Зв'язки між полями (порядок дат, місце офлайн-події) залежать
+    і від збережених значень, тож їх теж перевіряє сервіс, на об'єднаних даних.
+    """
+
+    model_config = ConfigDict(extra="forbid", json_schema_extra=_hide_null_in_schema)
+
+    # Для полів з _NOT_NULL_ON_UPDATE None означає лише «поле не передали»: явний null
+    # відхиляє валідатор нижче
+    title: ProjectTitle | None = None
+    description: ProjectDescription | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    is_online: bool | None = None
+    city_id: CityId | None = None
+    address: str | None = None
+    capacity: ProjectCapacity | None = None
+    volunteer_hours: VolunteerHours | None = None
+    is_adult_only: bool | None = None
+    experience_level: ExperienceLevelEnum | None = None
+    categories: ProjectCategories | None = None
+    tags: ProjectTags | None = None
+
+    @field_validator(*_NOT_NULL_ON_UPDATE)
+    @classmethod
+    def _not_null(cls, value: object) -> object:
+        # Не викликається для пропущених полів, лише для явно переданого null
+        if value is None:
+            raise ValueError("Field cannot be null")
+        return value
+
+    @field_validator("starts_at", "ends_at")
+    @classmethod
+    def validate_timezone(cls, value: datetime | None) -> datetime | None:
+        # Валідатор поля, а не моделі: присвоєння в моделі позначило б пропущене поле
+        # переданим, і PATCH стер би його
+        return _as_utc(value)
+
+    def project_changes(self) -> dict[str, Any]:
+        """Лише передані поля: назви збігаються зі стовпцями projects."""
+        return self.model_dump(exclude_unset=True)
+
+
 class ProjectListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -327,6 +425,18 @@ class ProjectListItem(BaseModel):
 
 class ProjectRead(ProjectListItem):
     updated_at: datetime
+    # Скільки місць уже зайнято схваленими заявками: вільних — capacity - accepted_count.
+    # Форма редагування не дає зменшити capacity нижче цього числа (R-24)
+    accepted_count: int
+
+    @classmethod
+    def from_project(cls, project: Project, accepted_count: int) -> ProjectRead:
+        # Усі поля моделі беремо з проєкту, а не з model_dump(): той пропускає поля з
+        # exclude=True, з яких можуть обчислюватися інші, і нове поле мовчки загубилося б
+        fields = {
+            name: getattr(project, name) for name in cls.model_fields if name != "accepted_count"
+        }
+        return cls.model_validate(fields | {"accepted_count": accepted_count})
 
 
 class ProjectPage(BaseModel):

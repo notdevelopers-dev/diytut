@@ -12,7 +12,7 @@ from app.schemas.join_requests import (
     ProjectJoinRequestRead,
     ProjectJoinRequestStatusRead,
 )
-from app.schemas.projects import ProjectCreate, ProjectListItem, ProjectRead
+from app.schemas.projects import ProjectCreate, ProjectListItem, ProjectRead, ProjectUpdate
 from app.schemas.users import MAX_BIGINT, MAX_INT32
 from app.services import project_join_requests as join_requests_service
 from app.services import projects as service
@@ -79,24 +79,32 @@ async def read_my_request_statuses(
 async def get_project(
     project_id: ProjectId, db_session: DbSessionDep, user_id: OptionalUserId
 ) -> ProjectRead:
-    project = await service.get_visible_project(db_session, project_id, user_id)
-    return ProjectRead.model_validate(project)
+    project, accepted_count = await service.read_project(db_session, project_id, user_id)
+    return ProjectRead.from_project(project, accepted_count)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_project(
     data: ProjectCreate, db_session: DbSessionDep, user_id: CurrentUserId
 ) -> ProjectRead:
-    project = await service.create_project(db_session, user_id, data)
-    return ProjectRead.model_validate(project)
+    project, accepted_count = await service.create_project(db_session, user_id, data)
+    return ProjectRead.from_project(project, accepted_count)
+
+
+@router.patch("/{project_id}")
+async def update_project(
+    project_id: ProjectId, data: ProjectUpdate, db_session: DbSessionDep, user_id: CurrentUserId
+) -> ProjectRead:
+    project, accepted_count = await service.update_project(db_session, user_id, project_id, data)
+    return ProjectRead.from_project(project, accepted_count)
 
 
 @router.post("/{project_id}/publish")
 async def publish_project(
     project_id: ProjectId, db_session: DbSessionDep, user_id: CurrentUserId
 ) -> ProjectRead:
-    project = await service.publish_project(db_session, user_id, project_id)
-    return ProjectRead.model_validate(project)
+    project, accepted_count = await service.publish_project(db_session, user_id, project_id)
+    return ProjectRead.from_project(project, accepted_count)
 
 
 @router.post("/{project_id}/join-requests", status_code=status.HTTP_201_CREATED)
