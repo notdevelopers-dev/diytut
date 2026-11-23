@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -12,6 +12,7 @@ from app.notifications import (
     organization_edit_link,
 )
 from app.schemas.admin import OrganizationReview
+from app.services.projects import _escape_like
 
 
 async def require_platform_admin(db_session: AsyncSession, user_id: int) -> int:
@@ -32,9 +33,17 @@ def _with_details(query):
 
 
 async def list_organization_requests(
-    db_session: AsyncSession, status: OrgStatusEnum | None, limit: int, offset: int
+    db_session: AsyncSession,
+    status: OrgStatusEnum | None,
+    search: str | None,
+    limit: int,
+    offset: int,
 ) -> tuple[list[Organization], int]:
     filters = [Organization.status == status] if status is not None else []
+    if search and search.strip():
+        # Частина назви без урахування регістру або частина ЄДРПОУ
+        pattern = f"%{_escape_like(search.strip())}%"
+        filters.append(or_(Organization.name.ilike(pattern), Organization.edrpou.like(pattern)))
     total = await db_session.scalar(select(func.count()).select_from(Organization).where(*filters))
     # Найстаріші заявки першими: черга розглядається в порядку надходження
     query = (

@@ -4,7 +4,7 @@ from typing import Annotated, Any
 
 import jwt
 from authlib.integrations.starlette_client import OAuth
-from fastapi import Cookie, Depends, Response
+from fastapi import Cookie, Depends, Request, Response
 
 from app import errors
 from app.config import settings
@@ -85,6 +85,11 @@ def _delete_cookie(response: Response, name: str) -> None:
     response.delete_cookie(
         name, path="/api", secure=settings.cookie_secure, httponly=True, samesite="lax"
     )
+
+
+def client_ip(request: Request) -> str | None:
+    """IP клієнта: uvicorn бере його з X-Forwarded-For, який ставить nginx (--proxy-headers)."""
+    return request.client.host if request.client else None
 
 
 def start_session(response: Response, user_id: int) -> None:

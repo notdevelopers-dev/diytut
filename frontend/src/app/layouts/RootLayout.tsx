@@ -171,8 +171,15 @@ export const RootLayout = () => {
   // Організація користувача (для режиму організації та перемикання)
   const org = user?.organization
 
+  // Адмін-панель — робочий інтерфейс: футер сайту там не потрібен, панель іде до низу екрана
+  const hideFooter = location.pathname.startsWith('/admin')
+
   return (
-    <div className="relative flex min-h-screen flex-col justify-between bg-[#F7FBFF] overflow-x-hidden">
+    // Сітка «шапка / вміст / футер»: вміст займає решту екрана, і сторінка може
+    // розтягнутися на всю цю висоту (min-h-full) без підрахунку висот шапки й футера.
+    // overflow-x-clip, а не hidden: hidden робить обгортку контейнером прокрутки,
+    // і sticky всередині сторінок (бічна панель адмінки) перестає працювати
+    <div className="relative grid min-h-screen grid-rows-[auto_1fr_auto] bg-[#F7FBFF] overflow-x-clip">
       {/* 1. Шапка за макетом із Figma: логотип ДійТут + жовта кнопка ☰ */}
       <header className="w-full bg-[#F7FBFF]">
         {/* Шапка за макетом Figma: логотип, пошук, дзвіночок, аватар, меню.
@@ -289,12 +296,12 @@ export const RootLayout = () => {
       </header>
 
       {/* 2. Основний вміст сайту */}
-      <main className="flex-1 w-full">
+      <main className="w-full">
         <Outlet />
       </main>
 
-      {/* 3. Багатоколонковий футер; притиснутий донизу завдяки min-h-screen + flex-1 у main */}
-      <SiteFooter />
+      {/* 3. Багатоколонковий футер; притиснутий донизу сіткою: рядок вмісту займає решту екрана */}
+      {!hideFooter && <SiteFooter />}
 
       {/* 4. Бургер-меню за макетом Figma («burger profile») */}
       {isMenuOpen && (

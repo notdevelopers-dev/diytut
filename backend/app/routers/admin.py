@@ -8,6 +8,8 @@ from app.db import DbSessionDep
 from app.models import OrgStatusEnum
 from app.schemas.admin import (
     DailyLogins,
+    LoginEventPage,
+    LoginEventRead,
     LoginStats,
     OrganizationRequest,
     OrganizationRequestPage,
@@ -35,11 +37,12 @@ router = APIRouter(dependencies=[Depends(get_current_admin_id)])
 async def list_organization_requests(
     db_session: DbSessionDep,
     status: OrgStatusEnum | None = None,
+    search: Annotated[str | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
 ) -> OrganizationRequestPage:
     organizations, total = await service.list_organization_requests(
-        db_session, status, limit, offset
+        db_session, status, search, limit, offset
     )
     return OrganizationRequestPage(
         items=[OrganizationRequest.model_validate(o) for o in organizations], total=total
@@ -91,3 +94,13 @@ async def login_stats(
         unique_users=unique_users,
         days=days,
     )
+
+
+@router.get("/stats/logins/recent")
+async def list_recent_logins(
+    db_session: DbSessionDep,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
+) -> LoginEventPage:
+    events, total = await logins_service.list_recent_logins(db_session, limit, offset)
+    return LoginEventPage(items=[LoginEventRead.model_validate(e) for e in events], total=total)
