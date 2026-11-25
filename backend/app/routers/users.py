@@ -28,9 +28,12 @@ async def update_my_profile(
 
 @router.get("/me/organizations")
 async def read_my_organizations(
-    db_session: DbSessionDep, user_id: CurrentUserId
+    db_session: DbSessionDep,
+    user_id: CurrentUserId,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
 ) -> list[OrganizationMembership]:
-    memberships = await get_user_memberships(db_session, user_id)
+    memberships = await get_user_memberships(db_session, user_id, limit=limit, offset=offset)
     return [OrganizationMembership.from_membership(m) for m in memberships]
 
 

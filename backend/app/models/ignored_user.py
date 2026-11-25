@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, desc
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -15,6 +15,15 @@ class OrganizationIgnoredUser(Base):
     """
 
     __tablename__ = "organization_ignored_users"
+    __table_args__ = (
+        # Список ігнору організації, свіжіші першими
+        Index(
+            "ix_organization_ignored_users_org_created_user",
+            "organization_id",
+            desc("created_at"),
+            desc("user_id"),
+        ),
+    )
 
     organization_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("organizations.id"), primary_key=True

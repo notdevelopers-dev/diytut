@@ -59,9 +59,18 @@ async def get_user_membership(
     return await db_session.scalar(query)
 
 
-async def get_user_memberships(db_session: AsyncSession, user_id: int) -> list[OrganizationMember]:
+async def get_user_memberships(
+    db_session: AsyncSession,
+    user_id: int,
+    *,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[OrganizationMember]:
     """Усі членства користувача в організаціях для перемикання акаунтів."""
-    result = await db_session.scalars(_memberships_query(user_id))
+    query = _memberships_query(user_id).offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+    result = await db_session.scalars(query)
     return list(result.all())
 
 
@@ -166,7 +175,9 @@ async def get_approved_organization(db_session: AsyncSession, organization_id: i
     return organization
 
 
-async def list_published_projects(db_session: AsyncSession, organization_id: int) -> list[Project]:
+async def list_published_projects(
+    db_session: AsyncSession, organization_id: int, *, limit: int = 20, offset: int = 0
+) -> list[Project]:
     query = (
         select(Project)
         .where(
@@ -174,5 +185,7 @@ async def list_published_projects(db_session: AsyncSession, organization_id: int
             Project.status == ProjectStatusEnum.published,
         )
         .order_by(Project.published_at.desc(), Project.id.desc())
+        .limit(limit)
+        .offset(offset)
     )
     return list(await db_session.scalars(query))

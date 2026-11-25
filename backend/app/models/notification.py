@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Text, false
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Text, desc, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -51,6 +51,8 @@ class Notification(Base):
         # не потрібен, бо його покриває перший стовпець цього. Ім'я задане явно: конвенція
         # бере лише перший стовпець і дала б оманливе ix_notifications_user_id
         Index("ix_notifications_user_id_is_read", "user_id", "is_read"),
+        # Список сповіщень користувача, нові першими
+        Index("ix_notifications_user_created_id", "user_id", desc("created_at"), desc("id")),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

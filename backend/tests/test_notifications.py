@@ -91,9 +91,10 @@ def test_only_composite_index_on_user_id_and_is_read(db) -> None:
         connection = await session.connection()
         return await connection.run_sync(lambda sync: inspect(sync).get_indexes("notifications"))
 
-    # Окремий індекс на user_id був би зайвим: його покриває перший стовпець композитного
+    # Окремий індекс на user_id був би зайвим: його покривають композитні індекси
     assert {index["name"]: index["column_names"] for index in db(indexes)} == {
-        "ix_notifications_user_id_is_read": ["user_id", "is_read"]
+        "ix_notifications_user_id_is_read": ["user_id", "is_read"],
+        "ix_notifications_user_created_id": ["user_id", "created_at", "id"],
     }
 
 

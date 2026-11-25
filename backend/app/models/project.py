@@ -11,6 +11,8 @@ from sqlalchemy import (
     Integer,
     Numeric,
     Text,
+    desc,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -101,6 +103,28 @@ class Project(Base):
         # Фільтри каталогу за сферами й хештегами (R-14): GIN індексує окремі елементи масиву
         Index("ix_projects_categories", "categories", postgresql_using="gin"),
         Index("ix_projects_tags", "tags", postgresql_using="gin"),
+        # Каталог активних проєктів (нові за published_at першими)
+        Index(
+            "ix_projects_published_at_id",
+            desc("published_at"),
+            desc("id"),
+            postgresql_where=text("status = 'published'"),
+        ),
+        # Кабінет організації: усі проєкти організації, нові за created_at першими
+        Index(
+            "ix_projects_org_created_at_id",
+            "organization_id",
+            desc("created_at"),
+            desc("id"),
+        ),
+        # Публічна сторінка організації: опубліковані проєкти організації
+        Index(
+            "ix_projects_org_published_at_id",
+            "organization_id",
+            desc("published_at"),
+            desc("id"),
+            postgresql_where=text("status = 'published'"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
