@@ -31,7 +31,7 @@ async def list_projects(
     db_session: DbSessionDep,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
-    search: Annotated[str | None, Query()] = None,
+    search: Annotated[str | None, Query(max_length=200)] = None,
     city_id: Annotated[int | None, Query(gt=0, le=MAX_INT32)] = None,
     # ?categories=ecology&categories=idp: проєкти з будь-якою з переданих сфер (R-14);
     # невідома сфера — 422. Ліміт — кількість сфер, тож повтори не пройдуть понад нього

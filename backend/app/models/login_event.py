@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, desc
 from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -23,6 +23,10 @@ class LoginEvent(Base):
     """
 
     __tablename__ = "login_events"
+    __table_args__ = (
+        # Список останніх входів (свіжіші першими без додаткового сортування за id)
+        Index("ix_login_events_created_at_id", desc("created_at"), desc("id")),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     # Статистика лишається й після видалення акаунта

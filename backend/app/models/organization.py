@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Text, desc, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -23,6 +23,20 @@ class OrgMemberRoleEnum(enum.StrEnum):
 
 class Organization(Base):
     __tablename__ = "organizations"
+    __table_args__ = (
+        # Публічний каталог (approved, нові спершу) й адмінка за статусом (зворотне сканування)
+        Index("ix_organizations_status_created_at_id", "status", desc("created_at"), desc("id")),
+        # Публічний каталог із фільтром за містом
+        Index(
+            "ix_organizations_approved_city_created_at_id",
+            "city_id",
+            desc("created_at"),
+            desc("id"),
+            postgresql_where=text("status = 'approved'"),
+        ),
+        # Адмінка без фільтра статусу (найстаріші першими)
+        Index("ix_organizations_created_at_id", "created_at", "id"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     name: Mapped[str] = mapped_column(Text)
