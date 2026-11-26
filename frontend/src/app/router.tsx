@@ -16,7 +16,11 @@ import {
   OrganizationsCatalogPage,
   OrganizationViewPage,
 } from '@/features/organizations'
-import { ProjectsCatalogPage, ProjectViewPage } from '@/features/projects'
+import {
+  CreateProjectPage,
+  ProjectsCatalogPage,
+  ProjectViewPage,
+} from '@/features/projects'
 import { NotificationsPage } from '@/features/notifications'
 import { StaticPage } from '@/features/static-pages'
 import { ProfilePage } from '@/features/users'
@@ -60,6 +64,14 @@ export const AppRoutes = () => (
       <Route path="/organizations/:id" element={<OrganizationViewPage />} />
       <Route path="/projects" element={<ProjectsCatalogPage />} />
       <Route path="/projects/:id" element={<ProjectViewPage />} />
+      <Route
+        path="/organization/projects/create"
+        element={
+          <ProtectedRoute>
+            <CreateProjectPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/profile"
         element={

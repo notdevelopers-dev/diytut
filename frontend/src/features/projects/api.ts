@@ -2,6 +2,7 @@ import { apiClient } from '@/lib/api-client'
 import type { JoinRequest } from '@/types/organization'
 import type {
   CategoryItem,
+  ExperienceLevel,
   Project,
   ProjectCategory,
   ProjectJoinRequestStatus,
@@ -77,5 +78,32 @@ export const cancelProjectJoinRequest = async (
   const { data } = await apiClient.delete<JoinRequest>(
     `/projects/${projectId}/my-request`,
   )
+  return data
+}
+
+/** Тіло POST /projects (app.schemas.projects.ProjectCreate) */
+export interface ProjectPayload {
+  /** draft: лише назва обов'язкова; published: повна перевірка полів */
+  status: 'draft' | 'published'
+  title: string
+  description?: string
+  starts_at?: string
+  ends_at?: string
+  is_online: boolean
+  city_id?: number
+  address?: string
+  capacity?: number
+  volunteer_hours?: number
+  is_adult_only: boolean
+  experience_level: ExperienceLevel
+  categories: ProjectCategory[]
+  tags: string[]
+}
+
+/** Створити проєкт від імені організації користувача за замовчуванням */
+export const createProject = async (
+  payload: ProjectPayload,
+): Promise<Project> => {
+  const { data } = await apiClient.post<Project>('/projects', payload)
   return data
 }
