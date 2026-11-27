@@ -142,12 +142,8 @@ async def list_ignored_users(
 async def unignore_user(
     ignored_user_id: Annotated[int, Path(gt=0, le=MAX_BIGINT)],
     db_session: DbSessionDep,
-    user_id: CurrentUserId,
-    organization_id: OwnOrganizationId = None,
+    membership: EditorMembership,
 ) -> None:
-    membership = await join_requests_service.require_request_reviewer(
-        db_session, user_id, organization_id
-    )
     await project_join_requests_service.unignore_user(
         db_session, membership.organization_id, ignored_user_id
     )
@@ -155,10 +151,15 @@ async def unignore_user(
 
 @router.get("/{organization_id}")
 async def get_organization(
-    organization_id: OrganizationId, db_session: DbSessionDep
+    organization_id: OrganizationId,
+    db_session: DbSessionDep,
+    projects_limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    projects_offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
 ) -> OrganizationDetailRead:
     organization = await service.get_approved_organization(db_session, organization_id)
-    projects = await service.list_published_projects(db_session, organization_id)
+    projects = await service.list_published_projects(
+        db_session, organization_id, limit=projects_limit, offset=projects_offset
+    )
     return OrganizationDetailRead(
         **OrganizationRead.model_validate(organization).model_dump(),
         projects=[ProjectListItem.model_validate(project) for project in projects],

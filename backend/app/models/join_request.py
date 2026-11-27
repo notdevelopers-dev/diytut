@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Text, text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, Text, desc, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -48,6 +48,31 @@ class JoinRequest(Base):
             "project_id",
             unique=True,
             postgresql_where=text("status IN ('pending', 'accepted') AND target = 'project'"),
+        ),
+        # Список власних заявок волонтера на проєкти (нові першими)
+        Index(
+            "ix_join_requests_user_project_created",
+            "user_id",
+            desc("created_at"),
+            desc("id"),
+            postgresql_where=text("target = 'project'"),
+        ),
+        # Черга заявок на проєкт (давніші першими) і підрахунок схвалених
+        Index(
+            "ix_join_requests_project_status_created",
+            "project_id",
+            "status",
+            "created_at",
+            "id",
+            postgresql_where=text("target = 'project'"),
+        ),
+        # Черга заявок на вступ до організації (давніші першими)
+        Index(
+            "ix_join_requests_org_pending_created",
+            "organization_id",
+            "created_at",
+            "id",
+            postgresql_where=text("status = 'pending' AND target = 'organization'"),
         ),
     )
 

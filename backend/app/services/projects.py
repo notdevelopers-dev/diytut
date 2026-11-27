@@ -6,12 +6,14 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app import errors
 from app.models import (
     JoinRequest,
     JoinRequestStatusEnum,
     NotificationTypeEnum,
+    Organization,
     OrganizationMember,
     OrgStatusEnum,
     Project,
@@ -99,9 +101,14 @@ async def list_active_projects(
 
     Кілька сфер чи хештегів — «будь-який із них»; сфери, хештеги й місто разом — «усі умови».
     """
-    query = select(Project).where(
-        Project.status == ProjectStatusEnum.published,
-        Project.ends_at > func.now(),
+    query = (
+        select(Project)
+        .join(Project.organization)
+        .where(
+            Project.status == ProjectStatusEnum.published,
+            Organization.status == OrgStatusEnum.approved,
+            Project.ends_at > func.now(),
+        )
     )
     if search and search.strip():
         pattern = f"%{_escape_like(search.strip())}%"
@@ -149,13 +156,22 @@ def _check_draft(fields: dict[str, Any]) -> None:
 async def get_visible_project(
     db_session: AsyncSession, project_id: int, user_id: int | None
 ) -> Project:
-    """Опублікований проєкт бачать усі, а чернетку, завершений і скасований — лише учасники
-    його організації (з будь-якою роллю). Для решти такого проєкту не існує: 404, а не 403.
+    """Опублікований проєкт схваленої організації бачать усі, а чернетку, завершений,
+    скасований чи проєкт несхваленої організації — лише учасники його організації
+    (з будь-якою роллю). Для решти такого проєкту не існує: 404, а не 403.
     """
-    project = await db_session.get(Project, project_id)
+    project = await db_session.scalar(
+        select(Project)
+        .options(joinedload(Project.organization, innerjoin=True))
+        .where(Project.id == project_id)
+    )
     if project is None:
         raise errors.project_not_found()
-    if project.status != ProjectStatusEnum.published and (
+    publicly_visible = (
+        project.status == ProjectStatusEnum.published
+        and project.organization.status == OrgStatusEnum.approved
+    )
+    if not publicly_visible and (
         user_id is None
         or await get_user_membership(db_session, user_id, project.organization_id) is None
     ):
