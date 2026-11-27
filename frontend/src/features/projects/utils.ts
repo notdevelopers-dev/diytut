@@ -105,3 +105,64 @@ export const projectCancelErrorText = (error: unknown) => {
       return 'Не вдалося скасувати запит. Спробуйте ще раз.'
   }
 }
+
+/** Події відбуваються в Україні: дні й час показуємо за київським часом, як бекенд */
+const EVENT_TIME_ZONE = 'Europe/Kyiv'
+
+/** День події: «2026-11-30» (starts_on) чи ISO-момент (starts_at) → Date для формату */
+const toEventDate = (value: string) =>
+  // Дата без часу — це вже київський день: беремо полудень UTC, щоб пояс не зсунув
+  /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T12:00:00Z`)
+    : new Date(value)
+
+const dayFormat = new Intl.DateTimeFormat('uk-UA', {
+  day: 'numeric',
+  month: 'long',
+  timeZone: EVENT_TIME_ZONE,
+})
+
+const timeFormat = new Intl.DateTimeFormat('uk-UA', {
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: EVENT_TIME_ZONE,
+})
+
+/** «30 листопада» або «30 листопада – 2 грудня» для багатоденної події */
+export const formatEventDays = (start: string | null, end: string | null) => {
+  if (!start) return null
+  const from = toEventDate(start)
+  if (Number.isNaN(from.getTime())) return null
+  const fromText = dayFormat.format(from)
+  const to = end ? toEventDate(end) : null
+  const toText =
+    to && !Number.isNaN(to.getTime()) ? dayFormat.format(to) : fromText
+  return toText === fromText ? fromText : `${fromText} – ${toText}`
+}
+
+/** «з 10:00 до 14:00»; якщо подія триває кілька днів — з датами */
+export const formatEventTime = (start: string | null, end: string | null) => {
+  if (!start) return null
+  const from = new Date(start)
+  if (Number.isNaN(from.getTime())) return null
+  const to = end ? new Date(end) : null
+  if (!to || Number.isNaN(to.getTime())) return `з ${timeFormat.format(from)}`
+  if (dayFormat.format(from) === dayFormat.format(to)) {
+    return `з ${timeFormat.format(from)} до ${timeFormat.format(to)}`
+  }
+  return `з ${dayFormat.format(from)}, ${timeFormat.format(from)} до ${dayFormat.format(to)}, ${timeFormat.format(to)}`
+}
+
+/** "4.00" → «4 години», "1.5" → «1,5 години», "5" → «5 годин» */
+export const formatWorkHours = (hours: string | null) => {
+  const value = hours === null ? NaN : Number(hours)
+  if (!Number.isFinite(value) || value <= 0) return null
+  const text = value.toLocaleString('uk-UA', { maximumFractionDigits: 2 })
+  if (!Number.isInteger(value)) return `${text} години`
+  const lastTwo = value % 100
+  const last = value % 10
+  if (lastTwo >= 11 && lastTwo <= 14) return `${text} годин`
+  if (last === 1) return `${text} година`
+  if (last >= 2 && last <= 4) return `${text} години`
+  return `${text} годин`
+}
