@@ -10,7 +10,13 @@ from app import errors
 from app.auth import GoogleIdentity
 from app.db import violated_constraint
 from app.models import User
-from app.schemas.users import RegistrationRequest, UserUpdate
+from app.schemas.users import (
+    ADULT_AGE,
+    RegistrationRequest,
+    UserUpdate,
+    _years_between,
+    today_kyiv,
+)
 from app.services.cities import ensure_city_exists
 
 GENERATED_NICKNAME_PREFIX = "volunteer_"
@@ -74,12 +80,15 @@ async def register_user(
     else:
         nickname = data.nickname
 
+    today = today_kyiv()
     user = User(
-        **data.model_dump(exclude={"nickname"}),
+        **data.model_dump(exclude={"nickname", "terms_consent", "personal_data_consent"}),
         nickname=nickname,
         google_sub=identity.sub,
         email=identity.email.lower(),
         profile_completed_at=datetime.now(UTC),
+        terms_consent_date=today,
+        personal_data_consent_date=today,
     )
     db_session.add(user)
     try:
@@ -107,6 +116,10 @@ async def update_profile(db_session: AsyncSession, user_id: int, data: UserUpdat
 
     changes = data.model_dump(exclude_unset=True)
     if changes:
+        if changes.get("birth_date") is not None:
+            age = _years_between(changes["birth_date"], today_kyiv())
+            if age < ADULT_AGE and not user.parental_consent:
+                raise errors.parental_consent_required()
         if changes.get("city_id") is not None:
             await ensure_city_exists(db_session, changes["city_id"])
         if changes.get("nickname") is not None and await is_nickname_taken_by_other(

@@ -92,6 +92,8 @@ def test_new_dev_user_goes_to_registration(client: TestClient, city_id: int, db_
             "phone": "+380671234568",
             "birth_date": "1990-02-25",
             "city_id": city_id,
+            "terms_consent": True,
+            "personal_data_consent": True,
         },
     )
     assert registered.status_code == 201

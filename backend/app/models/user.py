@@ -1,7 +1,7 @@
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Text
+from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -35,6 +35,12 @@ class User(Base):
     city_id: Mapped[int | None] = mapped_column(ForeignKey("cities.id"))
     bio: Mapped[str | None] = mapped_column(Text)
     platform_role: Mapped[RoleEnum] = mapped_column(default=RoleEnum.user)
+
+    parental_consent: Mapped[bool] = mapped_column(default=False, server_default=false())
+    terms_consent_date: Mapped[date] = mapped_column(Date, server_default=func.current_date())
+    personal_data_consent_date: Mapped[date] = mapped_column(
+        Date, server_default=func.current_date()
+    )
 
     profile_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

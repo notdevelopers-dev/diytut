@@ -435,6 +435,23 @@ def test_adult_only_project(
         assert response.json() == {"detail": "Project is for adults only"}
 
 
+def test_minor_applicant_allowed_for_regular_project_rejected_for_adult_only(
+    client, make_user, make_project, setup
+) -> None:
+    minor_user_id = make_user(birth_date=date(EVENT_YEAR - 15, 1, 1))
+    sign_in(client, minor_user_id)
+
+    regular_project_id = make_project(setup["org"], is_adult_only=False, starts_at=EVENT_AT)
+    adult_project_id = make_project(setup["org"], is_adult_only=True, starts_at=EVENT_AT)
+
+    response = client.post(requests_url(regular_project_id), json={})
+    assert response.status_code == 201
+
+    response_adult = client.post(requests_url(adult_project_id), json={})
+    assert response_adult.status_code == 403
+    assert response_adult.json() == {"detail": "Project is for adults only"}
+
+
 def test_level_requirement(client, db, make_project, setup) -> None:
     project_id = make_project(setup["org"], experience_level=ExperienceLevelEnum.interested)
     sign_in(client, setup["volunteer"])
