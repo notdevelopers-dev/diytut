@@ -112,6 +112,8 @@ export const fetchProjectJoinRequests = async (
 
 /** Тіло POST /projects (app.schemas.projects.ProjectCreate) */
 export interface ProjectPayload {
+  /** Від імені якої з організацій користувача; без поля — організація за замовчуванням */
+  organization_id?: number
   /** draft: лише назва обов'язкова; published: повна перевірка полів */
   status: 'draft' | 'published'
   title: string
@@ -129,7 +131,7 @@ export interface ProjectPayload {
   tags: string[]
 }
 
-/** Створити проєкт від імені організації користувача за замовчуванням */
+/** Створити проєкт від імені однієї з організацій користувача */
 export const createProject = async (
   payload: ProjectPayload,
 ): Promise<Project> => {

@@ -19,6 +19,7 @@ import {
   useCategories,
   useMyProjectRequestStatuses,
 } from '@/features/projects/hooks'
+import { setActiveOrganization } from '@/features/users/profileMode'
 import { getErrorStatus } from '@/lib/errors'
 
 /** Публічна сторінка організації за макетом Figma («Public org page»). */
@@ -28,7 +29,6 @@ export const OrganizationViewPage = () => {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const {
-    user,
     isAuthenticated,
     isProfileComplete,
     isLoading: isAuthLoading,
@@ -65,10 +65,11 @@ export const OrganizationViewPage = () => {
     [categoryItems],
   )
 
-  // Створювати проєкти може лише власник чи адміністратор саме цієї організації
-  const canCreateProject =
-    canEditOrganization(user?.organization) &&
-    Number(user?.organization?.id) === organizationId
+  // Створювати проєкти може лише власник чи адміністратор саме цієї організації.
+  // Перехід до форми робить її активною: форма створює проєкт від імені активної
+  const canCreateProject = canEditOrganization(
+    memberships?.find((m) => m.id === organizationId),
+  )
 
   const joinState: JoinState = (() => {
     // Кеш попереднього користувача не показуємо тому, хто вийшов
@@ -238,6 +239,7 @@ export const OrganizationViewPage = () => {
           <div className="mb-4 flex sm:justify-end">
             <Link
               to="/organization/projects/create"
+              onClick={() => setActiveOrganization(organizationId)}
               data-testid="create-project-link"
               className="inline-flex items-center gap-2 rounded-[5px] bg-[#DCECFF] px-4 py-1.5 text-lg font-normal text-black no-underline transition hover:bg-main/30"
             >
