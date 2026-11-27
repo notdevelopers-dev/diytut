@@ -50,6 +50,15 @@ def city_not_found() -> HTTPException:
     )
 
 
+def parental_consent_required() -> HTTPException:
+    return field_error(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "birth_date",
+        "parental_consent_required",
+        "Parental consent is required for users under 18",
+    )
+
+
 def no_organization() -> HTTPException:
     return HTTPException(status.HTTP_404_NOT_FOUND, "User does not belong to an organization")
 
