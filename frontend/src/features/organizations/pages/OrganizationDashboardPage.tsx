@@ -8,7 +8,6 @@ import {
   EmptyState,
   SearchField,
   SectionTitle,
-  SoonButton,
 } from '@/features/organizations/components/dashboard/shared'
 import {
   useIncomingJoinRequests,
@@ -131,8 +130,17 @@ export const OrganizationDashboardPage = () => {
                 onChange={setProjectSearch}
                 placeholder="Пошук проєкту"
               />
-              {/* Форма створення — FE-202 (SCRUM-132) */}
-              <SoonButton iconSrc={circlePlusIcon}>Створити проєкт</SoonButton>
+              {/* Форма створення (SCRUM-132): проєкт — від імені активної організації */}
+              {canReview && status !== 'blocked' && (
+                <Link
+                  to="/organization/projects/create"
+                  data-testid="dashboard-create-project"
+                  className="flex h-8 w-fit items-center gap-2 rounded-[5px] bg-[#DCECFF] px-3 text-base text-black no-underline transition-colors hover:bg-main/30"
+                >
+                  <img src={circlePlusIcon} alt="" width={19} height={19} />
+                  Створити проєкт
+                </Link>
+              )}
             </div>
             {!isApproved ? (
               <EmptyState
