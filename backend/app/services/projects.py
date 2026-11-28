@@ -250,7 +250,7 @@ async def create_project(
     return project, 0
 
 
-async def _lock_managed_project(
+async def lock_managed_project(
     db_session: AsyncSession,
     user_id: int,
     project_id: int,
@@ -284,7 +284,7 @@ async def _lock_managed_project(
 async def publish_project(
     db_session: AsyncSession, user_id: int, project_id: int
 ) -> tuple[Project, int]:
-    membership, project = await _lock_managed_project(
+    membership, project = await lock_managed_project(
         db_session, user_id, project_id, errors.not_project_publisher
     )
     if membership.organization.status != OrgStatusEnum.approved:
@@ -377,7 +377,7 @@ async def update_project(
 ) -> tuple[Project, int]:
     # Блокування рядка проєкту: паралельне прийняття заявки чекає, доки зміну збережено, і
     # рахує місця вже з новою capacity, а ця зміна — з усіма вже прийнятими заявками
-    membership, project = await _lock_managed_project(
+    membership, project = await lock_managed_project(
         db_session, user_id, project_id, errors.not_project_editor
     )
     if project.status in NOT_EDITABLE_STATUSES:

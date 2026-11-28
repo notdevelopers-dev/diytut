@@ -6,6 +6,12 @@ from pydantic import Field, StringConstraints
 from app.auth import CurrentUserId, OptionalUserId
 from app.db import DbSessionDep
 from app.models import JoinRequestStatusEnum, ProjectCategoryEnum
+from app.schemas.attendances import (
+    AttendanceBatchCreate,
+    AttendanceRead,
+    AttendanceUpdate,
+    ProjectParticipantAttendanceRead,
+)
 from app.schemas.join_requests import (
     JoinRequestCreate,
     JoinRequestRead,
@@ -14,6 +20,7 @@ from app.schemas.join_requests import (
 )
 from app.schemas.projects import ProjectCreate, ProjectListItem, ProjectRead, ProjectUpdate
 from app.schemas.users import MAX_BIGINT, MAX_INT32
+from app.services import attendances as attendances_service
 from app.services import project_join_requests as join_requests_service
 from app.services import projects as service
 
@@ -157,3 +164,45 @@ async def cancel_my_join_request(
         db_session, user_id, project_id
     )
     return JoinRequestRead.model_validate(join_request)
+
+
+@router.get("/{project_id}/attendances")
+async def list_attendances(
+    project_id: ProjectId,
+    db_session: DbSessionDep,
+    user_id: CurrentUserId,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0, le=MAX_INT32)] = 0,
+) -> list[ProjectParticipantAttendanceRead]:
+    rows = await attendances_service.list_project_attendances(
+        db_session, user_id, project_id, limit=limit, offset=offset
+    )
+    return [ProjectParticipantAttendanceRead.from_rows(*row) for row in rows]
+
+
+@router.post("/{project_id}/attendances", status_code=status.HTTP_201_CREATED)
+async def confirm_attendances(
+    project_id: ProjectId,
+    data: AttendanceBatchCreate,
+    db_session: DbSessionDep,
+    user_id: CurrentUserId,
+) -> list[AttendanceRead]:
+    attendances = await attendances_service.confirm_attendances(
+        db_session, user_id, project_id, data
+    )
+    return [AttendanceRead.model_validate(attendance) for attendance in attendances]
+
+
+# Не user_id: так названо поточного користувача в CurrentUserId
+@router.patch("/{project_id}/attendances/{volunteer_id}")
+async def update_attendance(
+    project_id: ProjectId,
+    volunteer_id: Annotated[int, Path(gt=0, le=MAX_BIGINT)],
+    data: AttendanceUpdate,
+    db_session: DbSessionDep,
+    user_id: CurrentUserId,
+) -> AttendanceRead:
+    attendance = await attendances_service.update_attendance(
+        db_session, user_id, project_id, volunteer_id, data
+    )
+    return AttendanceRead.model_validate(attendance)

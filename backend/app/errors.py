@@ -298,3 +298,43 @@ def applicant_already_member() -> HTTPException:
     return HTTPException(
         status.HTTP_409_CONFLICT, "Volunteer is already a member of this organization"
     )
+
+
+def not_attendance_manager() -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN, "Only organization owner or admin can confirm attendance"
+    )
+
+
+def project_not_finished() -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT, "Attendance can be confirmed only after the project has finished"
+    )
+
+
+def project_cancelled_no_attendance() -> HTTPException:
+    return HTTPException(
+        status.HTTP_409_CONFLICT, "Attendance cannot be confirmed for a cancelled project"
+    )
+
+
+def attendance_not_found() -> HTTPException:
+    return HTTPException(status.HTTP_404_NOT_FOUND, "Attendance not found")
+
+
+def not_accepted_participants(user_ids: list[int]) -> HTTPException:
+    return field_error(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        "entries",
+        "not_accepted_participants",
+        f"Users without an accepted application to this project: {user_ids}",
+    )
+
+
+def attendance_already_confirmed(user_ids: list[int]) -> HTTPException:
+    return field_error(
+        status.HTTP_409_CONFLICT,
+        "entries",
+        "attendance_already_confirmed",
+        f"Attendance is already confirmed for users: {user_ids}",
+    )
