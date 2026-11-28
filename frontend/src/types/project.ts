@@ -69,3 +69,23 @@ export interface ProjectJoinRequestStatus extends JoinRequest {
    */
   can_reapply_at: string | null
 }
+
+/** GET /api/projects/{id} (app.schemas.projects.ProjectRead): ще й зайняті місця */
+export interface ProjectDetail extends Project {
+  /** Скільки місць зайнято схваленими заявками; вільних — capacity - accepted_count */
+  accepted_count: number
+}
+
+/** Заявка на проєкт у кабінеті організації (ProjectJoinRequestRead) */
+export interface ProjectJoinRequest extends JoinRequest {
+  user: {
+    id: number
+    first_name: string | null
+    last_name: string
+    nickname: string | null
+    city_id: number | null
+    /** Decimal на бекенді приходить у JSON рядком, напр. "12.5" */
+    confirmed_hours: string
+    experience_level: ExperienceLevel
+  }
+}

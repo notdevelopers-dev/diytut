@@ -1,10 +1,12 @@
 import { apiClient } from '@/lib/api-client'
-import type { JoinRequest } from '@/types/organization'
+import type { JoinRequest, JoinRequestStatus } from '@/types/organization'
 import type {
   CategoryItem,
   ExperienceLevel,
   Project,
   ProjectCategory,
+  ProjectDetail,
+  ProjectJoinRequest,
   ProjectJoinRequestStatus,
 } from '@/types/project'
 
@@ -81,8 +83,37 @@ export const cancelProjectJoinRequest = async (
   return data
 }
 
+/** Проєкт разом із числом зайнятих місць; чернетку бачать лише учасники організації */
+export const fetchProject = async (
+  projectId: number,
+): Promise<ProjectDetail> => {
+  const { data } = await apiClient.get<ProjectDetail>(`/projects/${projectId}`)
+  return data
+}
+
+/** Скільки заявок на проєкт за раз (ліміт бекенду — 100) */
+export const PROJECT_REQUESTS_PAGE_SIZE = 20
+
+/**
+ * Заявки на проєкт для його організації (owner і admin), давніші першими, з рівнем
+ * і годинами волонтера. Без статусу бекенд віддає ті, що на розгляді.
+ */
+export const fetchProjectJoinRequests = async (
+  projectId: number,
+  status: JoinRequestStatus,
+  offset: number,
+): Promise<ProjectJoinRequest[]> => {
+  const { data } = await apiClient.get<ProjectJoinRequest[]>(
+    `/projects/${projectId}/join-requests`,
+    { params: { status, limit: PROJECT_REQUESTS_PAGE_SIZE, offset } },
+  )
+  return data
+}
+
 /** Тіло POST /projects (app.schemas.projects.ProjectCreate) */
 export interface ProjectPayload {
+  /** Від імені якої з організацій користувача; без поля — організація за замовчуванням */
+  organization_id?: number
   /** draft: лише назва обов'язкова; published: повна перевірка полів */
   status: 'draft' | 'published'
   title: string
@@ -100,7 +131,7 @@ export interface ProjectPayload {
   tags: string[]
 }
 
-/** Створити проєкт від імені організації користувача за замовчуванням */
+/** Створити проєкт від імені однієї з організацій користувача */
 export const createProject = async (
   payload: ProjectPayload,
 ): Promise<Project> => {

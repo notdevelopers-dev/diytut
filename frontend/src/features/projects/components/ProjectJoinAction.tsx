@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import clockIcon from '@/assets/icons/clock.svg'
 import memberCheckIcon from '@/assets/icons/member-check.svg'
 import { useToast } from '@/components/feedback'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useAuth } from '@/features/auth/hooks'
 import { JoinRequestModal } from '@/features/organizations/components/JoinRequestModal'
 import {
@@ -61,6 +62,8 @@ export const ProjectJoinAction = ({
   isLoading,
 }: ProjectJoinActionProps) => {
   const [isModalOpen, setIsModalOpen] = useState(false)
+  /** Відкрите вікно підтвердження скасування (замість системного window.confirm) */
+  const [isCancelOpen, setIsCancelOpen] = useState(false)
   const { isAuthenticated, isProfileComplete } = useAuth()
   const navigate = useNavigate()
   const { showToast } = useToast()
@@ -92,10 +95,10 @@ export const ProjectJoinAction = ({
   }
 
   const handleCancel = () => {
-    if (!window.confirm('Скасувати запит на участь у проєкті?')) return
     cancelJoinRequest.mutate(undefined, {
       onSuccess: () => showToast('Запит скасовано'),
       onError: (error) => showToast(projectCancelErrorText(error), 'error'),
+      onSettled: () => setIsCancelOpen(false),
     })
   }
 
@@ -103,7 +106,7 @@ export const ProjectJoinAction = ({
     <button
       type="button"
       data-testid="project-join-cancel"
-      onClick={handleCancel}
+      onClick={() => setIsCancelOpen(true)}
       disabled={cancelJoinRequest.isPending}
       className={linkButtonClass}
     >
@@ -211,6 +214,29 @@ export const ProjectJoinAction = ({
           onSubmit={handleSubmit}
           onClose={() => setIsModalOpen(false)}
         />
+      )}
+      {isCancelOpen && (
+        <ConfirmDialog
+          title={
+            status?.status === 'accepted'
+              ? 'Скасувати участь?'
+              : 'Скасувати запит?'
+          }
+          confirmLabel={
+            status?.status === 'accepted'
+              ? 'Скасувати участь'
+              : 'Скасувати запит'
+          }
+          pendingLabel="Скасування…"
+          cancelLabel="Ні, залишити"
+          isPending={cancelJoinRequest.isPending}
+          onConfirm={handleCancel}
+          onCancel={() => setIsCancelOpen(false)}
+        >
+          {status?.status === 'accepted'
+            ? `Ви більше не будете учасником проєкту «${projectTitle}», а ваше місце звільниться.`
+            : `Запит на участь у проєкті «${projectTitle}» буде скасовано.`}
+        </ConfirmDialog>
       )}
     </div>
   )

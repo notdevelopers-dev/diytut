@@ -21,8 +21,9 @@ import {
 import {
   changeAccount,
   setProfileMode,
+  switchToOrganization,
+  useActiveOrganization,
   useProfileMode,
-  type ProfileMode,
 } from '@/features/users/profileMode'
 
 /** Пункт меню: широка кнопка з іконкою в блакитному квадратику й стрілкою праворуч */
@@ -157,8 +158,13 @@ export const RootLayout = () => {
 
   // Режим профілю (волонтер / організація) — лише інтерфейс
   const isOrgMode = useProfileMode() === 'organization'
-  const switchMode = (mode: ProfileMode) => {
-    setProfileMode(mode)
+  const switchToVolunteer = () => {
+    setProfileMode('volunteer')
+    goTo('/profile')
+  }
+  // Режим організації саме цієї організації (їх може бути кілька, SCRUM-158)
+  const openOrganization = (organizationId: number) => {
+    switchToOrganization(organizationId)
     goTo('/profile')
   }
 
@@ -168,8 +174,9 @@ export const RootLayout = () => {
     void navigate(path, state ? { state } : undefined)
   }
 
-  // Організація користувача (для режиму організації та перемикання)
-  const org = user?.organization
+  // Активна організація й усі організації користувача (для перемикання)
+  const { organization: org, organizations } = useActiveOrganization()
+  const otherOrganizations = organizations.filter((o) => o.id !== org?.id)
 
   // Адмін-панель — робочий інтерфейс: футер сайту там не потрібен, панель іде до низу екрана
   const hideFooter = location.pathname.startsWith('/admin')
@@ -382,12 +389,31 @@ export const RootLayout = () => {
                   )}
                 </MenuSection>
 
+                {/* Інші організації користувача й створення нової (SCRUM-158) */}
+                <MenuSection title="Мої організації">
+                  {otherOrganizations.map((o) => (
+                    <MenuItem
+                      key={o.id}
+                      icon={organizationIcon}
+                      label={o.name}
+                      note={`Переключитися · ${getOrgRoleLabel(o.role)}`}
+                      onClick={() => openOrganization(o.id)}
+                    />
+                  ))}
+                  <MenuItem
+                    icon={addOrganizationIcon}
+                    label="Додати організацію"
+                    isActive={location.pathname === '/organization/create'}
+                    onClick={() => goTo('/organization/create')}
+                  />
+                </MenuSection>
+
                 <MenuSection title="Акаунт">
                   <MenuItem
                     icon={profileIcon}
                     label="Переключити на волонтера"
                     note={user?.name}
-                    onClick={() => switchMode('volunteer')}
+                    onClick={switchToVolunteer}
                   />
                   <MenuItem
                     icon={profileIcon}
@@ -448,25 +474,44 @@ export const RootLayout = () => {
                   />
                 </MenuSection>
 
-                <MenuSection title="Організація">
-                  {/* Сторінка організації — у режимі організації, тут лише створення */}
-                  {!org && (
-                    // Сторінка створення пускає лише тих, у кого організації ще немає
+                <MenuSection
+                  title={
+                    organizations.length > 1 ? 'Мої організації' : 'Організація'
+                  }
+                >
+                  {/* Кожна організація користувача: перехід у її режим (SCRUM-158) */}
+                  {organizations.length > 0 ? (
+                    organizations.map((o) => (
+                      <MenuItem
+                        key={o.id}
+                        icon={organizationIcon}
+                        label={
+                          organizations.length > 1
+                            ? o.name
+                            : 'Переключити на організацію'
+                        }
+                        note={
+                          organizations.length > 1
+                            ? `Переключитися · ${getOrgRoleLabel(o.role)}`
+                            : o.name
+                        }
+                        onClick={() => openOrganization(o.id)}
+                      />
+                    ))
+                  ) : (
                     <MenuItem
-                      icon={addOrganizationIcon}
-                      label="Додати організацію"
-                      isActive={location.pathname === '/organization/create'}
-                      onClick={() => goTo('/organization/create')}
+                      icon={organizationIcon}
+                      label="Переключити на організацію"
+                      note="Спершу додайте організацію"
+                      disabled
                     />
                   )}
-                  {/* Перемикання в акаунт організації — лише інтерфейс: бекенд працює
-                    з тією самою сесією, якщо користувач є учасником організації */}
+                  {/* Створити можна й нову, навіть якщо вже є організація */}
                   <MenuItem
-                    icon={organizationIcon}
-                    label="Переключити на організацію"
-                    note={org ? org.name : 'Спершу додайте організацію'}
-                    disabled={!org}
-                    onClick={() => switchMode('organization')}
+                    icon={addOrganizationIcon}
+                    label="Додати організацію"
+                    isActive={location.pathname === '/organization/create'}
+                    onClick={() => goTo('/organization/create')}
                   />
                 </MenuSection>
 

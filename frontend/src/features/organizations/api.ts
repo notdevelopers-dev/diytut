@@ -2,6 +2,8 @@ import { apiClient } from '@/lib/api-client'
 import { getErrorStatus } from '@/lib/errors'
 import type {
   JoinRequest,
+  IgnoredUser,
+  JoinRequestDecision,
   OrganizationDetail,
   OrganizationListItem,
   OrganizationJoinRequest,
@@ -61,19 +63,37 @@ export interface MyOrganization {
   role: string
 }
 
-export const fetchMyOrganization = async (): Promise<MyOrganization> => {
-  const { data } = await apiClient.get<MyOrganization>('/organizations/me')
+/**
+ * Профіль організації користувача разом з його роллю. organization_id обирає одну
+ * з кількох; без нього бекенд бере організацію за замовчуванням.
+ */
+export const fetchMyOrganization = async (
+  organizationId?: number,
+): Promise<MyOrganization> => {
+  const { data } = await apiClient.get<MyOrganization>('/organizations/me', {
+    params: organizationId ? { organization_id: organizationId } : undefined,
+  })
   return data
 }
 
-export const createOrganization = async (payload: OrganizationPayload) => {
-  await apiClient.post('/organizations', payload)
+/** Нова організація (статус pending); користувач стає її власником */
+export const createOrganization = async (
+  payload: OrganizationPayload,
+): Promise<{ id: number }> => {
+  const { data } = await apiClient.post<{ id: number }>(
+    '/organizations',
+    payload,
+  )
+  return data
 }
 
 export const updateMyOrganization = async (
   payload: OrganizationUpdatePayload,
+  organizationId?: number,
 ) => {
-  await apiClient.patch('/organizations/me', payload)
+  await apiClient.patch('/organizations/me', payload, {
+    params: organizationId ? { organization_id: organizationId } : undefined,
+  })
 }
 
 /** Публічна сторінка схваленої організації разом з її опублікованими проєктами */
@@ -143,4 +163,42 @@ export const fetchIncomingJoinRequests = async (
     },
   )
   return data
+}
+
+/**
+ * Рішення щодо заявки на вступ (PATCH /api/join-requests/{id}). Після схвалення
+ * бекенд додає волонтера до організації з роллю member і надсилає йому сповіщення.
+ */
+export const reviewJoinRequest = async (
+  joinRequestId: number,
+  status: JoinRequestDecision,
+  /** Лише разом із відхиленням заявки на проєкт: волонтер потрапляє в ігнор */
+  ignore = false,
+): Promise<JoinRequest> => {
+  const { data } = await apiClient.patch<JoinRequest>(
+    `/join-requests/${joinRequestId}`,
+    ignore ? { status, ignore } : { status },
+  )
+  return data
+}
+
+/** Волонтери, яких організація ігнорує: заявок на її проєкти вони не подають */
+export const fetchIgnoredUsers = async (
+  organizationId: number,
+): Promise<IgnoredUser[]> => {
+  const { data } = await apiClient.get<IgnoredUser[]>(
+    '/organizations/me/ignored-users',
+    { params: { organization_id: organizationId, limit: 100 } },
+  )
+  return data
+}
+
+/** Зняти ігнор: волонтер знову може подавати заявки на проєкти організації */
+export const unignoreUser = async (
+  organizationId: number,
+  userId: number,
+): Promise<void> => {
+  await apiClient.delete(`/organizations/me/ignored-users/${userId}`, {
+    params: { organization_id: organizationId },
+  })
 }

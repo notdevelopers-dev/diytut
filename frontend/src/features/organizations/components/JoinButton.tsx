@@ -50,14 +50,26 @@ export const JoinButton = ({ state, isLoading, onClick }: JoinButtonProps) => {
     )
   }
 
+  // Після відмови бекенд дозволяє подати нову заявку на вступ (паузи, як у
+  // проєктів, тут немає), тож під позначкою — «Подати знову»
   if (state === 'rejected') {
     return (
-      <div
-        data-testid="join-state"
-        data-state="rejected"
-        className={`${base} bg-[#C2D4EA] text-[#8B99AA]`}
-      >
-        Запит відхилено
+      <div className="flex w-[185px] flex-col items-center gap-1">
+        <div
+          data-testid="join-state"
+          data-state="rejected"
+          className={`${base} bg-[#C2D4EA] text-[#8B99AA]`}
+        >
+          Запит відхилено
+        </div>
+        <button
+          type="button"
+          data-testid="join-reapply"
+          onClick={onClick}
+          className="cursor-pointer text-xs text-[#5F6F82] underline hover:text-black"
+        >
+          Подати знову
+        </button>
       </div>
     )
   }

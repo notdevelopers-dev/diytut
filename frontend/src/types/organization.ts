@@ -30,6 +30,9 @@ export type JoinRequestStatus =
 /** На що подано заявку (app.models.JoinRequestTargetEnum) */
 export type JoinRequestTarget = 'organization' | 'project'
 
+/** Рішення організації щодо заявки (app.schemas.join_requests.JoinRequestReview) */
+export type JoinRequestDecision = 'accepted' | 'rejected'
+
 /** Заявка на вступ до організації чи на проєкт (app.schemas.join_requests.JoinRequestRead) */
 export interface JoinRequest {
   id: number
@@ -61,4 +64,11 @@ export interface OrganizationMembership {
   name: string
   status: OrgStatus
   role: OrgRole
+}
+
+/** Волонтер у списку ігнору організації (app.schemas.join_requests.IgnoredUserRead) */
+export interface IgnoredUser {
+  user: OrganizationJoinRequest['user']
+  ignored_by: number | null
+  created_at: string
 }

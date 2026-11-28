@@ -8,16 +8,26 @@ import {
 } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/features/auth/hooks'
-import { fetchOrganizations } from '@/features/organizations/api'
+import {
+  fetchOrganizations,
+  reviewJoinRequest,
+} from '@/features/organizations/api'
 import { USER_SCOPED_META } from '@/lib/query-client'
-import type { JoinRequest } from '@/types/organization'
+import type {
+  JoinRequest,
+  JoinRequestDecision,
+  JoinRequestStatus,
+} from '@/types/organization'
 import type { ProjectCategory, ProjectJoinRequestStatus } from '@/types/project'
 import {
   cancelProjectJoinRequest,
   createProjectJoinRequest,
   fetchCategories,
   fetchMyProjectRequestStatuses,
+  fetchProject,
+  fetchProjectJoinRequests,
   fetchProjects,
+  PROJECT_REQUESTS_PAGE_SIZE,
 } from './api'
 
 /** 12 ділиться і на 2, і на 3, і на 4 колонки: ряди сітки лишаються повними */
@@ -195,3 +205,70 @@ export const useCreateProjectJoinRequest = (projectId: number) =>
 /** Скасувати заявку: кнопка знову стає «Приєднатись» */
 export const useCancelProjectJoinRequest = (projectId: number) =>
   useJoinRequestMutation(() => cancelProjectJoinRequest(projectId))
+
+const projectDetailKey = (projectId: number) =>
+  ['projects', 'detail', projectId] as const
+const projectRequestsKey = (projectId: number) =>
+  ['projects', 'join-requests', projectId] as const
+
+/** Проєкт із числом зайнятих місць (для «Місця x/y» на сторінці заявок) */
+export const useProject = (projectId: number) =>
+  useQuery({
+    queryKey: projectDetailKey(projectId),
+    queryFn: () => fetchProject(projectId),
+    enabled: projectId > 0,
+    // Чернетку бачать лише учасники організації: після виходу прибираємо з кешу
+    meta: USER_SCOPED_META,
+  })
+
+/** Заявки на проєкт зі статусом; «Показати ще» довантажує наступні 20 */
+export const useProjectJoinRequests = (
+  projectId: number,
+  status: JoinRequestStatus,
+  enabled: boolean,
+) =>
+  useInfiniteQuery({
+    queryKey: [...projectRequestsKey(projectId), status],
+    queryFn: ({ pageParam }) =>
+      fetchProjectJoinRequests(projectId, status, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length === PROJECT_REQUESTS_PAGE_SIZE
+        ? pages.length * PROJECT_REQUESTS_PAGE_SIZE
+        : undefined,
+    enabled: enabled && projectId > 0,
+    meta: USER_SCOPED_META,
+    // Учаснику без прав бекенд відповідає 403 — повторювати немає сенсу
+    retry: false,
+  })
+
+/**
+ * Прийняти, відхилити або відхилити й ігнорувати заявку на проєкт. Після рішення
+ * (і після відмови бекенду, напр. «місць немає») оновлюємо заявки, місця й ігнор.
+ */
+export const useReviewProjectJoinRequest = (projectId: number) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      status,
+      ignore = false,
+    }: {
+      id: number
+      status: JoinRequestDecision
+      ignore?: boolean
+    }) => reviewJoinRequest(id, status, ignore),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: projectRequestsKey(projectId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: projectDetailKey(projectId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['organizations', 'ignored-users'],
+        }),
+      ]),
+  })
+}

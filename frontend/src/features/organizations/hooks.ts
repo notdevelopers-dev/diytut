@@ -6,6 +6,10 @@ import {
 } from '@tanstack/react-query'
 import { AUTH_ME_QUERY_KEY } from '@/features/auth/hooks'
 import { USER_SCOPED_META } from '@/lib/query-client'
+import type {
+  JoinRequestDecision,
+  OrganizationJoinRequest,
+} from '@/types/organization'
 import {
   createJoinRequest,
   createOrganization,
@@ -15,6 +19,9 @@ import {
   fetchMyOrganizations,
   fetchOrganization,
   fetchOrganizations,
+  fetchIgnoredUsers,
+  reviewJoinRequest,
+  unignoreUser,
   updateMyOrganization,
 } from './api'
 
@@ -47,11 +54,14 @@ export const useOrganizations = (
 
 export const MY_ORGANIZATION_QUERY_KEY = ['organizations', 'me'] as const
 
-/** Профіль власної організації; `enabled=false`, якщо організації в користувача немає. */
-export const useMyOrganization = (enabled = true) =>
+/**
+ * Профіль однієї з організацій користувача (активної, SCRUM-158); `enabled=false`,
+ * якщо організації в користувача немає.
+ */
+export const useMyOrganization = (enabled = true, organizationId?: number) =>
   useQuery({
-    queryKey: MY_ORGANIZATION_QUERY_KEY,
-    queryFn: fetchMyOrganization,
+    queryKey: [...MY_ORGANIZATION_QUERY_KEY, organizationId ?? 'default'],
+    queryFn: () => fetchMyOrganization(organizationId),
     enabled,
     meta: USER_SCOPED_META,
   })
@@ -75,10 +85,11 @@ export const useCreateOrganization = () => {
   })
 }
 
-export const useUpdateOrganization = () => {
+export const useUpdateOrganization = (organizationId?: number) => {
   const invalidate = useInvalidateOrganizationData()
   return useMutation({
-    mutationFn: updateMyOrganization,
+    mutationFn: (payload: Parameters<typeof updateMyOrganization>[0]) =>
+      updateMyOrganization(payload, organizationId),
     onSuccess: invalidate,
   })
 }
@@ -127,13 +138,16 @@ export const useCreateJoinRequest = (organizationId: number) => {
   })
 }
 
+const incomingRequestsKey = (organizationId: number | undefined) =>
+  ['organizations', 'incoming-requests', organizationId] as const
+
 /** Заявки на вступ, що чекають розгляду (кабінет організації) */
 export const useIncomingJoinRequests = (
   organizationId: number | undefined,
   enabled: boolean,
 ) =>
   useQuery({
-    queryKey: ['organizations', 'incoming-requests', organizationId],
+    queryKey: incomingRequestsKey(organizationId),
     queryFn: () => fetchIncomingJoinRequests(organizationId as number),
     // Заявки бачать лише власник і адміністратори: після виходу прибираємо з кешу
     meta: USER_SCOPED_META,
@@ -141,3 +155,53 @@ export const useIncomingJoinRequests = (
     // Учаснику без прав бекенд відповідає 403 — повторювати немає сенсу
     retry: false,
   })
+
+/**
+ * Схвалити або відхилити заявку на вступ. Після успіху заявка зникає зі списку
+ * (показуємо лише pending), а дані організації оновлюються — у ній новий учасник.
+ */
+export const useReviewJoinRequest = (organizationId: number | undefined) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, status }: { id: number; status: JoinRequestDecision }) =>
+      reviewJoinRequest(id, status),
+    onSuccess: (_data, { id }) => {
+      queryClient.setQueryData<OrganizationJoinRequest[]>(
+        incomingRequestsKey(organizationId),
+        (old) => old?.filter((r) => r.id !== id),
+      )
+    },
+    // І після помилки (заявку вже розглянув інший адмін) — свіжий список із бекенду
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: ['organizations'] }),
+  })
+}
+
+const ignoredUsersKey = (organizationId: number | undefined) =>
+  ['organizations', 'ignored-users', organizationId] as const
+
+/** Ігноровані волонтери організації (бачать власник і адміністратори) */
+export const useIgnoredUsers = (
+  organizationId: number | undefined,
+  enabled: boolean,
+) =>
+  useQuery({
+    queryKey: ignoredUsersKey(organizationId),
+    queryFn: () => fetchIgnoredUsers(organizationId as number),
+    enabled: enabled && Boolean(organizationId),
+    meta: USER_SCOPED_META,
+    retry: false,
+  })
+
+/** Зняти ігнор; після успіху волонтер зникає зі списку */
+export const useUnignoreUser = (organizationId: number | undefined) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: number) =>
+      unignoreUser(organizationId as number, userId),
+    onSettled: () =>
+      queryClient.invalidateQueries({
+        queryKey: ignoredUsersKey(organizationId),
+      }),
+  })
+}

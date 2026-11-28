@@ -1,6 +1,15 @@
 import { isAxiosError } from 'axios'
 import { getApiErrorMessage, getErrorStatus } from '@/lib/errors'
-import type { ProjectCategory } from '@/types/project'
+import type { ExperienceLevel, ProjectCategory } from '@/types/project'
+
+/** Назви рівнів досвіду з документа скоупу (R-27) */
+export const EXPERIENCE_LABELS: Record<ExperienceLevel, string> = {
+  novice: 'Новачок',
+  interested: 'Зацікавлений',
+  amateur: 'Аматор',
+  experienced: 'Досвідчений',
+  pro: 'Профі',
+}
 
 /** Усі сфери бекенду (app.models.project.ProjectCategoryEnum), щоб відсіяти невідомі з URL */
 export const PROJECT_CATEGORIES: readonly ProjectCategory[] = [

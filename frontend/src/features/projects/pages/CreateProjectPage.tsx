@@ -9,6 +9,7 @@ import { useAuth } from '@/features/auth/hooks'
 import { CityCombobox } from '@/features/cities/components/CityCombobox'
 import { useCities } from '@/features/cities/hooks'
 import { canEditOrganization } from '@/features/organizations/utils'
+import { useActiveOrganization } from '@/features/users/profileMode'
 import { getApiErrorMessage, getErrorStatus } from '@/lib/errors'
 import type { ExperienceLevel, ProjectCategory } from '@/types/project'
 import { createProject } from '../api'
@@ -301,7 +302,9 @@ export const CreateProjectPage = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { showToast } = useToast()
-  const { user, isLoading: isAuthLoading } = useAuth()
+  const { isLoading: isAuthLoading } = useAuth()
+  // Організація, обрана в меню (SCRUM-158); без вибору — за замовчуванням
+  const { organization, isLoading: isOrgsLoading } = useActiveOrganization()
   const { cities, error: citiesError } = useCities()
   const { data: categoryItems = [], isError: isCategoriesError } =
     useCategories()
@@ -314,7 +317,6 @@ export const CreateProjectPage = () => {
   const [tagInput, setTagInput] = useState('')
   const [tagError, setTagError] = useState<string | null>(null)
 
-  const organization = user?.organization
   const canCreate = canEditOrganization(organization)
   // Публікувати можуть лише підтверджені організації, а чернетки — будь-які
   const canPublish = organization?.status === 'approved'
@@ -383,7 +385,10 @@ export const CreateProjectPage = () => {
     setErrors(found)
     if (Object.keys(found).length > 0) return
     setSubmitError(null)
-    mutation.mutate(buildPayload(values, mode))
+    mutation.mutate({
+      ...buildPayload(values, mode),
+      ...(organization ? { organization_id: organization.id } : {}),
+    })
   }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -438,7 +443,8 @@ export const CreateProjectPage = () => {
     }
   }
 
-  if (isAuthLoading) {
+  // Поки список організацій вантажиться, активною могла б здатися інша
+  if (isAuthLoading || isOrgsLoading) {
     return (
       <div className="mx-auto w-full max-w-5xl p-4 text-sm text-[#8B99AA]">
         Завантаження...
