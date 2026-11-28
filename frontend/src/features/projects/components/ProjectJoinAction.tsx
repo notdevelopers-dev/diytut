@@ -35,12 +35,28 @@ const useNowUntil = (iso: string | null) => {
   return { now, target }
 }
 
-const pillClass =
-  'mx-auto flex items-center gap-1.5 rounded-[5px] px-4 py-1 text-xs'
-const greenButtonClass =
-  'mx-auto block cursor-pointer rounded-[5px] bg-[#B5F291] px-5 py-1 text-center text-xs text-black transition-colors hover:bg-[#a3e47c]'
-const linkButtonClass =
-  'mx-auto block cursor-pointer text-[10px] text-[#8B99AA] underline hover:text-black disabled:cursor-wait'
+/** Класи кнопки й позначок: маленькі на картці, 185×32 на сторінці проєкту (Figma) */
+const VARIANTS = {
+  card: {
+    pill: 'mx-auto flex items-center gap-1.5 rounded-[5px] px-4 py-1 text-xs',
+    button:
+      'mx-auto block cursor-pointer rounded-[5px] bg-[#B5F291] px-5 py-1 text-center text-xs text-black transition-colors hover:bg-[#a3e47c]',
+    link: 'mx-auto block cursor-pointer text-[10px] text-[#8B99AA] underline hover:text-black disabled:cursor-wait',
+    hint: 'text-center text-[10px] text-[#8B99AA]',
+    skeleton: 'mx-auto h-6 w-28 animate-pulse rounded-[5px] bg-[#C2D4EA]',
+    icon: 14,
+  },
+  page: {
+    pill: 'mx-auto flex h-8 w-full max-w-[185px] items-center justify-center gap-2 rounded-[11px] text-base',
+    button:
+      'mx-auto block h-8 w-full max-w-[185px] cursor-pointer rounded-[11px] bg-main text-center text-base text-black transition-colors hover:bg-main-hover',
+    link: 'mx-auto block cursor-pointer text-xs text-[#5F6F82] underline hover:text-black disabled:cursor-wait',
+    hint: 'text-center text-xs text-[#5F6F82]',
+    skeleton:
+      'mx-auto h-8 w-full max-w-[185px] animate-pulse rounded-[11px] bg-[#C2D4EA]',
+    icon: 21,
+  },
+} as const
 
 interface ProjectJoinActionProps {
   projectId: number
@@ -48,6 +64,8 @@ interface ProjectJoinActionProps {
   /** Остання заявка користувача на проєкт; `null` чи `undefined` — заявки немає */
   status?: ProjectJoinRequestStatus | null
   isLoading?: boolean
+  /** card — у картці каталогу (за замовчуванням), page — на сторінці проєкту */
+  variant?: keyof typeof VARIANTS
 }
 
 /**
@@ -60,7 +78,16 @@ export const ProjectJoinAction = ({
   projectTitle,
   status,
   isLoading,
+  variant = 'card',
 }: ProjectJoinActionProps) => {
+  const {
+    pill: pillClass,
+    button: buttonClass,
+    link: linkButtonClass,
+    hint: hintClass,
+    skeleton: skeletonClass,
+    icon: iconSize,
+  } = VARIANTS[variant]
   const [isModalOpen, setIsModalOpen] = useState(false)
   /** Відкрите вікно підтвердження скасування (замість системного window.confirm) */
   const [isCancelOpen, setIsCancelOpen] = useState(false)
@@ -116,12 +143,7 @@ export const ProjectJoinAction = ({
 
   const content = (() => {
     if (isLoading) {
-      return (
-        <div
-          aria-hidden="true"
-          className="mx-auto h-6 w-28 animate-pulse rounded-[5px] bg-[#C2D4EA]"
-        />
-      )
+      return <div aria-hidden="true" className={skeletonClass} />
     }
     switch (status?.status) {
       case 'pending':
@@ -132,7 +154,7 @@ export const ProjectJoinAction = ({
               data-state="pending"
               className={`${pillClass} bg-[#C2D4EA] text-[#8B99AA]`}
             >
-              <img src={clockIcon} alt="" width={14} height={14} />
+              <img src={clockIcon} alt="" width={iconSize} height={iconSize} />
               Запит очікує
             </p>
             {cancelButton('Скасувати запит')}
@@ -146,7 +168,12 @@ export const ProjectJoinAction = ({
               data-state="member"
               className={`${pillClass} bg-[#B5F291] text-black`}
             >
-              <img src={memberCheckIcon} alt="" width={16} height={16} />
+              <img
+                src={memberCheckIcon}
+                alt=""
+                width={iconSize + 2}
+                height={iconSize + 2}
+              />
               Ви учасник
             </p>
             {cancelButton('Скасувати участь')}
@@ -161,7 +188,7 @@ export const ProjectJoinAction = ({
               data-testid="project-join"
               data-state="reapply"
               onClick={openModal}
-              className={greenButtonClass}
+              className={buttonClass}
             >
               Подати знову
             </button>
@@ -177,7 +204,7 @@ export const ProjectJoinAction = ({
               Запит відхилено
             </p>
             {Number.isFinite(reapplyAt) && (
-              <p className="text-center text-[10px] text-[#8B99AA]">
+              <p className={hintClass}>
                 Подати знову можна через{' '}
                 {formatRetryAfter(Math.ceil((reapplyAt - now) / 1000))}
               </p>
@@ -193,7 +220,7 @@ export const ProjectJoinAction = ({
             data-testid="project-join"
             data-state="default"
             onClick={openModal}
-            className={greenButtonClass}
+            className={buttonClass}
           >
             Приєднатись
           </button>

@@ -101,7 +101,12 @@ export const ProjectCard = ({
       )}
 
       <h2 className="rounded-[5px] bg-[#F7FBFF] px-2 py-0.5 text-center text-sm font-normal break-words text-black">
-        {project.title}
+        <Link
+          to={`/projects/${project.id}`}
+          className="text-black no-underline hover:underline"
+        >
+          {project.title}
+        </Link>
       </h2>
 
       {categoryNames && project.categories.length > 0 && (
